@@ -78,7 +78,7 @@ namespace TaskbarTiles
         internal static bool ConflictingIds(string requested, string actual)
         {
             requested = CleanId(requested); actual = CleanId(actual);
-            return requested.Length != 0 && actual.Length != 0 && !requested.Equals(actual, StringComparison.OrdinalIgnoreCase);
+            return LaunchResolution.ExplicitId(requested) && LaunchResolution.ExplicitId(actual) && !requested.Equals(actual, StringComparison.OrdinalIgnoreCase);
         }
         internal static bool GenericHost(string exe)
         {
@@ -89,11 +89,17 @@ namespace TaskbarTiles
         {
             string requested = CleanId(receipt != null && !string.IsNullOrWhiteSpace(receipt.ExpectedAppId) ? receipt.ExpectedAppId : app.AppId);
             string actual = CleanId(w.AppId);
+            if (w.IdentityAmbiguous) return false;
             // Never move another browser profile just because both use chrome.exe.
             if (ConflictingIds(requested, actual)) return false;
-            if (requested.Length > 0 && actual.Length > 0) return true;
-            if (receipt != null && receipt.ProcessId != 0 && receipt.ProcessId == w.ProcessId &&
-                receipt.ProcessStartTicks != 0 && receipt.ProcessStartTicks == w.ProcessStartTicks && !GenericHost(w.Exe)) return true;
+            if (requested.Length > 0 && requested.Equals(actual, StringComparison.OrdinalIgnoreCase)) return true;
+            // Browser/profile-scoped IDs may temporarily be missing while starting.
+            // Do not collapse two profiles into a shared executable or PID.
+            if (LaunchResolution.ProfileScoped(requested)) return false;
+            uint appPid = w.AppProcessId != 0 ? w.AppProcessId : w.ProcessId;
+            long appStart = w.AppProcessId != 0 ? w.AppProcessStartTicks : w.ProcessStartTicks;
+            if (receipt != null && receipt.ProcessId != 0 && receipt.ProcessId == appPid &&
+                receipt.ProcessStartTicks != 0 && receipt.ProcessStartTicks == appStart && !GenericHost(w.Exe)) return true;
             string expected = receipt != null && !string.IsNullOrWhiteSpace(receipt.ExpectedExe) ? receipt.ExpectedExe : app.LaunchExe;
             if (FullPath(expected) && SamePath(expected, w.Exe)) return true;
             if (FullPath(requested) && SamePath(requested, w.Exe)) return true;
@@ -235,6 +241,7 @@ namespace TaskbarTiles
             }
             else if (LaunchIdentity.FullPath(target) && target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) receipt.ExpectedExe = target;
             else if (target.StartsWith(@"shell:AppsFolder\", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(receipt.ExpectedAppId)) receipt.ExpectedAppId = LaunchIdentity.CleanId(target);
+            LaunchResolution.ResolveShellTarget(target, receipt);
         }
         static void LaunchFavourite(AppButton app, Options settings, LaunchOperation operation, Action<LaunchReceipt, string> completed)
         {
@@ -279,7 +286,7 @@ namespace TaskbarTiles
         static void Dispatch(ProcessStartInfo start, LaunchReceipt receipt, LaunchOperation operation, Action<LaunchReceipt, string> completed)
         {
             if (!operation.TryDispatch()) return;
-            LaunchLog.Write(operation.Id, "dispatch: " + receipt.Method);
+            LaunchLog.Write(operation.Id, "dispatch: " + receipt.Method + "; version=" + Program.Version + "; expected=" + LaunchResolution.Describe(receipt.ExpectedAppId, receipt.ExpectedExe));
             // No retries on exceptions here: partial shell activation may already have happened.
             using (var process = Process.Start(start))
             {
@@ -289,7 +296,10 @@ namespace TaskbarTiles
                     {
                         string exe = process.MainModule.FileName;
                         if (!LaunchIdentity.GenericHost(exe))
-                        { receipt.ProcessId = (uint)process.Id; receipt.ProcessStartTicks = process.StartTime.ToUniversalTime().Ticks; }
+                        {
+                            receipt.ProcessId = (uint)process.Id; receipt.ProcessStartTicks = process.StartTime.ToUniversalTime().Ticks;
+                            if (string.IsNullOrWhiteSpace(receipt.ExpectedExe)) receipt.ExpectedExe = exe;
+                        }
                     }
                     catch { }
                 }
