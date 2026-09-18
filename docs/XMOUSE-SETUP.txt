@@ -1,0 +1,33 @@
+UPDATING FROM THE WORKING BUILD: keep your existing Run Application command. No X-Mouse change is needed.
+
+TASKBAR TILES 0.6 - X-MOUSE BUTTON CONTROL
+
+Use Button 5 directly, without the built-in ALT-TAB action.
+
+1. After Install.cmd finishes, right-click the Taskbar Tiles tray icon.
+2. Choose "Copy X-Mouse command".
+3. Open X-Mouse Button Control. Select Default and Layer 1.
+4. Change Mouse Button 5 from ALT-TAB to Run Application.
+5. Paste the copied command in the Run Application field.
+6. Click OK, then Apply in X-Mouse's main window.
+
+One press opens the panel and leaves it open. Another press closes it.
+Click a preview to switch windows, or an app tile to request another instance.
+
+The copied command has this form (use your actual path from the tray):
+"C:\Users\YOURNAME\AppData\Local\TaskbarTiles\TaskbarTiles.exe" --toggle
+
+It signals the existing tray instance. It does not create a second resident copy.
+If the tray utility is not running, the command starts it and opens the panel.
+
+Only change the Default profile's Button 5. Button 4 and your game profiles are not
+changed by this installer. App-specific profiles can override the Default profile.
+
+Optional shortcut alternative:
+Mouse Button 5 -> Simulated Keystrokes -> {CTRL}{ALT}{SPACE}
+Method 1 (as mouse button is pressed), Block original mouse input checked.
+Do not choose a repeating/held method. The Run Application method above avoids
+keyboard-simulation timing and hotkey conflicts.
+
+Official X-Mouse user guide, pages 8-9:
+https://www.highrez.co.uk/downloads/X-Mouse%20Button%20Control%20User%20Guide.pdf
