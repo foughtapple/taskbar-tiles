@@ -172,6 +172,7 @@ namespace TaskbarTiles
         bool busy;
         internal UpdatesWindow()
         {
+            AutoScaleDimensions = new SizeF(96F, 96F); AutoScaleMode = AutoScaleMode.Dpi;
             Text = "Taskbar Tiles - Updates"; BackColor = Theme.Background; ForeColor = Theme.Text;
             Font = new Font("Segoe UI", 10); StartPosition = FormStartPosition.CenterParent;
             ClientSize = new Size(680, 460); MinimumSize = new Size(660, 420); MaximizeBox = false;
