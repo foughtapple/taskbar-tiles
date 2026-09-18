@@ -333,7 +333,13 @@ namespace TaskbarTiles
                 try { if (!File.Exists(LaunchLog.FilePath)) LaunchLog.Write("info", "No launches recorded yet."); System.Diagnostics.Process.Start("notepad.exe", "\"" + LaunchLog.FilePath + "\""); }
                 catch (Exception ex) { MessageBox.Show(this, ex.Message); }
             };
-            system.Controls.AddRange(new Control[] { xmouse, display, diag, launchLog, appFolder });
+            var updates = Theme.Button("Check for updates...", 235); updates.Click += delegate { using (var dialog = new UpdatesWindow()) dialog.ShowDialog(this); };
+            var switching = Theme.Button("Open switching diagnostics", 235); switching.Click += delegate
+            {
+                try { if (!File.Exists(ActivationLog.PathName)) ActivationLog.Write("No switch requests recorded yet."); System.Diagnostics.Process.Start("notepad.exe", "\"" + ActivationLog.PathName + "\""); }
+                catch (Exception ex) { MessageBox.Show(this, ex.Message); }
+            };
+            system.Controls.AddRange(new Control[] { xmouse, display, diag, launchLog, switching, updates, appFolder });
             Section(system, "About this integration", "Zone placement reads saved layout geometry and uses normal Windows move/resize requests. It does not register a window in FancyZones' internal zone history. Apps can enforce minimum sizes; elevated, fullscreen or non-resizable windows may not accept placement.");
             AddQuickAccessPage();
             AddFavouritesPage();

@@ -1,3 +1,26 @@
+# Changelog
+
+## 0.7.0
+
+### Fixed
+- Activate the exact selected window before hiding the picker; verify foreground hand-off and wait for asynchronous restoration.
+- Do not replace an enabled window with an arbitrary owned popup or accept another same-process window as success.
+- Add bounded, user-input-aware retry and local focus diagnostics. The integrated search uses the same activation path.
+
+### Added
+- Per-user Inno Setup installer, upgrade backup, normal uninstaller and migration from source-built versions.
+- Explicit GitHub update check/download with strict release/host/filename validation and SHA-256 verification.
+- Version/product metadata, app icon, professional repository documentation, issue forms and Windows build/release workflows.
+- Deterministic activation/update tests and an isolated Windows installer lifecycle smoke test.
+
+### Preserved
+- Default title/app-name text 22, independent title icon sizing, balanced paging, live settings preview/discard, favourites, integrated search, launch reliability and monitor/FancyZones placement.
+
+### Validation
+- See docs/TESTING.md. Preparation-time static checks are not a claim of a successful Windows compile or live focus test. Published release provenance records the CI checks actually executed.
+
+## Earlier local versions
+
 # 0.6.2 - readable defaults, window-title icons and settings click-away
 
 - Default both open-window title and taskbar app-label fonts to 22 logical pixels; apply the requested value once when migrating pre-schema-7 settings. Preserve later custom font edits and all other preferences.

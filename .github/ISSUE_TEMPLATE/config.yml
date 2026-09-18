@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting and migration
+    url: https://github.com/foughtapple/taskbar-tiles/blob/main/docs/TROUBLESHOOTING.md
+    about: Installation, X-Mouse setup, switching diagnostics and known limitations.

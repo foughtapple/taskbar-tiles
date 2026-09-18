@@ -1,0 +1,85 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-2022
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify tag and repository
+        shell: powershell
+        run: |
+          $version = (Get-Content version.txt -Raw).Trim()
+          if ($env:GITHUB_REF_NAME -cne "v$version") { throw 'Tag does not match version.txt.' }
+          if ($env:GITHUB_REPOSITORY -cne 'foughtapple/taskbar-tiles') { throw 'Forks must change their updater repository and release workflow before publishing.' }
+          if (-not (Test-Path "docs/releases/v$version.md")) { throw 'Missing release notes.' }
+      - name: Compile, test and package installer
+        shell: powershell
+        run: ./tools/Package.ps1
+      - name: Test install, upgrade and uninstall on this disposable runner
+        shell: powershell
+        run: ./tools/Test-Installer.ps1
+      - name: Record build provenance
+        shell: powershell
+        run: |
+          $version = (Get-Content version.txt -Raw).Trim()
+          @{
+            version = $version
+            commit = $env:GITHUB_SHA
+            run = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            built_utc = (Get-Date).ToUniversalTime().ToString('o')
+            runner = 'windows-2022'
+            helper_tests = 'passed'
+            installer_smoke_tests = 'passed'
+            interactive_desktop_tests = 'not run by this workflow'
+            authenticode_signed = $false
+          } | ConvertTo-Json | Set-Content dist/build-info.json -Encoding UTF8
+      - name: Publish only after all tests pass
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content version.txt -Raw).Trim()
+          $tag = "v$version"
+          $repo = $env:GITHUB_REPOSITORY
+          $savedPreference = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          $existing = & gh release view $tag --repo $repo --json isDraft 2>$null
+          $exists = $LASTEXITCODE -eq 0
+          $ErrorActionPreference = $savedPreference
+          if ($exists) {
+            $data = $existing | ConvertFrom-Json
+            if (-not $data.isDraft) { throw 'Published release exists. Never overwrite published installer assets; issue a new version.' }
+          } else {
+            & gh release create $tag --repo $repo --verify-tag --draft --title "Taskbar Tiles $version" --notes-file "docs/releases/$tag.md"
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create draft release.' }
+          }
+          & gh release upload $tag "dist/TaskbarTiles-$version-Setup.exe" dist/SHA256SUMS.txt dist/build-info.json --repo $repo --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Draft upload failed; release remains unpublished.' }
+          & gh release edit $tag --repo $repo --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release assets uploaded but publication failed.' }
+      - name: Keep installer and test diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-diagnostics-${{ github.ref_name }}
+          path: |
+            build/
+            dist/
+          if-no-files-found: warn
+          retention-days: 30

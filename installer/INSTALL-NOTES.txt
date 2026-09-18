@@ -1,0 +1,14 @@
+Taskbar Tiles
+
+A mouse-first window switcher, app launcher and monitor/zone picker.
+
+This installs for your Windows user only. Administrator access is not required.
+Your existing Taskbar Tiles settings, favourites and X-Mouse command are preserved.
+Setup backs up the previous executable and configuration before replacing them.
+
+Updates are checked only when you choose "Check for updates" in the tray menu.
+This build is not Authenticode-signed. Checksums detect corruption, not publisher
+identity. Only install builds from a source you trust; do not disable Windows security.
+
+Uninstall through Windows Settings > Apps. Personal settings and favourites remain
+on disk unless you remove their folder yourself after uninstalling.

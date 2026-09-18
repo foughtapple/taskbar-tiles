@@ -1,5 +1,6 @@
-// Taskbar Tiles 0.6.2 - source-built Windows utility. C# 5 / .NET Framework.
-// No telemetry/network client, keyboard logging, registry taskbar edits, or DLL/process injection.
+// Taskbar Tiles 0.7.0 - source-built Windows utility. C# 5 / .NET Framework.
+// No telemetry, keyboard logging, taskbar registry edits or process injection.
+// Network access is limited to explicit, user-initiated GitHub update checks/downloads.
 using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -25,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.6.2";
+        internal const string Version = "0.7.0";
         static bool SignalToggle()
         {
             try
@@ -752,6 +753,7 @@ namespace TaskbarTiles
     {
         public IntPtr Handle;
         public string Title;
+        public uint ProcessId;
     }
 
     sealed partial class Switcher : Form
@@ -831,10 +833,13 @@ namespace TaskbarTiles
                 reader.Diagnostics(delegate(string file) { Post(delegate { OpenFile(file); }); });
             });
             menu.Items.Add("Open launch diagnostics", null, delegate { OpenLaunchDiagnostics(); });
+            menu.Items.Add("Open switching diagnostics", null, delegate { OpenSwitchingDiagnostics(); });
+            menu.Items.Add("Check for updates...", null, delegate { ShowUpdates(); });
+            menu.Items.Add("About Taskbar Tiles", null, delegate { ShowAbout(); });
             menu.Items.Add("Cancel pending launch / placement", null, delegate { CancelPendingLaunch(); });
             menu.Items.Add("Write icon diagnostics", null, delegate
             {
-                var report = new StringBuilder("Taskbar Tiles 0.6.2 icon sources (local only)" + Environment.NewLine);
+                var report = new StringBuilder("Taskbar Tiles 0.7.0 icon sources (local only)" + Environment.NewLine);
                 foreach (var app in apps)
                     report.AppendLine(app.DisplayName + " | " + app.Id + " | " + app.ImageSource + " | " + (app.Image == null ? "no icon" : app.Image.Width + "x" + app.Image.Height));
                 string file = Path.Combine(Program.Home, "icon-diagnostics.txt");
@@ -843,8 +848,8 @@ namespace TaskbarTiles
             menu.Items.Add("Open app folder", null, delegate { Process.Start("explorer.exe", "\"" + Program.Home.TrimEnd('\\') + "\""); });
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, delegate { Shutdown(); });
-            trayIcon = DrawingUtil.TrayIcon();
-            tray = new NotifyIcon { Icon = trayIcon, Text = "Taskbar Tiles 0.6.2", Visible = true, ContextMenuStrip = menu };
+            trayIcon = ApplicationIcon();
+            tray = new NotifyIcon { Icon = trayIcon, Text = "Taskbar Tiles 0.7.0", Visible = true, ContextMenuStrip = menu };
             tray.MouseDoubleClick += delegate(object sender, MouseEventArgs e) { if (e.Button == MouseButtons.Left) ToggleMenu(); };
             if (!Native.RegisterHotKey(Handle, 10, 0x4000 | 0x1 | 0x2, 0x20))
                 Program.Log("Ctrl+Alt+Space is already registered by another application.");
@@ -855,7 +860,7 @@ namespace TaskbarTiles
             launchTimer = new System.Windows.Forms.Timer { Interval = 40 };
             launchTimer.Tick += LaunchTick;
             monitorPoint = Cursor.Position;
-            SetupFeatures(); SetupQuickAccess(); SetupFullscreen();
+            SetupFeatures(); SetupQuickAccess(); SetupFullscreen(); SetupActivation();
             RefreshApps();
         }
         protected override CreateParams CreateParams
@@ -882,6 +887,8 @@ namespace TaskbarTiles
             }
             catch (InvalidOperationException) { }
         }
+        static Icon ApplicationIcon()
+        { try { return Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application; } catch { return SystemIcons.Application; } }
         void Notify(string message)
         {
             if (tray == null || closing) return;
@@ -953,6 +960,7 @@ namespace TaskbarTiles
             }
             if (fullscreenOpening)
             { stickySession |= forceSticky; if (stickySession) acceptAfterFullscreenOpen = false; openingCycles += reverse ? -1 : 1; return; }
+            CancelActivation();
             ReloadSettings(false);
             stickySession = forceSticky || options.StickyAltTab;
             monitorPoint = Cursor.Position;
@@ -963,6 +971,8 @@ namespace TaskbarTiles
         }
         void ShowMenuCore(bool reverse, IntPtr foregroundBeforeOpen)
         {
+            CancelActivation();
+            foregroundBeforeMenu = foregroundBeforeOpen;
             updatingSearch = true; searchBox.Text = ""; updatingSearch = false;
             allWindows = GetWindows();
             var original = allWindows.FirstOrDefault(w => w.Handle == foregroundBeforeOpen);
@@ -1008,12 +1018,13 @@ namespace TaskbarTiles
                 if (Native.DwmGetWindowAttribute(h, 14, out cloaked, 4) == 0 && cloaked != 0) return true;
                 var title = new StringBuilder(1024); Native.GetWindowText(h, title, title.Capacity);
                 if (title.Length == 0) return true;
-                // Switch to a visible modal popup instead of its disabled owner.
-                IntPtr popup = Native.GetLastActivePopup(h);
-                if (popup != IntPtr.Zero && popup != h && Native.IsWindowVisible(popup)) h = popup;
+                // Only a genuinely blocked owner is redirected to its owned modal.
+                // An enabled window is never substituted by its last active palette.
+                h = ActivationPolicy.Resolve(new WindowsActivationApi(), h);
+                if (h == IntPtr.Zero || !Native.IsWindow(h)) return true;
                 if (!seen.Add(h)) return true;
                 var actualTitle = new StringBuilder(1024); Native.GetWindowText(h, actualTitle, actualTitle.Capacity);
-                list.Add(new WindowItem { Handle = h, Title = actualTitle.Length > 0 ? actualTitle.ToString() : title.ToString() });
+                list.Add(new WindowItem { Handle = h, ProcessId = WindowNative.ProcessId(h), Title = actualTitle.Length > 0 ? actualTitle.ToString() : title.ToString() });
                 return true;
             }, IntPtr.Zero);
             return list;
@@ -1369,11 +1380,8 @@ namespace TaskbarTiles
         }
         void AcceptWindow()
         {
-            if (windows.Count == 0 || selected >= windows.Count) { Dismiss(); return; }
-            IntPtr target = windows[selected].Handle; Dismiss();
-            if (!Native.IsWindow(target)) { Notify("That window has closed."); return; }
-            if (Native.IsIconic(target)) Native.ShowWindowAsync(target, 9);
-            if (!Native.SetForegroundWindow(target)) Notify("Windows did not allow focus to change. Click the app on the normal taskbar.");
+            if (windows.Count == 0 || selected < 0 || selected >= windows.Count) { Dismiss(); return; }
+            ActivateWindow(windows[selected]);
         }
         void LaunchTick(object sender, EventArgs e)
         {
@@ -1461,7 +1469,7 @@ namespace TaskbarTiles
         public void Shutdown()
         {
             if (closing) return; closing = true;
-            CancelPendingLaunch(); ShutdownFullscreen(); ShutdownQuickAccess(); ShutdownFeatures();
+            CancelPendingLaunch(); DisposeActivation(); ShutdownFullscreen(); ShutdownQuickAccess(); ShutdownFeatures();
             hook.Dispose(); Native.UnregisterHotKey(Handle, 10);
             settingsTimer.Stop(); launchTimer.Stop(); reader.Dispose(); ClearThumbnails();
             tray.Visible = false; tray.Dispose(); trayIcon.Dispose(); DisposeImages(allApps); allApps.Clear(); apps.Clear();
@@ -1562,7 +1570,7 @@ namespace TaskbarTiles
                 string[,] names = new string[,] {
                     { "Steam - 1 running window", "Steam" }, { "Codex - 2 running windows", "Codex" },
                     { "Spotify pinned", "Spotify" }, { "Your Chrome - 1 running window", "Your Chrome" },
-                    { "File Explorer", "File Explorer" }, { "Jay - Chrome", "Jay - Chrome" },
+                    { "File Explorer", "File Explorer" }, { "Work - Chrome", "Work - Chrome" },
                     { "X-Mouse Button Control - 1 running window", "X-Mouse Button Control" } };
                 for (int i = 0; i < names.GetLength(0); i++) Check(TextTools.CleanAppName(names[i, 0]) == names[i, 1], "label " + names[i, 0]);
                 log.AppendLine("PASS: label cleanup preserves profile names and strips accessibility status text.");
@@ -1590,6 +1598,8 @@ namespace TaskbarTiles
                 LayoutRegressionTests.Run(log);
                 LaunchReliabilityTests.Run(log);
                 InterfacePolishTests.Run(log);
+                ActivationTests.Run(log);
+                UpdateTests.Run(log);
                 log.AppendLine("These are unit/interop-layout tests, not live Windows, FancyZones or X-Mouse integration tests.");
                 File.WriteAllText(Path.Combine(Program.Home, "self-test.log"), log.ToString());
                 return 0;

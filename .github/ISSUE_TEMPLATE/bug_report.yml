@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a reproducible problem with switching, launching, layouts or installation.
+title: '[Bug] '
+body:
+  - type: markdown
+    attributes:
+      value: 'Please redact private window titles, paths and account names from screenshots or logs. Do not attach credentials or whole diagnostics folders.'
+  - type: input
+    id: version
+    attributes:
+      label: Taskbar Tiles version
+      description: Right-click the tray icon and choose About Taskbar Tiles.
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and display setup
+      placeholder: Windows 11, 3 monitors, 100%/150% scaling
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the app involved and whether it is normal, minimised, maximised, fullscreen or elevated.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant, redacted diagnostics (optional)
+      description: For switching problems use the tray's Open switching diagnostics command. Review before pasting.
+      render: text

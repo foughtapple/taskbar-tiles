@@ -102,3 +102,20 @@ Consulted Microsoft documentation:
 - WM_ACTIVATEAPP distinguishes application activation and deactivation: https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-activateapp
 
 The implementation checks settled foreground process/owner relationships for the whole Settings session rather than treating every Form.Deactivate event as an outside click. Normal close requests unwind owned dialogs; saving remains explicit. API documentation is not evidence that these flows were run on Windows.
+
+
+## Version 0.7.0 activation and distribution references
+
+- SetForegroundWindow permission/foreground behaviour: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow
+- Asynchronous restore request: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindowasync
+- Owned last-active popup: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getlastactivepopup
+- Inno Setup scripting / per-user installer: https://jrsoftware.org/ishelp/
+- GitHub CLI browser sign-in: https://cli.github.com/manual/gh_auth_login
+- Repository creation: https://cli.github.com/manual/gh_repo_create
+- Job-level GitHub token permissions: https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication
+
+The tools used to prepare this source package could read the connected GitHub
+account, but could not perform an authenticated write. The provided one-time
+publisher is deliberately explicit about creating a public repository and uses
+the user's own browser-authorised CLI. No published release was claimed during
+preparation. Release assets become available only after the Windows CI gate passes.

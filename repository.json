@@ -1,0 +1,14 @@
+{
+  "owner": "foughtapple",
+  "name": "taskbar-tiles",
+  "visibility": "public",
+  "default_branch": "main",
+  "description": "A mouse-first Windows switcher and app launcher with live previews, favourites, integrated search and multi-monitor/FancyZones placement.",
+  "homepage": "https://github.com/foughtapple/taskbar-tiles/releases/latest",
+  "topics": ["windows", "windows11", "productivity", "task-switcher", "alt-tab", "app-launcher", "fancyzones", "winforms", "csharp", "multi-monitor"],
+  "has_issues": true,
+  "has_wiki": false,
+  "has_projects": false,
+  "delete_branch_on_merge": true,
+  "license": "MIT"
+}

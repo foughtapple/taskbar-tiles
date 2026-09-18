@@ -1,25 +1,30 @@
-# Verification - Taskbar Tiles 0.6.2
+# Testing and release gates
 
-## Executed in the authoring environment
+## What was validated during preparation
 
-C#-aware lexical scans checked delimiter/literal structure in all 24 C# source files. Source-wiring checks cover the complete installer compilation list, appearance default synchronization, migration gating, Settings dismissal propagation through all three entry paths, cancellation results, and the absence of saving/reopening calls in the dismissal implementation.
+The source package was assembled in a Linux environment without a Windows/.NET Framework compiler. Source wiring, XML/JSON/YAML structure, archive contents and Git bundle integrity can be checked there. **The C# app, the Windows installer and live foreground switching were not executed in that environment.** See `PREPARATION-CHECKS.json` for recorded, actually executed preparation checks. Do not treat static checks as Windows tests.
 
-An independent Python translation of the geometry passed **1,792 title-header combinations** and **31,104 menu configurations**, including font sizes 9/22/32, header icon sizes 12/28/64, icons on/off, close X on/off, screen fitting, multiple preview sizes, grids, counts and display scales. Tests check title/icon/X separation, containment, icon dimensions, reserved preview space, balanced bottom-heavy rows and menu screen bounds. The exact executed offline report is in `OFFLINE-CHECKS.json`.
+## Automated Windows checks
 
-**No C# compilation or Windows application execution was performed here.** These arithmetic and lexical checks are not a C# typecheck and do not establish live Windows focus/icon behaviour. No live Shell, FancyZones, X-Mouse, Terminal or fullscreen test is claimed. Earlier-version testing descriptions are not counted as new executions.
+`Build.cmd` / `tools/Build.ps1` compiles every C# source with the Windows Framework compiler and runs `TaskbarTiles.exe --self-test` from the isolated build folder. A timeout or nonzero result fails the build. The app's normal tray/hook/startup path does not run during these helper tests.
 
-## Windows install-time helper tests (included, not run here)
+Tests include the inherited layout, labels, FancyZones transforms, interop structure sizes, search, launcher identity, settings-dismissal and title-icon checks. New tests inject a fake OS interface into the exact activation state machine used in production: covered windows, asynchronous restore, rejected requests, foreground bounce, bounded retries, cancellation after new input, reused handles, owned modal dialogs and unrelated same-process windows. Update tests validate strict release versions, allowed hosts, checksum lists and incomplete-release rejection without network access.
 
-`Install.cmd` compiles the 24 source inputs and runs `--self-test` before replacing the working executable. A compile failure leaves it unchanged. Logs are in `%LOCALAPPDATA%\TaskbarTiles\build.log` and `self-test.log`. The earlier executable, settings and favourites are backed up after checks pass. `RestorePrevious.cmd` rolls back.
+`tools/Test-Installer.ps1` is deliberately restricted to disposable GitHub Actions runners. It installs silently, checks per-user registration/version, writes sentinel settings/favourites, upgrades, verifies backups and preservation, uninstalls, and verifies program removal plus user-data retention. It does not test the visual setup wizard.
 
-`InterfacePolishTests.cs` checks the two 22-pixel defaults, independent icon sizing, bounds, one-time upgrade semantics, preservation of later custom values, external-vs-owned focus decisions, and the shared header geometry. All existing launch-identity, dispatch, balanced-grid, font, zone, Search/Favourites and fullscreen helper suites still run. These helper suites do not launch, move, minimise or close actual applications, or write user settings.
+The release job publishes only after those checks pass. Its `build-info.json` records commit, workflow URL and the exact categories executed. No live desktop or gaming compatibility result is implied.
 
-## Windows checks still required
+## Manual Windows release checklist
 
-1. Upgrade from v0.6.1. Confirm both main fonts read 22 while other preferences are retained. Change one to 20, Apply and restart: 20 must persist. Reinstalling v0.6.2 must not reset it.
-2. Open Settings, change a size without Apply, then click another app or desktop. Settings must dismiss; no parent switcher, Favourites or zone picker should reopen. Reopen Settings: the unsaved change must be absent. The tray app should remain running.
-3. Repeat after Apply, then make a second change. Click away: the applied value must remain but the second change must not be saved.
-4. Switch between Settings tabs, numeric spinners, dropdowns, full preview, Installed apps, favourite editor and Open/Save/Folder dialogs. These internal transitions must not dismiss Settings. Clicking an external app while a nested picker is open should cancel that child and then Settings. Test save-confirmation dialogs with Cancel too.
-5. Turn the outside-close option off and Apply. Clicking another app must now keep Settings open. Restore it afterwards.
-6. Inspect icons for a browser profile, Explorer, Terminal and a packaged app. Change title icon size between 12, 28 and 64; compare main/full previews and actual menu at multiple display scales. Title, icon, preview and close X must not overlap. Disabling icons must restore title space.
-7. Verify the prior new-window, right-click zone, Search, Favourites, fullscreen minimise and close-X actions still work. Check repeated opening does not accumulate image resources. The launch-identification safeguards are retained.
+Record app version/commit, Windows build, display arrangement/scaling and results for each case:
+
+- Open two overlapping windows from different apps. Click the obscured preview and verify focus AND keyboard input reach it.
+- Repeat with two Explorer windows and two browser windows in the same process/profile; the exact chosen window must win.
+- Repeat for minimised and maximised windows. Restoring a non-minimised maximised window must not shrink it.
+- Open a Save/confirmation dialog. The blocked owner's selection should activate its legitimate modal dialog, not an unrelated palette.
+- Start a switch then click/type in another app; no later focus steal should occur. Repeat rapidly and close the target before selection.
+- Test borderless and exclusive-fullscreen apps, multi-monitor/DPI setups, optional fullscreen minimisation, elevated apps and always-on-top overlays. Record limitations rather than silently changing their policy.
+- Verify mouse --toggle and keyboard Alt+Tab/Ctrl+Alt+Space paths, search-window selection, closing settings without saving, text/icon sizes, launch/zone placement and normal X close requests.
+- Test the visual installer, startup choice, update notes/checksum failure/cancellation, preservation, uninstall and reinstall on a non-admin account.
+
+No development-time screenshot of an unrelated or private desktop should be committed as a project screenshot without review.

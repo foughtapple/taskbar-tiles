@@ -403,10 +403,7 @@ namespace TaskbarTiles
                     if (item.Window != null)
                     {
                         if (zone) { ChooseZone(item.Window, null); return; }
-                        IntPtr target = item.Window.Handle; Dismiss();
-                        if (!Native.IsWindow(target)) { Notify("That window has closed."); return; }
-                        if (Native.IsIconic(target)) Native.ShowWindowAsync(target, 9);
-                        if (!Native.SetForegroundWindow(target)) Notify("Windows did not allow focus to change. Use that app's taskbar button.");
+                        ActivateWindow(item.Window);
                     }
                     else
                     {

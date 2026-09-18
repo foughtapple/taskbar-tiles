@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest an improvement to everyday navigation.
+title: '[Feature] '
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What navigation problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour and useful defaults
+    validations:
+      required: true
