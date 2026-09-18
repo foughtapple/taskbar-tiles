@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.7.0";
+        internal const string Version = "0.7.1";
         static bool SignalToggle()
         {
             try
@@ -1597,6 +1597,7 @@ namespace TaskbarTiles
                 SearchPageTests.Run(log);
                 LayoutRegressionTests.Run(log);
                 LaunchReliabilityTests.Run(log);
+                LaunchResolutionTests.Run(log);
                 InterfacePolishTests.Run(log);
                 ActivationTests.Run(log);
                 UpdateTests.Run(log);

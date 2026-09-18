@@ -170,7 +170,7 @@ namespace TaskbarTiles
         readonly CancellationTokenSource stop = new CancellationTokenSource();
         AvailableUpdate available;
         bool busy;
-        internal UpdatesWindow()
+        internal UpdatesWindow(bool checkOnOpen = false)
         {
             AutoScaleDimensions = new SizeF(96F, 96F); AutoScaleMode = AutoScaleMode.Dpi;
             Text = "Taskbar Tiles - Updates"; BackColor = Theme.Background; ForeColor = Theme.Text;
@@ -194,6 +194,7 @@ namespace TaskbarTiles
             var releases = Theme.Button("Release notes", 125); releases.Click += delegate { try { ReleaseInfo.Open(ReleaseInfo.LatestUrl); } catch (Exception ex) { status.Text = ex.Message; } };
             actions.Controls.Add(close); actions.Controls.Add(install); actions.Controls.Add(check); actions.Controls.Add(releases); body.Controls.Add(actions, 0, 4);
             Controls.Add(body); CancelButton = close; FormClosing += delegate { stop.Cancel(); };
+            if (checkOnOpen) Shown += delegate { Check(); };
         }
         void UI(Action action) { if (IsDisposed || Disposing || !IsHandleCreated) return; try { BeginInvoke(action); } catch (InvalidOperationException) { } }
         void SetBusy(bool value) { busy = value; check.Enabled = !value; install.Enabled = !value && available != null; progress.Visible = value; }

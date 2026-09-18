@@ -49,6 +49,9 @@ namespace TaskbarTiles
         public uint ProcessId;
         public string Title, Exe, AppId;
         public long ProcessStartTicks;
+        internal uint AppProcessId;
+        internal long AppProcessStartTicks;
+        internal bool IdentityAmbiguous;
         internal DateTime NextIdentityRefresh;
         public override string ToString() { return Title + (string.IsNullOrEmpty(Exe) ? "" : "   [" + Path.GetFileName(Exe) + "]"); }
     }
@@ -82,7 +85,10 @@ namespace TaskbarTiles
                     string windowId = ShellIcons.WindowAppId(h);
                     entry.AppId = string.IsNullOrWhiteSpace(windowId) ? PackageIdentity.ForProcess(pid) : windowId;
                     entry.ProcessStartTicks = PackageIdentity.StartTicks(pid);
-                    entry.NextIdentityRefresh = DateTime.UtcNow.AddSeconds(1);
+                    entry.AppProcessId = pid; entry.AppProcessStartTicks = entry.ProcessStartTicks;
+                    entry.IdentityAmbiguous = false;
+                    HostedWindowIdentity.Refresh(h, entry);
+                    entry.NextIdentityRefresh = DateTime.UtcNow.AddMilliseconds(500);
                 }
                 entry.Title = title.ToString(); result.Add(entry); return true;
             }, IntPtr.Zero);
@@ -197,7 +203,8 @@ namespace TaskbarTiles
         IntPtr candidate, observedForeground;
         uint candidatePid;
         bool completed;
-        int lastNew = -1, lastMatches = -1;
+        int lastNew = -1, lastMatches = -1, lastExisting = -1;
+        readonly HashSet<string> evidenceLogged = new HashSet<string>();
         LaunchReceipt receipt;
         public Form ActiveDialog { get; private set; }
         public LaunchPlacement(AppButton requested, Options settings, string id, Action<IntPtr, string> callback)
@@ -210,7 +217,7 @@ namespace TaskbarTiles
         public void Begin(LaunchReceipt accepted)
         {
             receipt = accepted ?? new LaunchReceipt(); started = DateTime.UtcNow;
-            LaunchLog.Write(requestId, "tracking; initial windows=" + before.Count + "; require new=" + receipt.RequireNewWindow);
+            LaunchLog.Write(requestId, "tracking; version=" + Program.Version + "; initial windows=" + before.Count + "; require new=" + receipt.RequireNewWindow + "; expected=" + LaunchResolution.Describe(receipt.ExpectedAppId, receipt.ExpectedExe));
             timer.Start();
         }
         public void Fail(string error) { Complete(IntPtr.Zero, error); }
@@ -223,10 +230,16 @@ namespace TaskbarTiles
                 var now = WindowInventory.Read(cache);
                 var matches = now.Where(w => New(w) && Match(w)).ToList();
                 int newCount = now.Count(New);
-                if (newCount != lastNew || matches.Count != lastMatches)
+                int existingMatches = now.Count(w => !New(w) && Match(w));
+                if (newCount != lastNew || matches.Count != lastMatches || existingMatches != lastExisting)
                 {
-                    lastNew = newCount; lastMatches = matches.Count;
-                    LaunchLog.Write(requestId, "new windows=" + newCount + "; matching new=" + matches.Count + "; matching existing=" + now.Count(w => !New(w) && Match(w)));
+                    lastNew = newCount; lastMatches = matches.Count; lastExisting = existingMatches;
+                    LaunchLog.Write(requestId, "new windows=" + newCount + "; matching new=" + matches.Count + "; matching existing=" + existingMatches);
+                }
+                foreach (var observed in now.Where(w => New(w) || Match(w)))
+                {
+                    string evidence = "hwnd=" + observed.Handle.ToInt64().ToString("X") + "; owner pid=" + observed.ProcessId + "; app pid=" + observed.AppProcessId + "; " + LaunchResolution.Describe(observed.AppId, observed.Exe) + "; " + LaunchResolution.Reason(app, observed, receipt);
+                    if (evidenceLogged.Count < 96 && evidenceLogged.Add(evidence)) LaunchLog.Write(requestId, evidence);
                 }
                 double elapsed = (DateTime.UtcNow - started).TotalSeconds;
                 IntPtr foreground = Native.GetForegroundWindow();
@@ -267,7 +280,14 @@ namespace TaskbarTiles
         {
             timer.Stop(); LaunchLog.Write(requestId, "manual choice required; candidates=" + windows.Count);
             WindowRecord selected = null; bool wait = false; DialogResult result;
-            using (var picker = new WindowChoiceWindow(app.DisplayName, reason, windows, delegate { return Shortlist(WindowInventory.Read(cache)); }))
+            bool all = windows.Count == 0;
+            if (all)
+            {
+                windows = WindowInventory.Read(cache);
+                reason += "\nNo identity match: showing all open windows for manual selection, not an automatic move.";
+                LaunchLog.Write(requestId, "manual fallback lists all eligible windows=" + windows.Count);
+            }
+            using (var picker = new WindowChoiceWindow(app.DisplayName, reason, windows, delegate { return Shortlist(WindowInventory.Read(cache)); }, all))
             {
                 ActiveDialog = picker;
                 try { result = picker.ShowDialog(); selected = picker.Selected; wait = picker.WaitLongerRequested; }
@@ -299,9 +319,9 @@ namespace TaskbarTiles
         bool showAll;
         public WindowRecord Selected;
         public bool WaitLongerRequested;
-        public WindowChoiceWindow(string app, string reason, List<WindowRecord> windows, Func<List<WindowRecord>> reload)
+        public WindowChoiceWindow(string app, string reason, List<WindowRecord> windows, Func<List<WindowRecord>> reload, bool initiallyShowAll = false)
         {
-            refresh = reload;
+            refresh = reload; showAll = initiallyShowAll;
             Text = "Choose window - " + app; StartPosition = FormStartPosition.CenterScreen; ShowInTaskbar = false; TopMost = true;
             Size = new Size(850, 460); MinimumSize = new Size(680, 330);
             BackColor = Theme.Background; ForeColor = Theme.Text; Font = new Font("Segoe UI", 10);
@@ -313,7 +333,7 @@ namespace TaskbarTiles
             var cancel = Theme.Button("Cancel", 90); cancel.Click += delegate { Close(); };
             var reloadButton = Theme.Button("Refresh list", 110); reloadButton.Click += delegate { Reload(); };
             var waitButton = Theme.Button("Wait longer", 110); waitButton.Click += delegate { WaitLongerRequested = true; DialogResult = DialogResult.Retry; Close(); };
-            var all = Theme.Button("Show all windows", 150); all.Click += delegate { showAll = !showAll; all.Text = showAll ? "Show candidates" : "Show all windows"; Reload(); };
+            var all = Theme.Button(showAll ? "Show candidates" : "Show all windows", 150); all.Click += delegate { showAll = !showAll; all.Text = showAll ? "Show candidates" : "Show all windows"; Reload(); };
             var log = Theme.Button("Diagnostics", 105); log.Click += delegate { try { Process.Start("notepad.exe", "\"" + LaunchLog.FilePath + "\""); } catch { } };
             footer.Controls.AddRange(new Control[] { move, cancel, waitButton, reloadButton, all, log });
             list.DoubleClick += delegate { Accept(); };
