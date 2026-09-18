@@ -17,6 +17,9 @@ jobs:
       - name: Compile and run helper tests
         shell: powershell
         run: ./tools/Build.ps1
+      - name: Test actual updater HTTPS and verified download
+        shell: powershell
+        run: ./tools/Test-UpdateHttps.ps1
       - name: Upload build and test records
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
