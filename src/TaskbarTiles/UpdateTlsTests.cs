@@ -32,7 +32,22 @@ namespace TaskbarTiles
             Require(tls.Contains("TLS") && tls.Contains("Browser download") && tls.Contains("unchanged"), "TLS failures explain manual recovery");
             string certificate = UpdatesWindow.ErrorText(new WebException("test", WebExceptionStatus.TrustFailure));
             Require(certificate.Contains("certificate") && certificate.Contains("Do not disable"), "certificate failures never suggest bypassing security");
-            log.AppendLine("PASS: " + checks + " updater TLS/runtime/error-message regressions. No network requests in these helper tests.");
+            string folder = Path.Combine(Path.GetTempPath(), "TaskbarTiles-MarkerTest-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(folder);
+            try
+            {
+                string file = Path.Combine(folder, "test.download"), renamed = Path.Combine(folder, "renamed.bin");
+                string source = ReleaseInfo.AssetUrl("v0.7.1", ReleaseInfo.SetupName("v0.7.1"));
+                File.WriteAllText(file, "Non-executable marker regression fixture.");
+                string hash = ReleaseInfo.Hash(file);
+                InternetDownload.Mark(file, source);
+                Require(InternetDownload.HasMark(file, source), "native stream retains ZoneId=3 and source");
+                Require(ReleaseInfo.Hash(file) == hash, "Internet marker does not change payload checksum");
+                File.Move(file, renamed);
+                Require(InternetDownload.HasMark(renamed, source), "Internet marker survives final rename");
+            }
+            finally { Directory.Delete(folder, true); }
+            log.AppendLine("PASS: " + checks + " updater TLS/runtime/Internet-marker/error-message regressions. No network requests in these helper tests.");
         }
 
         // GETs GitHub metadata, the checksum list and an installer using production transport.
@@ -55,6 +70,9 @@ namespace TaskbarTiles
                     string file = UpdateTransport.DownloadTo(update, stop.Token, null, out expected, root);
                     if (!File.Exists(file) || new FileInfo(file).Length == 0 || ReleaseInfo.Hash(file) != expected)
                         throw new InvalidDataException("Downloaded installer failed final verification.");
+                    if (!InternetDownload.HasMark(file, ReleaseInfo.AssetUrl(update.Tag, update.AssetName)))
+                        throw new InvalidDataException("Downloaded installer lost its Internet security marker.");
+                    log.AppendLine("PASS: final installer retains its Internet security marker.");
                     log.AppendLine("PASS: checksum list, HTTPS redirect and installer download through production updater transport.");
                     log.AppendLine("PASS: downloaded installer SHA-256 verified; installer NOT executed.");
                 }
@@ -64,6 +82,7 @@ namespace TaskbarTiles
             {
                 var web = ex as WebException;
                 log.AppendLine("FAIL: " + ex.GetType().Name + (web == null ? "" : " / " + web.Status) + ": " + ex.Message);
+                log.AppendLine(ex.StackTrace);
             }
             finally
             {

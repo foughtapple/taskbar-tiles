@@ -24,6 +24,7 @@ edit(src+'TaskbarTiles.csproj', '    <TargetFrameworkVersion>v4.8</TargetFramewo
 ''')
 edit(src+'TaskbarTiles.csproj', '    <Compile Include="UpdateTests.cs" />\n', '''    <Compile Include="UpdateTests.cs" />
     <Compile Include="UpdateTlsTests.cs" />
+    <Compile Include="InternetDownload.cs" />
 ''')
 edit(src+'app.config', '<configuration><startup useLegacyV2RuntimeActivationPolicy="true"><supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.8" /></startup></configuration>', '''<configuration>
   <startup useLegacyV2RuntimeActivationPolicy="true">
@@ -49,6 +50,13 @@ edit(src+'Updates.cs', '''        internal static string Download(AvailableUpdat
         {
             string sums''')
 edit(src+'Updates.cs', 'string folder = Path.Combine(Program.Home, "Updates", update.Tag);', 'string folder = Path.Combine(updateRoot, update.Tag);')
+# Write the Internet marker through a native named stream; File.WriteAllText rejects ADS paths.
+edit(src+'Updates.cs', '                if (File.Exists(destination)) File.Delete(destination);', '''                InternetDownload.Mark(partial, ReleaseInfo.AssetUrl(update.Tag, update.AssetName));
+                if (File.Exists(destination)) File.Delete(destination);''')
+edit(src+'Updates.cs', r'''                // Mark the file as an Internet download on NTFS; do not bypass Windows checks.
+                try { File.WriteAllText(destination + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=" + ReleaseInfo.AssetUrl(update.Tag, update.AssetName) + "\r\n"); } catch (IOException) { }
+''', '''                // Renaming within the same folder preserves the verified Internet marker.
+''')
 edit(src+'Updates.cs', 'ClientSize = new Size(680, 460); MinimumSize = new Size(660, 420);', 'ClientSize = new Size(700, 490); MinimumSize = new Size(680, 460);')
 edit(src+'Updates.cs', 'body.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));', 'body.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));')
 edit(src+'Updates.cs', 'var releases = Theme.Button("Release notes", 125);', 'var releases = Theme.Button("Browser download", 145);')
@@ -67,6 +75,7 @@ edit('CHANGELOG.md', '# Changelog\n\n## 0.7.0\n\n### Fixed\n', '''# Changelog
 
 - Fix updater TLS negotiation in CodeDOM-built executables by declaring the .NET Framework 4.8 target in assembly metadata and opting into OS-selected TLS/strong cryptography in the app-local configuration.
 - Retain normal certificate validation, HTTPS-only trusted redirects and SHA-256 verification. Do not enable legacy protocols, modify machine-wide TLS policy or silently retry with weaker security.
+- Fix post-download path errors by writing and verifying the Internet security marker through the native named-stream API before exposing the installer.
 - Provide an always-available Browser download action and specific TLS/certificate failure explanations.
 - Add offline runtime-policy regressions plus an explicit online integration test using the actual built executable to read GitHub metadata, download/verify a released installer and delete the test download without running it.
 - Preserve the 0.7.1 launch-placement fixes, Settings Updates tab and all user configuration.
