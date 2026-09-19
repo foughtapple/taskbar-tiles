@@ -15,7 +15,7 @@ namespace TaskbarTiles
         {
             for (int depth = 0; depth < 32 && candidate != IntPtr.Zero; depth++)
             {
-                candidate = Native.GetWindow(candidate, 4); // GW_OWNER, not another same-PID window.
+                candidate = Native.GetWindow(candidate, 4);
                 if (candidate == owner) return true;
             }
             return false;
@@ -69,8 +69,9 @@ namespace TaskbarTiles
         {
             if (disposed) return;
             presenting = true; failureLogged = false;
-            // WinForms caches TopMost; the explicit native call below is still needed.
-            form.TopMost = true;
+            // Only on an explicit open: the .NET Framework TopMost setter can activate.
+            // Its getter is cached and is not evidence of the current native Z order.
+            if (!form.TopMost) form.TopMost = true;
         }
         internal void Suspend()
         { presenting = false; timer.Stop(); }
@@ -82,12 +83,12 @@ namespace TaskbarTiles
         internal bool RaiseNow()
         {
             if (raising || !CanRaise()) return false;
-            // Owned modal windows must stay above their parent, not behind it.
             foreach (Form owned in form.OwnedForms) if (owned.Visible) return false;
             raising = true;
             try
             {
-                form.TopMost = true;
+                // Do not assign Form.TopMost here: on .NET Framework its setter omits
+                // SWP_NOACTIVATE, even when the property's cached value is already true.
                 bool ok = WindowNative.SetWindowPos(form.Handle, new IntPtr(-1), 0, 0, 0, 0, SwitcherLayerPolicy.RaiseFlags);
                 if (!ok && !failureLogged)
                 { failureLogged = true; ActivationLog.Write("switcher-layer: topmost request rejected; version=" + Program.Version); }
