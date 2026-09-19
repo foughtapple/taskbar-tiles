@@ -9,6 +9,19 @@ using System.Windows.Forms;
 
 namespace TaskbarTiles
 {
+    static class ClickAwayDiagnostics
+    {
+        static readonly object gate = new object();
+        static DateTime last; static int count;
+        internal static void Write(string phase, Exception ex)
+        {
+            lock (gate)
+            {
+                if ((DateTime.UtcNow - last).TotalMinutes >= 1) { last = DateTime.UtcNow; count = 0; }
+                if (count++ < 12) RenderingLog.Write(phase, ex, Size.Empty, 1, 0, 0);
+            }
+        }
+    }
     static class OutsideClickPolicy
     {
         internal static bool Dismiss(int observedSession, int currentSession, bool armed, bool visible, bool enabled,
@@ -39,10 +52,11 @@ namespace TaskbarTiles
             callback = Hook;
             worker = new Thread(Run) { IsBackground = true, Name = "Taskbar Tiles outside-click observer" };
             worker.SetApartmentState(ApartmentState.MTA); worker.Start();
-            ready.WaitOne(2000);
+            if (ready.WaitOne(2000)) ready.Dispose();
             form.VisibleChanged += Visibility;
             form.Disposed += FormDisposed;
         }
+        void SignalReady() { try { ready.Set(); } catch (ObjectDisposedException) { } }
         void Run()
         {
             IntPtr hook = IntPtr.Zero;
@@ -55,12 +69,12 @@ namespace TaskbarTiles
                     var h = queue.Handle;
                     hook = Native.SetWindowsHookEx(14, callback, Native.GetModuleHandle(null), 0);
                     installed = hook != IntPtr.Zero;
-                    if (!installed) RenderDiagnostics.Write("outside-click-hook-unavailable", null);
-                    ready.Set();
+                    if (!installed) ClickAwayDiagnostics.Write("outside-click-hook-unavailable", null);
+                    SignalReady();
                     if (!disposed) Application.Run();
                 }
             }
-            catch (Exception ex) { RenderDiagnostics.Write("outside-click-hook", ex); ready.Set(); }
+            catch (Exception ex) { ClickAwayDiagnostics.Write("outside-click-hook", ex); SignalReady(); }
             finally
             {
                 installed = false;
@@ -106,7 +120,7 @@ namespace TaskbarTiles
                     form.Disposing, InternalTarget(target, point)))
                 { Suspend(); dismiss(); }
             }
-            catch (Exception ex) { RenderDiagnostics.Write("outside-click-dismissal", ex); }
+            catch (Exception ex) { ClickAwayDiagnostics.Write("outside-click-dismissal", ex); }
         }
         void Visibility(object sender, EventArgs e) { if (form.Visible) Arm(); else Suspend(); }
         void FormDisposed(object sender, EventArgs e) { Dispose(); }

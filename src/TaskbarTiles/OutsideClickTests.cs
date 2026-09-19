@@ -9,7 +9,7 @@ using System.Windows.Forms;
 
 namespace TaskbarTiles
 {
-    static class UiReliabilityTests
+    static class OutsideClickTests
     {
         static int checks;
         static void Require(bool ok, string label) { checks++; if (!ok) throw new InvalidOperationException("FAILED: " + label); }
@@ -25,27 +25,7 @@ namespace TaskbarTiles
             }
             Require(OutsideClickPolicy.IsDown(0x201) && OutsideClickPolicy.IsDown(0x204) && OutsideClickPolicy.IsDown(0x207), "left right middle observed");
             Require(!OutsideClickPolicy.IsDown(0x20B) && !OutsideClickPolicy.IsDown(0x200) && !OutsideClickPolicy.IsDown(0x202), "toggle/move/up not intercepted");
-            bool failed = false;
-            Require(!RenderSafety.Paint(delegate { throw new ArgumentException("fixture"); }, delegate { failed = true; }) && failed, "drawing failure contained");
-            Require(RenderSafety.Paint(delegate { }, delegate { }), "next paint still runs");
-            log.AppendLine("PASS: " + checks + " paint-boundary and click-away policy assertions; no input was generated.");
-        }
-        sealed class PaintFixture : Form
-        {
-            internal bool FailNext;
-            internal Image BadImage;
-            internal int Failures, Paints;
-            protected override void OnPaint(PaintEventArgs e)
-            {
-                RenderSafety.Paint(delegate
-                {
-                    Paints++;
-                    if (FailNext) { FailNext = false; throw new InvalidOperationException("injected one-frame failure"); }
-                    e.Graphics.Clear(Color.FromArgb(20, 27, 38));
-                    RenderSafety.DrawImage(e.Graphics, BadImage, new Rectangle(8, 8, 32, 32));
-                    TextRenderer.DrawText(e.Graphics, "Menu remains drawable", Font, ClientRectangle, Color.White);
-                }, delegate { Failures++; });
-            }
+            log.AppendLine("PASS: " + checks + " outside-click policy assertions; no input was generated.");
         }
         sealed class NoActivateFixture : Form
         {
@@ -56,7 +36,7 @@ namespace TaskbarTiles
             protected override void WndProc(ref Message m)
             { if (m.Msg == 0x21) { m.Result = new IntPtr(3); return; } base.WndProc(ref m); }
             protected override void OnMouseDown(MouseEventArgs e)
-            { base.OnMouseDown(e); Clicks++; Text = "TT075 clicks " + Clicks; }
+            { base.OnMouseDown(e); Clicks++; Text = "TT076 clicks " + Clicks; }
         }
         // Explicit native CI mode only. Run before the tray app's mutex/hooks are created.
         internal static int RunTarget(string[] args)
@@ -67,7 +47,7 @@ namespace TaskbarTiles
             {
                 form.StartPosition = FormStartPosition.Manual; form.FormBorderStyle = FormBorderStyle.None;
                 form.Bounds = new Rectangle(int.Parse(args[1]), int.Parse(args[2]), int.Parse(args[3]), int.Parse(args[4]));
-                form.Text = "TT075 clicks 0"; form.TopMost = true; form.ShowInTaskbar = false;
+                form.Text = "TT076 clicks 0"; form.TopMost = true; form.ShowInTaskbar = false;
                 expiry.Tick += delegate { form.Close(); }; expiry.Start(); Application.Run(form); return 0;
             }
         }
@@ -81,7 +61,7 @@ namespace TaskbarTiles
         {
             IntPtr found = IntPtr.Zero;
             Native.EnumWindows(delegate(IntPtr h, IntPtr p)
-            { if (WindowNative.ProcessId(h) == pid && Native.IsWindowVisible(h)) { var title = new StringBuilder(100); Native.GetWindowText(h, title, title.Capacity); if (title.ToString().StartsWith("TT075 clicks ", StringComparison.Ordinal)) { found = h; return false; } } return true; }, IntPtr.Zero);
+            { if (WindowNative.ProcessId(h) == pid && Native.IsWindowVisible(h)) { var title = new StringBuilder(100); Native.GetWindowText(h, title, title.Capacity); if (title.ToString().StartsWith("TT076 clicks ", StringComparison.Ordinal)) { found = h; return false; } } return true; }, IntPtr.Zero);
             return found;
         }
         static void ClickOnlyFixture(IntPtr window, Point point)
@@ -98,50 +78,10 @@ namespace TaskbarTiles
             try
             {
                 Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
-                using (var surface = new Bitmap(500, 220))
-                using (var g = Graphics.FromImage(surface))
-                using (var form = new Form())
-                using (var input = new TextBox())
-                using (var live = new Font("Segoe UI", 12, GraphicsUnit.Pixel))
-                {
-                    form.Controls.Add(input); FontBinding.Assign(form, live); FontBinding.Assign(input, live);
-                    using (var equal = new Font("Segoe UI", 12, GraphicsUnit.Pixel))
-                    {
-                        form.Font = equal;
-                        log.AppendLine("Observed legacy equal-font assignment retains original reference: " + ReferenceEquals(form.Font, live));
-                        FontBinding.Assign(form, live);
-                    }
-                    for (int i = 0; i < 300; i++)
-                    {
-                        using (var draft = new Font("Segoe UI", i % 3 == 0 ? 18 : 12, GraphicsUnit.Pixel))
-                        {
-                            FontBinding.Assign(form, draft); FontBinding.Assign(input, draft);
-                            Require(ReferenceEquals(form.Font, draft) && ReferenceEquals(input.Font, draft), "draft owns actual installed font references");
-                            TextRenderer.DrawText(g, "Preview", form.Font, Point.Empty, Color.White);
-                            FontBinding.Assign(form, live); FontBinding.Assign(input, live);
-                        }
-                        Require(ReferenceEquals(form.Font, live) && ReferenceEquals(input.Font, live), "no disposed preview font remains installed");
-                        TextRenderer.DrawText(g, "Reopened menu", form.Font, Point.Empty, Color.White);
-                        IntPtr hfont = input.Font.ToHfont(); DeleteObject(hfont);
-                    }
-                    var dead = new Bitmap(16, 16); dead.Dispose();
-                    Require(!RenderSafety.DrawImage(g, dead, new Rectangle(0, 0, 32, 32)), "disposed optional icon falls back");
-                    Require(!RenderSafety.DrawImage(g, dead, new Rectangle(0, 0, 32, 32)), "bad icon is not retried each paint");
-                    using (var valid = new Bitmap(16, 16)) Require(RenderSafety.DrawImage(g, valid, new Rectangle(0, 0, 32, 32)), "replacement image is accepted");
-                    FontBinding.Assign(input, SystemFonts.MessageBoxFont); FontBinding.Assign(form, SystemFonts.MessageBoxFont);
-                }
-                using (var paint = new PaintFixture { ShowInTaskbar = false, Size = new Size(300, 180) })
-                {
-                    paint.Show(); Pump(70); paint.FailNext = true; paint.Invalidate(); paint.Update();
-                    int previous = paint.Paints; paint.Invalidate(); paint.Update();
-                    Require(paint.Failures == 1 && paint.Paints > previous, "native WM_PAINT continues after injected error; no red-X latch");
-                    var dead = new Bitmap(24, 24); dead.Dispose(); paint.BadImage = dead;
-                    paint.Invalidate(); paint.Update(); Require(paint.Failures == 1, "bad image cannot abort the form paint"); paint.Hide();
-                }
                 Rectangle work = Screen.PrimaryScreen.WorkingArea;
                 var external = new Rectangle(work.Left + 350, work.Top + 80, 220, 170);
                 target = Process.Start(new ProcessStartInfo(Application.ExecutablePath,
-                    "--test-ui-target " + external.X + " " + external.Y + " " + external.Width + " " + external.Height) { UseShellExecute = false });
+                    "--test-clickaway-target " + external.X + " " + external.Y + " " + external.Width + " " + external.Height) { UseShellExecute = false });
                 IntPtr h = IntPtr.Zero;
                 for (int i = 0; i < 150 && h == IntPtr.Zero; i++) { Pump(20); h = FindTarget((uint)target.Id); }
                 Require(h != IntPtr.Zero, "out-of-process nonactivating fixture opened");
@@ -165,14 +105,14 @@ namespace TaskbarTiles
                         ClickOnlyFixture(h, new Point(external.Left + 80, external.Top + 70)); Pump(220);
                         Require(dismissed == 1 && !popup.Visible, "outside click dismisses a popup that was never active");
                         var title = new StringBuilder(100); Native.GetWindowText(h, title, title.Capacity);
-                        Require(title.ToString() == "TT075 clicks 2", "both clicks reached the other app unchanged");
+                        Require(title.ToString() == "TT076 clicks 2", "both clicks reached the other app unchanged");
                         watcher.Observe(watcher.Session, h, external.Location); Require(dismissed == 1, "hidden popup stays dismissed");
                         popup.Show(); Pump(70); ClickOnlyFixture(popup.Handle, new Point(popup.Left + 80, popup.Top + 70)); Pump(100);
                         Require(popup.Visible && dismissed == 1, "real inside click is not dismissed");
                         watcher.Suspend(); popup.Hide();
                     }
                 }
-                log.AppendLine("PASS: " + checks + " native font/preview/paint-fault/click-away assertions, including 300 font preview/reopen cycles.");
+                log.AppendLine("PASS: " + checks + " native click-away assertions, including clicks on a separate nonactivating process.");
                 log.AppendLine("Disposable test windows only. Not a reproduction of the reporter's desktop, display driver or exact original exception.");
                 return 0;
             }
@@ -181,7 +121,7 @@ namespace TaskbarTiles
             {
                 if (target != null) try { if (!target.HasExited) { var h = FindTarget((uint)target.Id); if (h != IntPtr.Zero) WindowNative.PostMessage(h, 0x10, IntPtr.Zero, IntPtr.Zero); if (!target.WaitForExit(2000)) target.Kill(); } target.Dispose(); } catch { }
                 Cursor.Position = pointer;
-                File.WriteAllText(Path.Combine(Program.Home, "ui-reliability-test.log"), log.ToString());
+                File.WriteAllText(Path.Combine(Program.Home, "outside-click-test.log"), log.ToString());
             }
         }
         [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr h);

@@ -62,6 +62,8 @@
     <Compile Include="UpdateTlsTests.cs" />
     <Compile Include="InternetDownload.cs" />
     <Compile Include="Updates.cs" />
+    <Compile Include="OutsideClickDismissal.cs" />
+    <Compile Include="OutsideClickTests.cs" />
     <Compile Include="SwitcherLayer.cs" />
     <Compile Include="SwitcherLayerTests.cs" />
     <Compile Include="Rendering.cs" />

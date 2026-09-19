@@ -1,4 +1,4 @@
-// Taskbar Tiles 0.7.4 - Windows utility. C# 5 / .NET Framework.
+// Taskbar Tiles 0.7.6 - Windows utility. C# 5 / .NET Framework.
 // No telemetry, keyboard logging, taskbar registry edits or process injection.
 // Network access is limited to explicit, user-initiated GitHub update checks/downloads.
 using System;
@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.7.5";
+        internal const string Version = "0.7.6";
         static bool SignalToggle()
         {
             try
@@ -61,6 +61,8 @@ namespace TaskbarTiles
         [STAThread]
         static void Main(string[] args)
         {
+            if (args.Contains("--test-clickaway")) { Environment.Exit(OutsideClickTests.RunNative()); return; }
+            if (args.Contains("--test-clickaway-target")) { Environment.Exit(OutsideClickTests.RunTarget(args)); return; }
             if (args.Contains("--test-update-https")) { Environment.Exit(UpdateTlsTests.RunNetwork()); return; }
             if (args.Contains("--test-switcher-layer")) { Environment.Exit(SwitcherLayerTests.RunNative()); return; }
             if (args.Contains("--test-launch-fixture")) { Environment.Exit(LaunchOutcomeTests.Fixture(args)); return; }
@@ -874,6 +876,7 @@ namespace TaskbarTiles
             SetupFeatures(); SetupQuickAccess(); SetupFullscreen(); SetupActivation();
             switcherLayer = new SwitcherLayer(this, delegate
             { return !closing && transient == null && activation == null && !fullscreenOpening; });
+            SetupOutsideDismissal();
             RefreshApps();
         }
         protected override CreateParams CreateParams
@@ -1459,7 +1462,7 @@ namespace TaskbarTiles
             if (tracking != null) tracking.Dispose();
         }
         void Dismiss()
-        { if (switcherLayer != null) switcherLayer.Suspend(); if (fullscreenOpening) CancelFullscreenOpen(); HideIntegratedSearch(); ClearThumbnails(); tip.Hide(this); Hide(); }
+        { if (outsideClicks != null) outsideClicks.Suspend(); Capture = false; if (switcherLayer != null) switcherLayer.Suspend(); if (fullscreenOpening) CancelFullscreenOpen(); HideIntegratedSearch(); ClearThumbnails(); tip.Hide(this); Hide(); }
         protected override void OnDeactivate(EventArgs e)
         { base.OnDeactivate(e); if (!suppressDeactivate && options.HideOnFocusLoss && Visible && transient == null) Dismiss(); }
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -1475,6 +1478,7 @@ namespace TaskbarTiles
         public void Shutdown()
         {
             if (closing) return; closing = true;
+            DisposeOutsideDismissal();
             if (switcherLayer != null) switcherLayer.Dispose();
             CancelPendingLaunch(); DisposeActivation(); ShutdownFullscreen(); ShutdownQuickAccess(); ShutdownFeatures();
             hook.Dispose(); Native.UnregisterHotKey(Handle, 10);
@@ -1608,6 +1612,7 @@ namespace TaskbarTiles
                 InterfacePolishTests.Run(log);
                 ActivationTests.Run(log);
                 SwitcherLayerTests.Run(log);
+                OutsideClickTests.Run(log);
                 UpdateTests.Run(log);
                 log.AppendLine("These are unit/interop-layout tests, not live Windows, FancyZones or X-Mouse integration tests.");
                 File.WriteAllText(Path.Combine(Program.Home, "self-test.log"), log.ToString());
