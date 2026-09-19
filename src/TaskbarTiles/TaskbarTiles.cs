@@ -1,4 +1,4 @@
-// Taskbar Tiles 0.7.2 - Windows utility. C# 5 / .NET Framework.
+// Taskbar Tiles 0.7.3 - Windows utility. C# 5 / .NET Framework.
 // No telemetry, keyboard logging, taskbar registry edits or process injection.
 // Network access is limited to explicit, user-initiated GitHub update checks/downloads.
 using System;
@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.7.2";
+        internal const string Version = "0.7.3";
         static bool SignalToggle()
         {
             try
@@ -62,6 +62,7 @@ namespace TaskbarTiles
         static void Main(string[] args)
         {
             if (args.Contains("--test-update-https")) { Environment.Exit(UpdateTlsTests.RunNetwork()); return; }
+            if (args.Contains("--test-switcher-layer")) { Environment.Exit(SwitcherLayerTests.RunNative()); return; }
             if (args.Contains("--self-test")) { Environment.Exit(SelfTests.Run()); return; }
             if (args.Contains("--exit"))
             {
@@ -787,6 +788,8 @@ namespace TaskbarTiles
         Icon trayIcon;
         bool refreshInProgress;
 
+        readonly SwitcherLayer switcherLayer;
+
         public Switcher()
         {
             Text = "Taskbar Tiles"; FormBorderStyle = FormBorderStyle.None;
@@ -840,7 +843,7 @@ namespace TaskbarTiles
             menu.Items.Add("Cancel pending launch / placement", null, delegate { CancelPendingLaunch(); });
             menu.Items.Add("Write icon diagnostics", null, delegate
             {
-                var report = new StringBuilder("Taskbar Tiles 0.7.0 icon sources (local only)" + Environment.NewLine);
+                var report = new StringBuilder("Taskbar Tiles " + Program.Version + " icon sources (local only)" + Environment.NewLine);
                 foreach (var app in apps)
                     report.AppendLine(app.DisplayName + " | " + app.Id + " | " + app.ImageSource + " | " + (app.Image == null ? "no icon" : app.Image.Width + "x" + app.Image.Height));
                 string file = Path.Combine(Program.Home, "icon-diagnostics.txt");
@@ -850,7 +853,7 @@ namespace TaskbarTiles
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, delegate { Shutdown(); });
             trayIcon = ApplicationIcon();
-            tray = new NotifyIcon { Icon = trayIcon, Text = "Taskbar Tiles 0.7.0", Visible = true, ContextMenuStrip = menu };
+            tray = new NotifyIcon { Icon = trayIcon, Text = "Taskbar Tiles " + Program.Version, Visible = true, ContextMenuStrip = menu };
             tray.MouseDoubleClick += delegate(object sender, MouseEventArgs e) { if (e.Button == MouseButtons.Left) ToggleMenu(); };
             if (!Native.RegisterHotKey(Handle, 10, 0x4000 | 0x1 | 0x2, 0x20))
                 Program.Log("Ctrl+Alt+Space is already registered by another application.");
@@ -862,6 +865,8 @@ namespace TaskbarTiles
             launchTimer.Tick += LaunchTick;
             monitorPoint = Cursor.Position;
             SetupFeatures(); SetupQuickAccess(); SetupFullscreen(); SetupActivation();
+            switcherLayer = new SwitcherLayer(this, delegate
+            { return !closing && transient == null && activation == null && !fullscreenOpening; });
             RefreshApps();
         }
         protected override CreateParams CreateParams
@@ -955,6 +960,7 @@ namespace TaskbarTiles
             if (launchPlacement != null && launchPlacement.ActiveDialog != null) { launchPlacement.ActiveDialog.Activate(); return; }
             if (Visible)
             {
+                switcherLayer.RaiseNow();
                 if (integratedSearch != null && integratedSearch.Visible) { integratedSearch.FocusInput(); return; }
                 stickySession |= forceSticky;
                 MoveSelection(reverse ? -1 : 1); return;
@@ -998,9 +1004,17 @@ namespace TaskbarTiles
             windowTitleFont = new Font("Segoe UI", options.WindowTitleFontSize * scale, FontStyle.Regular, GraphicsUnit.Pixel);
             LayoutMenu();
             suppressDeactivate = true;
-            Show(); Activate(); Native.SetForegroundWindow(Handle);
-            try { int corner = 2; Native.DwmSetWindowAttribute(Handle, 33, ref corner, 4); } catch { }
-            suppressDeactivate = false;
+            try
+            {
+                switcherLayer.Begin();
+                Show(); switcherLayer.RaiseNow();
+                Activate(); Native.SetForegroundWindow(Handle);
+                // Activation and topmost order are different operations. Reassert our
+                // own HWND after activation; never promote the selected app to topmost.
+                switcherLayer.RaiseNow();
+                try { int corner = 2; Native.DwmSetWindowAttribute(Handle, 33, ref corner, 4); } catch { }
+            }
+            finally { suppressDeactivate = false; }
             UpdateThumbnails();
             RefreshApps();
         }
@@ -1454,7 +1468,7 @@ namespace TaskbarTiles
             if (tracking != null) tracking.Dispose();
         }
         void Dismiss()
-        { if (fullscreenOpening) CancelFullscreenOpen(); HideIntegratedSearch(); ClearThumbnails(); tip.Hide(this); Hide(); }
+        { if (switcherLayer != null) switcherLayer.Suspend(); if (fullscreenOpening) CancelFullscreenOpen(); HideIntegratedSearch(); ClearThumbnails(); tip.Hide(this); Hide(); }
         protected override void OnDeactivate(EventArgs e)
         { base.OnDeactivate(e); if (!suppressDeactivate && options.HideOnFocusLoss && Visible && transient == null) Dismiss(); }
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -1470,6 +1484,7 @@ namespace TaskbarTiles
         public void Shutdown()
         {
             if (closing) return; closing = true;
+            if (switcherLayer != null) switcherLayer.Dispose();
             CancelPendingLaunch(); DisposeActivation(); ShutdownFullscreen(); ShutdownQuickAccess(); ShutdownFeatures();
             hook.Dispose(); Native.UnregisterHotKey(Handle, 10);
             settingsTimer.Stop(); launchTimer.Stop(); reader.Dispose(); ClearThumbnails();
@@ -1601,6 +1616,7 @@ namespace TaskbarTiles
                 LaunchResolutionTests.Run(log);
                 InterfacePolishTests.Run(log);
                 ActivationTests.Run(log);
+                SwitcherLayerTests.Run(log);
                 UpdateTests.Run(log);
                 log.AppendLine("These are unit/interop-layout tests, not live Windows, FancyZones or X-Mouse integration tests.");
                 File.WriteAllText(Path.Combine(Program.Home, "self-test.log"), log.ToString());

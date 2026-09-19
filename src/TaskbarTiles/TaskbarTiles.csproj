@@ -60,6 +60,8 @@
     <Compile Include="UpdateTlsTests.cs" />
     <Compile Include="InternetDownload.cs" />
     <Compile Include="Updates.cs" />
+    <Compile Include="SwitcherLayer.cs" />
+    <Compile Include="SwitcherLayerTests.cs" />
     <Compile Include="WindowActivation.cs" />
     <Compile Include="WindowHeaderIcons.cs" />
     <Compile Include="WindowPlacement.cs" />

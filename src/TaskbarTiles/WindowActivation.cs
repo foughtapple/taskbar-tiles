@@ -222,6 +222,9 @@ namespace TaskbarTiles
             suppressDeactivate = true;
             try
             {
+                // Suspend before the first selected-window activation, not after it.
+                // Otherwise a queued layer callback could cover the app we just chose.
+                switcherLayer.Suspend();
                 activationClock.Restart();
                 activation.Start();
                 Dismiss();
