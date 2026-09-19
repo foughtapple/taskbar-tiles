@@ -39,6 +39,9 @@ jobs:
       - name: Compile, test and package installer
         shell: powershell
         run: ./tools/Package.ps1
+      - name: Test native switcher topmost ordering
+        shell: powershell
+        run: ./tools/Test-SwitcherLayer.ps1
       - name: Test actual updater HTTPS and verified download
         shell: powershell
         run: ./tools/Test-UpdateHttps.ps1
@@ -56,9 +59,10 @@ jobs:
             built_utc = (Get-Date).ToUniversalTime().ToString('o')
             runner = 'windows-2022'
             helper_tests = 'passed'
+            native_switcher_layer_tests = 'passed on disposable test Forms; not the user desktop'
             updater_https_download_checksum_test = 'passed; installer downloaded but not executed by network test'
             installer_smoke_tests = 'passed'
-            interactive_desktop_tests = 'not run by this workflow'
+            interactive_desktop_tests = 'full application interaction not tested by this workflow'
             authenticode_signed = $false
           } | ConvertTo-Json | Set-Content dist/build-info.json -Encoding UTF8
       - name: Publish only after all tests pass

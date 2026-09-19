@@ -17,6 +17,9 @@ jobs:
       - name: Compile and run helper tests
         shell: powershell
         run: ./tools/Build.ps1
+      - name: Test native switcher topmost ordering
+        shell: powershell
+        run: ./tools/Test-SwitcherLayer.ps1
       - name: Test actual updater HTTPS and verified download
         shell: powershell
         run: ./tools/Test-UpdateHttps.ps1
