@@ -2,7 +2,7 @@ name: Validate rendering and click-away repair
 on:
   push:
     branches: ['fix/rendering-clickaway-0.7.5']
-    paths: ['.maintenance/apply075.py', '.github/workflows/prepare-ui-repair.yml', 'src/TaskbarTiles/RenderReliability.cs', 'src/TaskbarTiles/OutsideClickDismissal.cs', 'src/TaskbarTiles/UiReliabilityTests.cs']
+    paths: ['.maintenance/*.py', '.github/workflows/prepare-ui-repair.yml', 'src/TaskbarTiles/RenderReliability.cs', 'src/TaskbarTiles/OutsideClickDismissal.cs', 'src/TaskbarTiles/UiReliabilityTests.cs']
 permissions:
   contents: read
 concurrency:
@@ -27,6 +27,8 @@ jobs:
           if ($env:GITHUB_REF -cne 'refs/heads/fix/rendering-clickaway-0.7.5') { throw 'Unexpected branch.' }
           & python .maintenance/apply075.py
           if ($LASTEXITCODE -ne 0) { throw 'Source assertions failed. No changes are pushed.' }
+          & python .maintenance/fixfixture075.py
+          if ($LASTEXITCODE -ne 0) { throw 'Fixture source assertion failed.' }
           & git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed.' }
       - name: Compile and run helper regressions
@@ -53,8 +55,8 @@ jobs:
           & git config user.name 'github-actions[bot]'
           & git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           & git add -- src/TaskbarTiles version.txt CHANGELOG.md
-          & git rm -- .maintenance/apply075.py
-          if ($LASTEXITCODE -ne 0) { throw 'Could not remove one-time helper.' }
+          & git rm -- .maintenance/apply075.py .maintenance/fixfixture075.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not remove one-time helpers.' }
           & git commit -m 'Fix retained font lifetime, guard paints and handle outside clicks without activation (0.7.5)'
           if ($LASTEXITCODE -ne 0) { throw 'Could not commit tested source.' }
           & gh auth setup-git
