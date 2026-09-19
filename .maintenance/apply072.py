@@ -61,7 +61,7 @@ edit(src+'Updates.cs', '''            var web = ex as WebException; var response
                 return "Windows could not verify GitHub's certificate. Check the PC clock or your network's certificate policy. Do not disable certificate checks. Browser download is available; your installed version is unchanged.";
 ''')
 edit('version.txt', '0.7.1', '0.7.2')
-edit('CHANGELOG.md', '# Changelog\n', '''# Changelog
+edit('CHANGELOG.md', '# Changelog\n\n## 0.7.0\n\n### Fixed\n', '''# Changelog
 
 ## 0.7.2
 
@@ -76,5 +76,9 @@ edit('CHANGELOG.md', '# Changelog\n', '''# Changelog
 - Improve launch metadata and hosted-window identity matching; retain browser-profile and new-window safeguards.
 - Show all eligible windows for deliberate selection when the safe placement shortlist is empty.
 - Add privacy-conscious launch diagnostics and a dedicated Settings Updates tab.
+
+## 0.7.0
+
+### Fixed
 ''')
 print('Exact 0.7.2 source edits applied. Windows compilation and HTTPS tests are still required.')
