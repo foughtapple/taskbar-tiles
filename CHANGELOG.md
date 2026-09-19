@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.2
+
+- Fix updater TLS negotiation in CodeDOM-built executables by declaring the .NET Framework 4.8 target in assembly metadata and opting into OS-selected TLS/strong cryptography in the app-local configuration.
+- Retain normal certificate validation, HTTPS-only trusted redirects and SHA-256 verification. Do not enable legacy protocols, modify machine-wide TLS policy or silently retry with weaker security.
+- Fix post-download path errors by writing and verifying the Internet security marker through the native named-stream API before exposing the installer.
+- Provide an always-available Browser download action and specific TLS/certificate failure explanations.
+- Add offline runtime-policy regressions plus an explicit online integration test using the actual built executable to read GitHub metadata, download/verify a released installer and delete the test download without running it.
+- Preserve the 0.7.1 launch-placement fixes, Settings Updates tab and all user configuration.
+
+## 0.7.1
+
+- Improve launch metadata and hosted-window identity matching; retain browser-profile and new-window safeguards.
+- Show all eligible windows for deliberate selection when the safe placement shortlist is empty.
+- Add privacy-conscious launch diagnostics and a dedicated Settings Updates tab.
+
 ## 0.7.0
 
 ### Fixed

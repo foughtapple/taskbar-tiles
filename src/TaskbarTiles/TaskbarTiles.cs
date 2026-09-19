@@ -1,4 +1,4 @@
-// Taskbar Tiles 0.7.0 - source-built Windows utility. C# 5 / .NET Framework.
+// Taskbar Tiles 0.7.2 - Windows utility. C# 5 / .NET Framework.
 // No telemetry, keyboard logging, taskbar registry edits or process injection.
 // Network access is limited to explicit, user-initiated GitHub update checks/downloads.
 using System;
@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.7.1";
+        internal const string Version = "0.7.2";
         static bool SignalToggle()
         {
             try
@@ -61,6 +61,7 @@ namespace TaskbarTiles
         [STAThread]
         static void Main(string[] args)
         {
+            if (args.Contains("--test-update-https")) { Environment.Exit(UpdateTlsTests.RunNetwork()); return; }
             if (args.Contains("--self-test")) { Environment.Exit(SelfTests.Run()); return; }
             if (args.Contains("--exit"))
             {

@@ -10,6 +10,7 @@ namespace TaskbarTiles
         static void Reject(Action action, string name) { bool rejected = false; try { action(); } catch (InvalidDataException) { rejected = true; } Require(rejected, name); }
         internal static void Run(StringBuilder log)
         {
+            UpdateTlsTests.Run(log);
             checks = 0; Version v;
             Require(ReleaseInfo.TryVersion("v0.7.0", out v) && v == new Version(0, 7, 0), "stable version parsed");
             foreach (string tag in new[] { "v0.7.0-beta", "../bad", "v01.2.3", "v1.2", "v1.2.3.4", "v999999999.2.3", "v1.2.3&calc", "v1.2.3\n" })

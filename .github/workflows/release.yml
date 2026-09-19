@@ -39,6 +39,9 @@ jobs:
       - name: Compile, test and package installer
         shell: powershell
         run: ./tools/Package.ps1
+      - name: Test actual updater HTTPS and verified download
+        shell: powershell
+        run: ./tools/Test-UpdateHttps.ps1
       - name: Test install, upgrade and uninstall on this disposable runner
         shell: powershell
         run: ./tools/Test-Installer.ps1
@@ -53,6 +56,7 @@ jobs:
             built_utc = (Get-Date).ToUniversalTime().ToString('o')
             runner = 'windows-2022'
             helper_tests = 'passed'
+            updater_https_download_checksum_test = 'passed; installer downloaded but not executed by network test'
             installer_smoke_tests = 'passed'
             interactive_desktop_tests = 'not run by this workflow'
             authenticode_signed = $false
