@@ -20,6 +20,9 @@ jobs:
       - name: Test native switcher topmost ordering
         shell: powershell
         run: ./tools/Test-SwitcherLayer.ps1
+      - name: Test native app-managed launch outcomes
+        shell: powershell
+        run: ./tools/Test-AppLaunch.ps1
       - name: Test actual updater HTTPS and verified download
         shell: powershell
         run: ./tools/Test-UpdateHttps.ps1
