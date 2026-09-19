@@ -161,18 +161,17 @@ namespace TaskbarTiles
         Bitmap CaptureMenuPreview(Options draft)
         {
             if (Visible) throw new InvalidOperationException("Close the switcher before requesting a settings preview.");
+            EnsureMenuFonts(); MenuFonts liveFonts = menuFonts, previewFonts = null;
             Options oldOptions = options; Rectangle oldArea = area, oldBounds = Bounds;
             float oldScale = scale; int oldSelected = selected, oldWindowPage = windowPage, oldAppPage = appPage;
-            var oldWindows = windows; var oldApps = apps; Font oldUi = uiFont, oldHeading = headingFont, oldTile = tileFont, oldTitle = windowTitleFont, oldFont = Font;
+            var oldWindows = windows; var oldApps = apps;
             string oldQuery = searchBox.Text;
             try
             {
                 renderingPreview = true; options = draft.Clone(); options.Validate();
                 area = Screen.FromPoint(monitorPoint).WorkingArea;
                 scale = MenuGeometry.ScaleFor(options, area.Size, Native.ScaleAt(monitorPoint));
-                uiFont = new Font("Segoe UI", 12 * scale, GraphicsUnit.Pixel); headingFont = new Font("Segoe UI", 14 * scale, FontStyle.Bold, GraphicsUnit.Pixel);
-                tileFont = new Font("Segoe UI", options.AppLabelFontSize * scale, GraphicsUnit.Pixel);
-                windowTitleFont = new Font("Segoe UI", options.WindowTitleFontSize * scale, GraphicsUnit.Pixel); Font = uiFont;
+                previewFonts = new MenuFonts(options, scale); BindMenuFonts(previewFonts);
                 updatingSearch = true; searchBox.Text = ""; updatingSearch = false;
                 windows = allWindows.Where(w => !options.CurrentMonitorOnly || Screen.FromHandle(w.Handle).DeviceName == Screen.FromPoint(monitorPoint).DeviceName).ToList(); apps = allApps.ToList();
                 if (windows.Count == 0) windows = Enumerable.Range(1, 4).Select(n => new WindowItem { Title = "Example window " + n, Handle = IntPtr.Zero }).ToList();
@@ -180,14 +179,17 @@ namespace TaskbarTiles
                 selected = windowPage = appPage = 0; LayoutMenu();
                 lastMenuPreviewSummary = menuGeometry.Summary(options);
                 var image = new Bitmap(Math.Max(1, Width), Math.Max(1, Height));
-                using (var g = Graphics.FromImage(image)) { g.Clear(BackColor); OnPaint(new PaintEventArgs(g, new Rectangle(Point.Empty, image.Size))); }
-                return image;
+                try
+                {
+                    using (var g = Graphics.FromImage(image)) { g.Clear(BackColor); OnPaint(new PaintEventArgs(g, new Rectangle(Point.Empty, image.Size))); }
+                    return image;
+                }
+                catch { image.Dispose(); throw; }
             }
             finally
             {
-                Font = oldFont; searchBox.Font = oldFont;
-                if (uiFont != oldUi) uiFont.Dispose(); if (headingFont != oldHeading) headingFont.Dispose(); if (tileFont != oldTile) tileFont.Dispose(); if (windowTitleFont != oldTitle && windowTitleFont != null) windowTitleFont.Dispose();
-                uiFont = oldUi; headingFont = oldHeading; tileFont = oldTile; windowTitleFont = oldTitle;
+                BindMenuFonts(liveFonts);
+                if (previewFonts != null) previewFonts.Dispose();
                 options = oldOptions; scale = oldScale; area = oldArea; windows = oldWindows; apps = oldApps;
                 selected = oldSelected; windowPage = oldWindowPage; appPage = oldAppPage; Bounds = oldBounds;
                 updatingSearch = true; searchBox.Text = oldQuery; updatingSearch = false; searchBox.Visible = false;
