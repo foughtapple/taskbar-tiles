@@ -212,6 +212,7 @@ namespace TaskbarTiles
         }
         void ActivateWindow(WindowItem item)
         {
+            CancelPassiveLaunchObservation();
             CancelActivation();
             if (item == null) { Dismiss(); return; }
             // Copy the identity before any hide, refresh, modal or asynchronous work.

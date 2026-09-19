@@ -41,6 +41,8 @@
     <Compile Include="IntegratedSearch.cs" />
     <Compile Include="InterfacePolishTests.cs" />
     <Compile Include="LaunchReliability.cs" />
+    <Compile Include="LaunchOutcome.cs" />
+    <Compile Include="LaunchOutcomeTests.cs" />
     <Compile Include="LaunchResolution.cs" />
     <Compile Include="LaunchResolutionTests.cs" />
     <Compile Include="LaunchReliabilityTests.cs" />

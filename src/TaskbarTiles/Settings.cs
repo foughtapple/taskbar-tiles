@@ -12,7 +12,7 @@ namespace TaskbarTiles
 {
     sealed class Options
     {
-        public int ConfigVersion = 7;
+        public int ConfigVersion = 8;
         public int TileSize = 120;
         public int PreviewScale = 120;
         public int MaxPanelWidth = 1500;
@@ -53,7 +53,7 @@ namespace TaskbarTiles
         public bool EnableUndoMove = true;
         public bool ReuseSingleInstance = true;
         public bool DirectAppLaunch = true;
-        public bool TerminalNewWindow = true;
+        public bool TerminalNewWindow = false; // App-managed windows unless the user explicitly opts in.
         public int PickerWidth = 1050;
         public int PickerHeight = 650;
         public int FullScreenButtonHeight = 52;
@@ -126,7 +126,7 @@ namespace TaskbarTiles
             // Translate former Auto (0) once; preserve explicitly selected column/row limits.
             if (o.WindowColumns == 0 || (!sawColumns && o.ConfigVersion < 6))
                 o.WindowColumns = Math.Max(1, Math.Min(12, (Math.Max(760, Math.Min(3600, o.MaxPanelWidth)) - 32) / (280 * Math.Max(70, Math.Min(220, o.PreviewScale)) / 100 + 12)));
-            o.ConfigVersion = Math.Max(7, o.ConfigVersion);
+            o.ConfigVersion = Math.Max(8, o.ConfigVersion);
             o.Validate(); return o;
         }
         internal static Options Load() { return File.Exists(FilePath) ? Parse(File.ReadAllLines(FilePath)) : new Options(); }
@@ -178,15 +178,18 @@ namespace TaskbarTiles
             // The user requested both labels at 22 on this upgrade. Do it once,
             // not on every start or reinstall; all other preferences survive.
             if (StoredVersion(lines) < 7) { o.WindowTitleFontSize = 22; o.AppLabelFontSize = 22; }
-            o.ConfigVersion = Math.Max(7, o.ConfigVersion); return o;
+            // Replace our historical forced-new default once; never change an app's
+            // configuration or a user's explicit shortcut command-line arguments.
+            if (StoredVersion(lines) < 8) o.TerminalNewWindow = false;
+            o.ConfigVersion = Math.Max(8, o.ConfigVersion); return o;
         }
         internal static void Migrate()
         {
             try
             {
                 var raw = File.Exists(FilePath) ? File.ReadAllLines(FilePath) : new string[0];
-                if (StoredVersion(raw) >= 7) return;
-                if (File.Exists(FilePath)) File.Copy(FilePath, FilePath + ".pre-v062", true);
+                if (StoredVersion(raw) >= 8) return;
+                if (File.Exists(FilePath)) File.Copy(FilePath, FilePath + ".pre-v074", true);
                 UpgradeToCurrent(raw).Save();
             }
             catch (Exception ex) { Program.Log("Settings migration: " + ex.Message); }
@@ -288,14 +291,14 @@ namespace TaskbarTiles
             Check(navigation, "StickyAltTab", "Keep the menu open when Alt is released");
             Check(navigation, "InterceptAltTab", "Replace Alt+Tab while Taskbar Tiles is running");
             Check(navigation, "MinimizeFullscreenOnOpen", "Minimise the foreground fullscreen app when opening the switcher");
-            Section(navigation, "Window placement", "Right-click selects a destination; ordinary left-click behaviour is unchanged.");
+            Section(navigation, "Launching and window placement", "Each click sends one normal launch request. The application decides whether to create a window or reuse one; its own settings and your shortcut arguments are respected.");
             Check(navigation, "RightClickZones", "Enable right-click monitor and zone picker");
             Check(navigation, "KeepOpenAfterMove", "Reopen Taskbar Tiles after moving an existing window");
             Check(navigation, "EnableUndoMove", "Remember the last window move for Undo");
             Check(navigation, "DirectAppLaunch", "Launch verified shortcuts directly instead of clicking the taskbar");
-            Check(navigation, "TerminalNewWindow", "Open plain Terminal launchers in a new window");
-            Check(navigation, "ReuseSingleInstance", "Move a matching existing window if an app reuses it");
-            Number(navigation, "LaunchTimeoutSeconds", "Wait for a new app window", "Seconds. Waits for a stable new window before considering reuse. Ambiguous matches let you refresh, wait longer or choose.", 5, 60, 5);
+            Check(navigation, "TerminalNewWindow", "Override Terminal settings: always request a new window (optional)");
+            Check(navigation, "ReuseSingleInstance", "Bring forward an existing window when the app reuses it");
+            Number(navigation, "LaunchTimeoutSeconds", "Wait for the app's launch result", "Seconds. New windows take priority; at this deadline a single verified existing window may be restored. Zone ambiguity asks you to choose. Ordinary launch observation never blocks your next action.", 5, 60, 5);
 
             var zones = Page("Screens & zones");
             Section(zones, "Destination picker", "Full screen means maximise on that monitor, with the normal Windows taskbar. It does not send F11.");

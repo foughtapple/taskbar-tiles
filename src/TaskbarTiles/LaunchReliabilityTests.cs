@@ -91,7 +91,7 @@ namespace TaskbarTiles
             foreach(var t in threads)t.Join();
             Check(winners==1,"concurrent dispatch has one winner");
             var defaults=new Options();
-            Check(defaults.DirectAppLaunch && defaults.TerminalNewWindow,"launch reliability defaults on");
+            Check(defaults.DirectAppLaunch && !defaults.TerminalNewWindow,"direct launch enabled without forcing app window policy");
             var migrated=Options.Parse(new[]{"ConfigVersion=6","TileSize=144","PreviewScale=170","WindowColumns=6","WindowRows=2","WindowTitleFontSize=18","AppLabelFontSize=20","DirectAppLaunch=false","TerminalNewWindow=false"});
             Check(migrated.TileSize==144 && migrated.PreviewScale==170 && migrated.WindowColumns==6 && migrated.WindowRows==2,"existing appearance preserved");
             Check(migrated.WindowTitleFontSize==18 && migrated.AppLabelFontSize==20,"independent fonts preserved");

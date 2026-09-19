@@ -263,6 +263,7 @@ namespace TaskbarTiles
     {
         void ShowUpdates()
         {
+            CancelPassiveLaunchObservation();
             if (transient != null) { transient.Activate(); return; }
             CancelActivation(); Dismiss();
             using (var form = new UpdatesWindow())
