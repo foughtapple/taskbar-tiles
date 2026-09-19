@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.5
+
+- Fix font lifetime across repeated opens and settings previews: WinForms may retain an equal old Font, so detach control bindings before disposing its owner. Reuse unchanged font generations.
+- Isolate bad icons and contain managed paint failures before WinForms latches its white/red-X error surface. Retry resource rebuild at most twice per open, with F5/tray graphics refresh and local rendering diagnostics.
+- Native regressions reproduce the old disposed-font defect and exercise the real menu paint/preview path, equal metrics, font/scale changes, damaged icons, persistent failures and dismissal safety.
+- Keep app-managed launch outcomes, exact-window switching, topmost handling, updater checks and existing user configuration unchanged.
+
 ## 0.7.4
 
 - Observe normal launches as well as zone launches. Send one request and honour whichever new or reused window the app actually exposes.

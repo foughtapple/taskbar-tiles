@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.7.4";
+        internal const string Version = "0.7.5";
         static bool SignalToggle()
         {
             try
@@ -65,6 +65,7 @@ namespace TaskbarTiles
             if (args.Contains("--test-switcher-layer")) { Environment.Exit(SwitcherLayerTests.RunNative()); return; }
             if (args.Contains("--test-launch-fixture")) { Environment.Exit(LaunchOutcomeTests.Fixture(args)); return; }
             if (args.Contains("--test-launch-outcome")) { Environment.Exit(LaunchOutcomeTests.RunNative()); return; }
+            if (args.Contains("--test-rendering")) { Environment.Exit(Switcher.RunRenderingRegressionTests()); return; }
             if (args.Contains("--self-test")) { Environment.Exit(SelfTests.Run()); return; }
             if (args.Contains("--exit"))
             {
@@ -792,7 +793,8 @@ namespace TaskbarTiles
 
         readonly SwitcherLayer switcherLayer;
 
-        public Switcher()
+        public Switcher() : this(false) { }
+        internal Switcher(bool renderingTest)
         {
             Text = "Taskbar Tiles"; FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false; StartPosition = FormStartPosition.Manual;
@@ -800,6 +802,7 @@ namespace TaskbarTiles
             BackColor = Color.FromArgb(20, 27, 38); ForeColor = Color.FromArgb(235, 239, 245);
             TopMost = true;
             var h = Handle; // Create the message target without showing the menu.
+            if (renderingTest) { Controls.Add(searchBox); return; } // Explicit isolated rendering tests: no hooks/tray/workers.
             reader = new TaskbarReader();
             hook = new KeyboardHook();
             hook.Enabled = options.InterceptAltTab;
@@ -840,6 +843,8 @@ namespace TaskbarTiles
             });
             menu.Items.Add("Open launch diagnostics", null, delegate { OpenLaunchDiagnostics(); });
             menu.Items.Add("Open switching diagnostics", null, delegate { OpenSwitchingDiagnostics(); });
+            menu.Items.Add("Open rendering diagnostics", null, delegate { OpenRenderingDiagnostics(); });
+            menu.Items.Add("Refresh menu graphics", null, delegate { RefreshMenuGraphics(); });
             menu.Items.Add("Check for updates...", null, delegate { ShowUpdates(); });
             menu.Items.Add("About Taskbar Tiles", null, delegate { ShowAbout(); });
             menu.Items.Add("Cancel pending launch / placement", null, delegate { CancelPendingLaunch(); });
@@ -996,16 +1001,8 @@ namespace TaskbarTiles
             // Constrain extreme accessibility scaling only when the two sections
             // otherwise cannot fit on the chosen monitor's working area.
             scale = MenuGeometry.ScaleFor(options, area.Size, scale);
-            Font oldFont = uiFont;
-            uiFont = new Font("Segoe UI", 12f * scale, FontStyle.Regular, GraphicsUnit.Pixel);
-            Font = uiFont;
-            if (oldFont != null) oldFont.Dispose();
-            if (headingFont != null) headingFont.Dispose();
-            headingFont = new Font("Segoe UI", 14f * scale, FontStyle.Bold, GraphicsUnit.Pixel);
-            if (tileFont != null) tileFont.Dispose();
-            tileFont = new Font("Segoe UI", options.AppLabelFontSize * scale, FontStyle.Regular, GraphicsUnit.Pixel);
-            if (windowTitleFont != null) windowTitleFont.Dispose();
-            windowTitleFont = new Font("Segoe UI", options.WindowTitleFontSize * scale, FontStyle.Regular, GraphicsUnit.Pixel);
+            ResetPaintRecovery();
+            EnsureMenuFonts();
             LayoutMenu();
             suppressDeactivate = true;
             try
@@ -1053,11 +1050,7 @@ namespace TaskbarTiles
         Rectangle pageInfoRect;
         void RefreshLabelFonts()
         {
-            float title = options.WindowTitleFontSize * scale, app = options.AppLabelFontSize * scale;
-            if (windowTitleFont == null || Math.Abs(windowTitleFont.Size - title) > .01f)
-            { if (windowTitleFont != null) windowTitleFont.Dispose(); windowTitleFont = new Font("Segoe UI", title, FontStyle.Regular, GraphicsUnit.Pixel); }
-            if (tileFont == null || Math.Abs(tileFont.Size - app) > .01f)
-            { if (tileFont != null) tileFont.Dispose(); tileFont = new Font("Segoe UI", app, FontStyle.Regular, GraphicsUnit.Pixel); }
+            EnsureMenuFonts();
         }
         void LayoutMenu()
         {
@@ -1165,10 +1158,11 @@ namespace TaskbarTiles
                 { float sign = kind == "prev" ? -1 : 1; g.DrawLines(pen, new PointF[] { new PointF(x - sign * d / 2, y - d), new PointF(x + sign * d / 2, y), new PointF(x - sign * d / 2, y + d) }); }
             }
         }
-        protected override void OnPaint(PaintEventArgs e)
+        void PaintMenu(PaintEventArgs e)
         {
             base.OnPaint(e); Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            paintPhase = "menu header";
             Color light = ForeColor, muted = Color.FromArgb(156, 171, 192), accent = Color.FromArgb(111, 193, 250);
             DrawingUtil.Round(g, new Rectangle(0, 0, Width - 1, Height - 1), S(15), BackColor, Color.FromArgb(62, 74, 93), 1);
             if (renderingPreview && options.EnableSearch) PaintPreviewSearch(g);
@@ -1188,6 +1182,7 @@ namespace TaskbarTiles
             for (int i = 0; i < cardRects.Count; i++)
             {
                 Rectangle r = cardRects[i]; int index = windowPage * perWindowPage + i;
+                paintPhase = "window card";
                 bool hover = lastMouseHit == i, active = index == selected;
                 DrawingUtil.Round(g, r, S(10), hover ? Color.FromArgb(40, 50, 65) : Color.FromArgb(31, 39, 51),
                     active ? accent : hover ? Color.FromArgb(89, 111, 140) : Color.FromArgb(53, 65, 83), active ? Math.Max(1.5f, scale * 1.5f) : 1);
@@ -1195,12 +1190,8 @@ namespace TaskbarTiles
                 if (!header.Icon.IsEmpty)
                 {
                     var icon = headerIcons == null ? null : headerIcons.Get(windows[index].Handle);
-                    if (icon != null)
-                    {
-                        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                        g.DrawImage(icon, DrawingUtil.Fit(header.Icon, icon.Width, icon.Height));
-                    }
-                    else WindowHeaderGeometry.PaintFallback(g, header.Icon, accent);
+                    if (!DrawMenuImage(g, icon, header.Icon, "window title icon"))
+                        WindowHeaderGeometry.PaintFallback(g, header.Icon, accent);
                 }
                 TextRenderer.DrawText(g, windows[index].Title, windowTitleFont ?? Font, header.Title, light,
                     TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
@@ -1235,18 +1226,7 @@ namespace TaskbarTiles
                 int labelHeight = options.ShowAppLabels ? S(MenuTextMetrics.AppLabelBand(options)) : 0;
                 int iconSize = Math.Max(S(14), Math.Min((int)(r.Width * .58), r.Height - labelHeight - S(18)));
                 Rectangle box = new Rectangle(r.Left + (r.Width - iconSize) / 2, options.ShowAppLabels ? r.Top + S(8) : r.Top + (r.Height - iconSize) / 2, iconSize, iconSize);
-                if (app.Image != null)
-                {
-                    Rectangle imageRect = DrawingUtil.Fit(box, app.Image.Width, app.Image.Height);
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                    using (var attributes = new ImageAttributes())
-                    {
-                        attributes.SetWrapMode(WrapMode.TileFlipXY);
-                        g.DrawImage(app.Image, imageRect, 0, 0, app.Image.Width, app.Image.Height, GraphicsUnit.Pixel, attributes);
-                    }
-                    g.PixelOffsetMode = PixelOffsetMode.Default;
-                }
-                else
+                if (!DrawMenuImage(g, app.Image, box, "app launch icon"))
                 {
                     DrawingUtil.Round(g, box, S(9), Color.FromArgb(45, 65, 89), Color.Transparent, 0);
                     Label(g, TextTools.Initials(app.DisplayName), box, true, accent, true);
@@ -1257,6 +1237,7 @@ namespace TaskbarTiles
                 if (options.ShowAppLabels) TextRenderer.DrawText(g, app.DisplayName, tileFont, label, light, flags);
             }
             if (apps.Count == 0) Label(g, string.IsNullOrEmpty(Query) ? taskbarStatus : "No matching apps", new Rectangle(S(22), appTop + S(42), Width - S(44), S(72)), false, muted, true);
+            paintPhase = "footer";
             PaintQuickAccess(g);
             Label(g, options.RightClickZones ? "Left-click: choose   /   Right-click: place   /   Esc: back" : "Click to choose   /   Esc to close", new Rectangle(S(22), footerTop, Width - S(options.QuickSizeButtons ? 490 : 44), S(28)), false, muted, false);
             if (options.QuickSizeButtons)
@@ -1386,7 +1367,7 @@ namespace TaskbarTiles
             if (QuickAccessKey(keyData)) return true;
             Keys code = keyData & Keys.KeyCode;
             if (code == Keys.Escape) { if (!string.IsNullOrEmpty(Query)) searchBox.Clear(); else Dismiss(); return true; }
-            if (code == Keys.F5) { RefreshWindows(); RefreshApps(); return true; }
+            if (code == Keys.F5) { RefreshMenuGraphics(); RefreshWindows(); RefreshApps(); return true; }
             if (keyData == (Keys.Control | Keys.F) && options.EnableSearch) { searchBox.Focus(); searchBox.SelectAll(); return true; }
             if (code == Keys.Enter) { if (windows.Count == 0 && apps.Count > 0) QueueLaunch(apps[0], null); else AcceptWindow(); return true; }
             if (searchBox.Focused && (code == Keys.Left || code == Keys.Right || code == Keys.Home || code == Keys.End)) return base.ProcessCmdKey(ref msg, keyData);
@@ -1524,15 +1505,14 @@ namespace TaskbarTiles
         {
             if (disposing)
             {
-                if (headingFont != null) headingFont.Dispose();
-                if (uiFont != null) uiFont.Dispose();
-                if (tileFont != null) tileFont.Dispose();
-                if (windowTitleFont != null) windowTitleFont.Dispose();
                 tip.Dispose();
                 if (settingsTimer != null) settingsTimer.Dispose();
                 if (launchTimer != null) launchTimer.Dispose();
             }
             base.Dispose(disposing);
+            // Inherited child-control fonts must outlive the controls themselves.
+            if (disposing && menuFonts != null) { menuFonts.Dispose(); menuFonts = null; }
+            if (disposing) rejectedPaintImages.Clear();
         }
     }
 
