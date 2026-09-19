@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.3
+
+- Reassert the switcher's own native topmost layer on opening/activation and repair overlap while the popup is in use.
+- Suspend layer maintenance before handing focus to the exact selected window, dismissal and modal transitions. Never change another app's topmost preference or steal focus during maintenance.
+- Add native Z-order regression tests for competing topmost windows, stale cached/native style, repeated hide/reopen, modal ordering and handoff gates.
+- Retain updater TLS, verified downloads, launch-placement fixes and all preferences; correct the tray version label.
+
 ## 0.7.2
 
 - Fix updater TLS negotiation in CodeDOM-built executables by declaring the .NET Framework 4.8 target in assembly metadata and opting into OS-selected TLS/strong cryptography in the app-local configuration.
