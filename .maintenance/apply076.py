@@ -12,7 +12,7 @@ def block(path,start,finish,replacement):
 base='src/TaskbarTiles/'
 main=base+'TaskbarTiles.cs'
 edit(main,'internal const string Version = "0.7.5";','internal const string Version = "0.7.6";')
-edit(main,'// Taskbar Tiles 0.7.5','// Taskbar Tiles 0.7.6')
+edit(main,'// Taskbar Tiles 0.7.4','// Taskbar Tiles 0.7.6')
 edit(main,'            if (args.Contains("--test-update-https"))','''            if (args.Contains("--test-clickaway")) { Environment.Exit(OutsideClickTests.RunNative()); return; }
             if (args.Contains("--test-clickaway-target")) { Environment.Exit(OutsideClickTests.RunTarget(args)); return; }
             if (args.Contains("--test-update-https"))''')
