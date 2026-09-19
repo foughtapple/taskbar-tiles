@@ -139,10 +139,13 @@ namespace TaskbarTiles
         internal static AvailableUpdate Check(CancellationToken token)
         { return AvailableUpdate.Parse(Text(ReleaseInfo.ApiUrl, 2097152, token)); }
         internal static string Download(AvailableUpdate update, CancellationToken token, Action<long, long> progress, out string verifiedHash)
+        { return DownloadTo(update, token, progress, out verifiedHash, Path.Combine(Program.Home, "Updates")); }
+        // The online integration test uses a unique temporary root; normal updates keep their existing location.
+        internal static string DownloadTo(AvailableUpdate update, CancellationToken token, Action<long, long> progress, out string verifiedHash, string updateRoot)
         {
             string sums = Text(ReleaseInfo.AssetUrl(update.Tag, "SHA256SUMS.txt"), 65536, token);
             verifiedHash = ReleaseInfo.ExpectedHash(sums, update.AssetName);
-            string folder = Path.Combine(Program.Home, "Updates", update.Tag);
+            string folder = Path.Combine(updateRoot, update.Tag);
             Directory.CreateDirectory(folder);
             string partial = Path.Combine(folder, Guid.NewGuid().ToString("N") + ".download");
             string destination = Path.Combine(folder, update.AssetName);
@@ -152,10 +155,10 @@ namespace TaskbarTiles
                     Get(new Uri(ReleaseInfo.AssetUrl(update.Tag, update.AssetName)), stream, 134217728, token, progress);
                 if (ReleaseInfo.Hash(partial) != verifiedHash) throw new InvalidDataException("Installer checksum mismatch. Nothing will be run.");
                 token.ThrowIfCancellationRequested();
+                InternetDownload.Mark(partial, ReleaseInfo.AssetUrl(update.Tag, update.AssetName));
                 if (File.Exists(destination)) File.Delete(destination);
                 File.Move(partial, destination);
-                // Mark the file as an Internet download on NTFS; do not bypass Windows checks.
-                try { File.WriteAllText(destination + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=" + ReleaseInfo.AssetUrl(update.Tag, update.AssetName) + "\r\n"); } catch (IOException) { }
+                // Renaming within the same folder preserves the verified Internet marker.
                 return destination;
             }
             finally { if (File.Exists(partial)) File.Delete(partial); }
@@ -175,10 +178,10 @@ namespace TaskbarTiles
             AutoScaleDimensions = new SizeF(96F, 96F); AutoScaleMode = AutoScaleMode.Dpi;
             Text = "Taskbar Tiles - Updates"; BackColor = Theme.Background; ForeColor = Theme.Text;
             Font = new Font("Segoe UI", 10); StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(680, 460); MinimumSize = new Size(660, 420); MaximizeBox = false;
+            ClientSize = new Size(700, 490); MinimumSize = new Size(680, 460); MaximizeBox = false;
             var body = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 1, RowCount = 5 };
             body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
             body.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
             body.Controls.Add(new Label { Text = "Taskbar Tiles  " + Program.Version, Font = new Font("Segoe UI", 18, FontStyle.Bold), AutoSize = true }, 0, 0);
             status.Text = "Check GitHub for a newer version. Nothing is downloaded or installed without your action.";
@@ -191,7 +194,7 @@ namespace TaskbarTiles
             var close = Theme.Button("Close", 82); close.Click += delegate { Close(); };
             install = Theme.Button("Download && install", 165); install.Enabled = false; install.Click += delegate { Download(); };
             check = Theme.Button("Check GitHub", 125); check.Click += delegate { Check(); };
-            var releases = Theme.Button("Release notes", 125); releases.Click += delegate { try { ReleaseInfo.Open(ReleaseInfo.LatestUrl); } catch (Exception ex) { status.Text = ex.Message; } };
+            var releases = Theme.Button("Browser download", 145); releases.Click += delegate { try { ReleaseInfo.Open(ReleaseInfo.LatestUrl); } catch (Exception ex) { status.Text = ex.Message; } };
             actions.Controls.Add(close); actions.Controls.Add(install); actions.Controls.Add(check); actions.Controls.Add(releases); body.Controls.Add(actions, 0, 4);
             Controls.Add(body); CancelButton = close; FormClosing += delegate { stop.Cancel(); };
             if (checkOnOpen) Shown += delegate { Check(); };
@@ -218,9 +221,13 @@ namespace TaskbarTiles
                 catch (Exception ex) { UI(delegate { status.Text = ErrorText(ex); SetBusy(false); }); }
             });
         }
-        static string ErrorText(Exception ex)
+        internal static string ErrorText(Exception ex)
         {
             var web = ex as WebException; var response = web == null ? null : web.Response as HttpWebResponse;
+            if (web != null && web.Status == WebExceptionStatus.SecureChannelFailure)
+                return "Windows could not establish a secure TLS connection to GitHub. Use Browser download to update manually. Certificate checks remain enabled; your installed version is unchanged.";
+            if (web != null && web.Status == WebExceptionStatus.TrustFailure)
+                return "Windows could not verify GitHub's certificate. Check the PC clock or your network's certificate policy. Do not disable certificate checks. Browser download is available; your installed version is unchanged.";
             if (response != null && response.StatusCode == HttpStatusCode.NotFound) return "No public release is available at the configured repository yet. Publish the first release before using GitHub updates.";
             return "Update check/download did not complete. Your installed version is unchanged. " + ex.Message;
         }
