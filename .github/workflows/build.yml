@@ -17,6 +17,9 @@ jobs:
       - name: Compile and run helper tests
         shell: powershell
         run: ./tools/Build.ps1
+      - name: Test real menu rendering and recovery
+        shell: powershell
+        run: ./tools/Test-Rendering.ps1
       - name: Test native switcher topmost ordering
         shell: powershell
         run: ./tools/Test-SwitcherLayer.ps1
