@@ -180,7 +180,7 @@ namespace TaskbarTiles
                 foreach (var app in allApps) { var image = app.Image; app.Image = null; if (image != null) image.Dispose(); }
                 // Detach controls before releasing any font, including value-equal ones.
                 FontBinding.Assign(this, SystemFonts.MessageBoxFont); FontBinding.Assign(searchBox, SystemFonts.MessageBoxFont);
-                var retired = new HashSet<Font>(new[] { uiFont, headingFont, tileFont, windowTitleFont });
+                var retired = new[] { uiFont, headingFont, tileFont, windowTitleFont };
                 uiFont = headingFont = tileFont = windowTitleFont = null;
                 foreach (var font in retired) if (font != null) font.Dispose();
                 RefreshMenuFonts();
@@ -194,7 +194,7 @@ namespace TaskbarTiles
         void ReleaseMenuFonts()
         {
             FontBinding.Assign(this, SystemFonts.MessageBoxFont); FontBinding.Assign(searchBox, SystemFonts.MessageBoxFont);
-            foreach (var font in new HashSet<Font>(new[] { uiFont, headingFont, tileFont, windowTitleFont })) if (font != null) font.Dispose();
+            foreach (var font in new[] { uiFont, headingFont, tileFont, windowTitleFont }) if (font != null) font.Dispose();
             uiFont = headingFont = tileFont = windowTitleFont = null;
         }
     }

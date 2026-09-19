@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.5
+
+- Fix a value-equal Font assignment/disposal bug on repeated opening and settings preview restoration. Reuse live fonts and detach controls before retiring replaced resources.
+- Restore live menu geometry after preview rendering, isolate bad optional icons and catch menu-paint errors before Windows Forms latches its white/red-X placeholder.
+- Bound automatic render repair; add Repair menu rendering and Open rendering diagnostics in the tray. Do not reset settings or restart/launch applications as recovery.
+- Observe outside left/right/middle clicks without consuming them, including when the popup never obtained focus. Reject stale clicks from earlier sessions and preserve owned dialogs, search controls and the click-away preference.
+- Apply the same outside-click safety to Settings; unapplied drafts still discard and explicit Apply remains saved.
+- Add native font/preview-cycle, paint-fault and nonactivating outside-click regression tests. Preserve topmost, launch, placement and updater fixes.
+
 ## 0.7.4
 
 - Observe normal launches as well as zone launches. Send one request and honour whichever new or reused window the app actually exposes.

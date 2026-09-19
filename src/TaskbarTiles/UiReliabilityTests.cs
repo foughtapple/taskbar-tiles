@@ -81,7 +81,7 @@ namespace TaskbarTiles
         {
             IntPtr found = IntPtr.Zero;
             Native.EnumWindows(delegate(IntPtr h, IntPtr p)
-            { if (WindowNative.ProcessId(h) == pid && Native.IsWindowVisible(h) && Native.GetWindow(h, 4) == IntPtr.Zero) { found = h; return false; } return true; }, IntPtr.Zero);
+            { if (WindowNative.ProcessId(h) == pid && Native.IsWindowVisible(h)) { var title = new StringBuilder(100); Native.GetWindowText(h, title, title.Capacity); if (title.ToString().StartsWith("TT075 clicks ", StringComparison.Ordinal)) { found = h; return false; } } return true; }, IntPtr.Zero);
             return found;
         }
         static void ClickOnlyFixture(IntPtr window, Point point)

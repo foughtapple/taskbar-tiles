@@ -144,6 +144,12 @@ namespace TaskbarTiles
             { if (cache[key].Image != null) cache[key].Image.Dispose(); cache.Remove(key); }
             if (any && changed != null) changed();
         }
+        internal void ClearCache()
+        {
+            if (stopped) return;
+            foreach (var entry in cache.Values) if (entry.Image != null) entry.Image.Dispose();
+            cache.Clear();
+        }
         public void Dispose()
         {
             if (stopped) return;

@@ -1,4 +1,4 @@
-// Taskbar Tiles 0.7.4 - Windows utility. C# 5 / .NET Framework.
+// Taskbar Tiles 0.7.5 - Windows utility. C# 5 / .NET Framework.
 // No telemetry, keyboard logging, taskbar registry edits or process injection.
 // Network access is limited to explicit, user-initiated GitHub update checks/downloads.
 using System;
@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.7.4";
+        internal const string Version = "0.7.5";
         static bool SignalToggle()
         {
             try
@@ -61,6 +61,8 @@ namespace TaskbarTiles
         [STAThread]
         static void Main(string[] args)
         {
+            if (args.Contains("--test-ui-reliability")) { Environment.Exit(UiReliabilityTests.RunNative()); return; }
+            if (args.Contains("--test-ui-target")) { Environment.Exit(UiReliabilityTests.RunTarget(args)); return; }
             if (args.Contains("--test-update-https")) { Environment.Exit(UpdateTlsTests.RunNetwork()); return; }
             if (args.Contains("--test-switcher-layer")) { Environment.Exit(SwitcherLayerTests.RunNative()); return; }
             if (args.Contains("--test-launch-fixture")) { Environment.Exit(LaunchOutcomeTests.Fixture(args)); return; }
@@ -840,6 +842,8 @@ namespace TaskbarTiles
             });
             menu.Items.Add("Open launch diagnostics", null, delegate { OpenLaunchDiagnostics(); });
             menu.Items.Add("Open switching diagnostics", null, delegate { OpenSwitchingDiagnostics(); });
+            menu.Items.Add("Repair menu rendering", null, delegate { try { RepairMenuRendering(true); } catch (Exception ex) { RenderDiagnostics.Write("manual-repair", ex); Notify("See rendering diagnostics."); } });
+            menu.Items.Add("Open rendering diagnostics", null, delegate { OpenRenderingDiagnostics(); });
             menu.Items.Add("Check for updates...", null, delegate { ShowUpdates(); });
             menu.Items.Add("About Taskbar Tiles", null, delegate { ShowAbout(); });
             menu.Items.Add("Cancel pending launch / placement", null, delegate { CancelPendingLaunch(); });
@@ -869,6 +873,7 @@ namespace TaskbarTiles
             SetupFeatures(); SetupQuickAccess(); SetupFullscreen(); SetupActivation();
             switcherLayer = new SwitcherLayer(this, delegate
             { return !closing && transient == null && activation == null && !fullscreenOpening; });
+            SetupOutsideDismissal();
             RefreshApps();
         }
         protected override CreateParams CreateParams
@@ -983,6 +988,7 @@ namespace TaskbarTiles
         void ShowMenuCore(bool reverse, IntPtr foregroundBeforeOpen)
         {
             CancelActivation();
+            StartRenderSession();
             foregroundBeforeMenu = foregroundBeforeOpen;
             updatingSearch = true; searchBox.Text = ""; updatingSearch = false;
             allWindows = GetWindows();
@@ -996,16 +1002,7 @@ namespace TaskbarTiles
             // Constrain extreme accessibility scaling only when the two sections
             // otherwise cannot fit on the chosen monitor's working area.
             scale = MenuGeometry.ScaleFor(options, area.Size, scale);
-            Font oldFont = uiFont;
-            uiFont = new Font("Segoe UI", 12f * scale, FontStyle.Regular, GraphicsUnit.Pixel);
-            Font = uiFont;
-            if (oldFont != null) oldFont.Dispose();
-            if (headingFont != null) headingFont.Dispose();
-            headingFont = new Font("Segoe UI", 14f * scale, FontStyle.Bold, GraphicsUnit.Pixel);
-            if (tileFont != null) tileFont.Dispose();
-            tileFont = new Font("Segoe UI", options.AppLabelFontSize * scale, FontStyle.Regular, GraphicsUnit.Pixel);
-            if (windowTitleFont != null) windowTitleFont.Dispose();
-            windowTitleFont = new Font("Segoe UI", options.WindowTitleFontSize * scale, FontStyle.Regular, GraphicsUnit.Pixel);
+            RefreshMenuFonts();
             LayoutMenu();
             suppressDeactivate = true;
             try
@@ -1051,17 +1048,9 @@ namespace TaskbarTiles
         int S(int n) { return Math.Max(1, (int)Math.Round(n * scale)); }
         MenuGeometry menuGeometry;
         Rectangle pageInfoRect;
-        void RefreshLabelFonts()
-        {
-            float title = options.WindowTitleFontSize * scale, app = options.AppLabelFontSize * scale;
-            if (windowTitleFont == null || Math.Abs(windowTitleFont.Size - title) > .01f)
-            { if (windowTitleFont != null) windowTitleFont.Dispose(); windowTitleFont = new Font("Segoe UI", title, FontStyle.Regular, GraphicsUnit.Pixel); }
-            if (tileFont == null || Math.Abs(tileFont.Size - app) > .01f)
-            { if (tileFont != null) tileFont.Dispose(); tileFont = new Font("Segoe UI", app, FontStyle.Regular, GraphicsUnit.Pixel); }
-        }
         void LayoutMenu()
         {
-            RefreshLabelFonts();
+            RefreshMenuFonts();
             ClearThumbnails(); cardRects.Clear(); tileRects.Clear(); cardCloseRects.Clear();
             lastMouseHit = pressedMouseHit = -100; tip.Hide(this);
             int pad = S(22), gap = S(12);
@@ -1082,7 +1071,7 @@ namespace TaskbarTiles
             winPrev = new Rectangle(width - pad - S(232), S(12), S(32), S(32));
             winNext = new Rectangle(width - pad - S(194), S(12), S(32), S(32));
             searchBox.Visible = options.EnableSearch;
-            if (options.EnableSearch) { searchBox.Font = Font; searchBox.SetBounds(pad, S(56), available, S(28)); }
+            if (options.EnableSearch) { FontBinding.Assign(searchBox, Font); searchBox.SetBounds(pad, S(56), available, S(28)); }
             int windowCount = menuGeometry.VisibleWindows; columns = maxColumns;
             cardRects.AddRange(BalancedGrid.Cards(windowCount, columns, width, headerHeight, requestedWidth, previewHeight, gap));
             foreach (Rectangle card in cardRects)
@@ -1165,9 +1154,11 @@ namespace TaskbarTiles
                 { float sign = kind == "prev" ? -1 : 1; g.DrawLines(pen, new PointF[] { new PointF(x - sign * d / 2, y - d), new PointF(x + sign * d / 2, y), new PointF(x - sign * d / 2, y + d) }); }
             }
         }
-        protected override void OnPaint(PaintEventArgs e)
+        void PaintMenuContents(Graphics g)
         {
-            base.OnPaint(e); Graphics g = e.Graphics;
+            if (windowPage * perWindowPage < 0 || windowPage * perWindowPage + cardRects.Count > windows.Count ||
+                appPage * perAppPage < 0 || appPage * perAppPage + tileRects.Count > apps.Count || cardCloseRects.Count < cardRects.Count)
+                throw new InvalidOperationException("The paint layout is stale; rebuild before drawing.");
             g.SmoothingMode = SmoothingMode.AntiAlias;
             Color light = ForeColor, muted = Color.FromArgb(156, 171, 192), accent = Color.FromArgb(111, 193, 250);
             DrawingUtil.Round(g, new Rectangle(0, 0, Width - 1, Height - 1), S(15), BackColor, Color.FromArgb(62, 74, 93), 1);
@@ -1195,12 +1186,7 @@ namespace TaskbarTiles
                 if (!header.Icon.IsEmpty)
                 {
                     var icon = headerIcons == null ? null : headerIcons.Get(windows[index].Handle);
-                    if (icon != null)
-                    {
-                        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                        g.DrawImage(icon, DrawingUtil.Fit(header.Icon, icon.Width, icon.Height));
-                    }
-                    else WindowHeaderGeometry.PaintFallback(g, header.Icon, accent);
+                    if (!RenderSafety.DrawImage(g, icon, header.Icon)) WindowHeaderGeometry.PaintFallback(g, header.Icon, accent);
                 }
                 TextRenderer.DrawText(g, windows[index].Title, windowTitleFont ?? Font, header.Title, light,
                     TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
@@ -1235,18 +1221,7 @@ namespace TaskbarTiles
                 int labelHeight = options.ShowAppLabels ? S(MenuTextMetrics.AppLabelBand(options)) : 0;
                 int iconSize = Math.Max(S(14), Math.Min((int)(r.Width * .58), r.Height - labelHeight - S(18)));
                 Rectangle box = new Rectangle(r.Left + (r.Width - iconSize) / 2, options.ShowAppLabels ? r.Top + S(8) : r.Top + (r.Height - iconSize) / 2, iconSize, iconSize);
-                if (app.Image != null)
-                {
-                    Rectangle imageRect = DrawingUtil.Fit(box, app.Image.Width, app.Image.Height);
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                    using (var attributes = new ImageAttributes())
-                    {
-                        attributes.SetWrapMode(WrapMode.TileFlipXY);
-                        g.DrawImage(app.Image, imageRect, 0, 0, app.Image.Width, app.Image.Height, GraphicsUnit.Pixel, attributes);
-                    }
-                    g.PixelOffsetMode = PixelOffsetMode.Default;
-                }
-                else
+                if (!RenderSafety.DrawImage(g, app.Image, box))
                 {
                     DrawingUtil.Round(g, box, S(9), Color.FromArgb(45, 65, 89), Color.Transparent, 0);
                     Label(g, TextTools.Initials(app.DisplayName), box, true, accent, true);
@@ -1478,7 +1453,7 @@ namespace TaskbarTiles
             if (tracking != null) tracking.Dispose();
         }
         void Dismiss()
-        { if (switcherLayer != null) switcherLayer.Suspend(); if (fullscreenOpening) CancelFullscreenOpen(); HideIntegratedSearch(); ClearThumbnails(); tip.Hide(this); Hide(); }
+        { EndRenderSession(); if (outsideClicks != null) outsideClicks.Suspend(); Capture = false; if (switcherLayer != null) switcherLayer.Suspend(); if (fullscreenOpening) CancelFullscreenOpen(); HideIntegratedSearch(); ClearThumbnails(); tip.Hide(this); Hide(); }
         protected override void OnDeactivate(EventArgs e)
         { base.OnDeactivate(e); if (!suppressDeactivate && options.HideOnFocusLoss && Visible && transient == null) Dismiss(); }
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -1494,12 +1469,13 @@ namespace TaskbarTiles
         public void Shutdown()
         {
             if (closing) return; closing = true;
+            DisposeOutsideDismissal();
             if (switcherLayer != null) switcherLayer.Dispose();
             CancelPendingLaunch(); DisposeActivation(); ShutdownFullscreen(); ShutdownQuickAccess(); ShutdownFeatures();
             hook.Dispose(); Native.UnregisterHotKey(Handle, 10);
             settingsTimer.Stop(); launchTimer.Stop(); reader.Dispose(); ClearThumbnails();
             tray.Visible = false; tray.Dispose(); trayIcon.Dispose(); DisposeImages(allApps); allApps.Clear(); apps.Clear();
-            Close(); Application.ExitThread();
+            ReleaseMenuFonts(); Close(); Application.ExitThread();
         }
         public static string StartupPath { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "Taskbar Tiles.lnk"); } }
         public static void SetStartup(bool enabled)
@@ -1628,6 +1604,7 @@ namespace TaskbarTiles
                 InterfacePolishTests.Run(log);
                 ActivationTests.Run(log);
                 SwitcherLayerTests.Run(log);
+                UiReliabilityTests.Run(log);
                 UpdateTests.Run(log);
                 log.AppendLine("These are unit/interop-layout tests, not live Windows, FancyZones or X-Mouse integration tests.");
                 File.WriteAllText(Path.Combine(Program.Home, "self-test.log"), log.ToString());
