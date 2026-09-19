@@ -16,7 +16,7 @@ namespace TaskbarTiles
             Require(defaults.WindowTitleFontSize == 22 && defaults.AppLabelFontSize == 22, "both main label defaults are 22");
             Require(defaults.ShowWindowTitleIcons && defaults.WindowTitleIconSize == 28, "title icons default on at 28");
             var upgrade = Options.UpgradeToCurrent(new[] { "ConfigVersion=6", "WindowTitleFontSize=12", "AppLabelFontSize=20", "TileSize=144", "PreviewScale=150", "WindowColumns=6", "WindowRows=2", "HideOnFocusLoss=false", "DirectAppLaunch=false", "TerminalNewWindow=false" });
-            Require(upgrade.WindowTitleFontSize == 22 && upgrade.AppLabelFontSize == 22 && upgrade.ConfigVersion == 7, "requested font sizes adopted once");
+            Require(upgrade.WindowTitleFontSize == 22 && upgrade.AppLabelFontSize == 22 && upgrade.ConfigVersion == 8, "requested font sizes adopted once");
             Require(upgrade.TileSize == 144 && upgrade.PreviewScale == 150 && upgrade.WindowColumns == 6 && upgrade.WindowRows == 2, "grid and size preferences kept");
             Require(!upgrade.HideOnFocusLoss && !upgrade.DirectAppLaunch && !upgrade.TerminalNewWindow, "other navigation choices kept");
             var again = Options.UpgradeToCurrent(new[] { "ConfigVersion=7", "WindowTitleFontSize=18", "AppLabelFontSize=24", "WindowTitleIconSize=48", "ShowWindowTitleIcons=false" });

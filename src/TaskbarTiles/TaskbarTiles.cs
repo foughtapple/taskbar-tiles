@@ -1,4 +1,4 @@
-// Taskbar Tiles 0.7.3 - Windows utility. C# 5 / .NET Framework.
+// Taskbar Tiles 0.7.4 - Windows utility. C# 5 / .NET Framework.
 // No telemetry, keyboard logging, taskbar registry edits or process injection.
 // Network access is limited to explicit, user-initiated GitHub update checks/downloads.
 using System;
@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.7.3";
+        internal const string Version = "0.7.4";
         static bool SignalToggle()
         {
             try
@@ -63,6 +63,8 @@ namespace TaskbarTiles
         {
             if (args.Contains("--test-update-https")) { Environment.Exit(UpdateTlsTests.RunNetwork()); return; }
             if (args.Contains("--test-switcher-layer")) { Environment.Exit(SwitcherLayerTests.RunNative()); return; }
+            if (args.Contains("--test-launch-fixture")) { Environment.Exit(LaunchOutcomeTests.Fixture(args)); return; }
+            if (args.Contains("--test-launch-outcome")) { Environment.Exit(LaunchOutcomeTests.RunNative()); return; }
             if (args.Contains("--self-test")) { Environment.Exit(SelfTests.Run()); return; }
             if (args.Contains("--exit"))
             {
@@ -940,6 +942,7 @@ namespace TaskbarTiles
         { foreach (var a in list) if (a.Image != null) a.Image.Dispose(); }
         public void ToggleMenu()
         {
+            CancelPassiveLaunchObservation();
             if (fullscreenOpening) { CancelFullscreenOpen(); return; }
             if (launchPlacement != null && launchPlacement.ActiveDialog != null) { launchPlacement.ActiveDialog.Activate(); return; }
             if (transient != null) { if (transient is ZonePicker || transient is FavouritesWindow) transient.Close(); else transient.Activate(); return; }
@@ -956,6 +959,7 @@ namespace TaskbarTiles
         }
         void OpenOrCycle(bool forceSticky, bool reverse, bool minimiseFullscreen = true)
         {
+            CancelPassiveLaunchObservation();
             if (closing || pending != null || transient != null) return;
             if (launchPlacement != null && launchPlacement.ActiveDialog != null) { launchPlacement.ActiveDialog.Activate(); return; }
             if (Visible)
@@ -1421,18 +1425,24 @@ namespace TaskbarTiles
             AppButton app = pending; ZoneDestination destination = pendingDestination;
             var operation = new LaunchOperation(); launchDispatch = operation; dispatchStarted = DateTime.UtcNow;
             LaunchLog.Write(operation.Id, "prepare; target=" + (app.Favourite == null ? "taskbar" : "favourite/search") + "; zone=" + (destination != null));
+            // Track ordinary launches too: Shell acceptance is not foreground success.
             LaunchPlacement tracking = null;
-            if (destination != null)
             {
                 try
                 {
                     tracking = new LaunchPlacement(app, options.Clone(), operation.Id, delegate(IntPtr window, string error)
                     {
-                        var old = launchPlacement; launchPlacement = null; if (old != null) old.Dispose();
+                        if (!ReferenceEquals(launchPlacement, tracking)) return;
+                        var resolved = tracking.SelectedWindow;
+                        launchPlacement = null; tracking.Dispose();
                         if (closing) return;
                         if (error != null) Notify(error);
-                        else if (window != IntPtr.Zero) MoveTo(window, destination, false);
-                    });
+                        else if (window != IntPtr.Zero && resolved != null)
+                        {
+                            if (destination != null) MoveTo(window, destination, false);
+                            else ActivateWindow(new WindowItem { Handle = window, ProcessId = resolved.ProcessId, Title = resolved.Title });
+                        }
+                    }, destination != null);
                     launchPlacement = tracking;
                 }
                 catch (Exception ex) { launchDispatch = null; pending = null; pendingDestination = null; launchTimer.Stop(); Notify("Could not prepare app placement: " + ex.Message); return; }
@@ -1613,6 +1623,7 @@ namespace TaskbarTiles
                 SearchPageTests.Run(log);
                 LayoutRegressionTests.Run(log);
                 LaunchReliabilityTests.Run(log);
+                LaunchOutcomeTests.Run(log);
                 LaunchResolutionTests.Run(log);
                 InterfacePolishTests.Run(log);
                 ActivationTests.Run(log);

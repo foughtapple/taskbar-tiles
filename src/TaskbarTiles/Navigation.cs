@@ -73,6 +73,7 @@ namespace TaskbarTiles
         }
         void ShowSettings()
         {
+            CancelPassiveLaunchObservation();
             if (transient != null) { transient.Activate(); return; }
             bool reopen = Visible; Dismiss();
             bool returnToMenu = SettingsCore();
@@ -95,6 +96,7 @@ namespace TaskbarTiles
         }
         void ChooseZone(WindowItem window, AppButton app)
         {
+            CancelPassiveLaunchObservation();
             if (!options.RightClickZones || transient != null) return;
             if (pending != null || launchPlacement != null || mover.Busy) { Notify("Finish the current launch or window move first."); return; }
             Point point = monitorPoint; Dismiss();
@@ -133,6 +135,7 @@ namespace TaskbarTiles
         }
         void QueueLaunch(AppButton app, ZoneDestination destination)
         {
+            CancelPassiveLaunchObservation();
             if (pending != null || launchPlacement != null) { Notify("An app launch is already in progress."); return; }
             pending = new AppButton { Id=app.Id, Name=app.Name, DisplayName=app.DisplayName, ClassName=app.ClassName,
                 LaunchExe=app.LaunchExe, ShortcutPath=app.ShortcutPath, VerifiedShortcut=app.VerifiedShortcut,

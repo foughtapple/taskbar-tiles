@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.4
+
+- Observe normal launches as well as zone launches. Send one request and honour whichever new or reused window the app actually exposes.
+- Prefer stable new windows, including a new HWND in an existing process. After the bounded wait, restore a single verified existing window even if it never came to the foreground.
+- Keep profile/identity checks, ambiguity safeguards and exact-window activation. No product-name list, app-setting edits or duplicate launch attempts.
+- Let new navigation supersede passive launch observation; no modal chooser for ordinary shortcuts and no delayed focus steal after the user changes apps.
+- Turn the old forced-new Terminal default off once on upgrade; keep an explicit optional override and preserve custom shortcut arguments and other settings.
+- Add native end-to-end fixture tests that change single/multiple-instance preference between requests, exercise minimised-window reuse and delayed new-window placement.
+
 ## 0.7.3
 
 - Reassert the switcher's own native topmost layer on opening/activation and repair overlap while the popup is in use.
