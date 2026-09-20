@@ -1,0 +1,73 @@
+name: Validate touch detection readiness repair
+on:
+  push:
+    branches: ['fix/touch-detection-readiness-0.8.1']
+    paths: ['.maintenance/apply081.py', 'src/TaskbarTiles/TouchSetupDiagnostics.cs', 'src/TaskbarTiles/TouchSetupTests.cs', '.github/workflows/prepare-touch081.yml']
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Apply reviewed source edits
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:GITHUB_REF -cne 'refs/heads/fix/touch-detection-readiness-0.8.1') { throw 'Unexpected branch.' }
+          & python .maintenance/apply081.py
+          if ($LASTEXITCODE -ne 0) { throw 'Source assertions failed. Nothing is pushed.' }
+          & git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed.' }
+      - name: Compile and run helper regressions
+        shell: powershell
+        run: ./tools/Build.ps1
+      - name: Test real menu rendering and recovery
+        shell: powershell
+        run: ./tools/Test-Rendering.ps1
+      - name: Test native outside-click dismissal
+        shell: powershell
+        run: ./tools/Test-OutsideClick.ps1
+      - name: Test touch detection readiness and shortcut recovery
+        shell: powershell
+        run: ./tools/Test-TouchSupport.ps1
+      - name: Test native switcher topmost ordering
+        shell: powershell
+        run: ./tools/Test-SwitcherLayer.ps1
+      - name: Test app-managed launches
+        shell: powershell
+        run: ./tools/Test-AppLaunch.ps1
+      - name: Test actual updater HTTPS and verified download
+        shell: powershell
+        run: ./tools/Test-UpdateHttps.ps1
+      - name: Commit only tested source on repair branch
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & git config user.name 'github-actions[bot]'
+          & git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          & git add -- src/TaskbarTiles docs/releases/v0.8.1.md docs/TOUCH-SUPPORT.md CHANGELOG.md version.txt
+          & git rm -- .maintenance/apply081.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not remove source helper.' }
+          & git commit -m 'Fix false touch-device blocks and expose setup readiness (0.8.1)'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not commit tested source.' }
+          & gh auth setup-git
+          if ($LASTEXITCODE -ne 0) { throw 'Git authentication setup failed.' }
+          & git push origin HEAD:refs/heads/fix/touch-detection-readiness-0.8.1
+          if ($LASTEXITCODE -ne 0) { throw 'Branch changed or push rejected. No force push is used.' }
+      - name: Retain validation records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: touch-readiness-081-validation
+          path: build/
+          if-no-files-found: warn
+          retention-days: 14
