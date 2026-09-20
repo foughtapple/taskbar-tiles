@@ -70,6 +70,7 @@
     <Compile Include="TouchReturnRuntime.cs" />
     <Compile Include="SettingsTouchSupport.cs" />
     <Compile Include="TouchSupportTests.cs" />
+    <Compile Include="TouchAnchorPolicy.cs" />
     <Compile Include="SwitcherLayer.cs" />
     <Compile Include="SwitcherLayerTests.cs" />
     <Compile Include="Rendering.cs" />

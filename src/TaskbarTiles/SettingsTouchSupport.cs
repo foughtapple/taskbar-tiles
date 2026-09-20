@@ -111,6 +111,7 @@ namespace TaskbarTiles
             top.Controls.Add(new Label {Text="Hold a contact still for at least 3 seconds, release it, and test two fingers together (touch). Test pen hover entry/exit separately.",AutoSize=true});
             var footer=new FlowLayoutPanel {Dock=DockStyle.Bottom,Height=52,FlowDirection=FlowDirection.RightToLeft};
             Add(footer,"Use draft",130,delegate{Store();Result=TouchRules.Save(rules);DialogResult=DialogResult.OK;Close();});Add(footer,"Cancel",100,delegate{DialogResult=DialogResult.Cancel;Close();});
+            Add(footer,"Copy diagnostics",155,delegate{var service=TouchReturnService.Current;if(service!=null)Clipboard.SetText("Taskbar Tiles "+Program.Version+Environment.NewLine+service.Report);});
             Controls.Add(status);Controls.Add(top);Controls.Add(map);Controls.Add(footer);
             map.Monitors=monitors;map.Choose=key=>{for(int i=0;i<rules.Count;i++)if(rules[i].Key==key)monitorList.SelectedIndex=i;};
             hints.SetToolTip(enabled,"Disconnected/ambiguous identities and unverified devices never trigger return. This is a draft until Apply in main Settings.");

@@ -27,7 +27,7 @@ namespace TaskbarTiles
     sealed class TouchInputObserver : IDisposable
     {
         [StructLayout(LayoutKind.Sequential)] struct Mouse { internal Native.POINT Point; internal uint Data,Flags,Time; internal UIntPtr Extra; }
-        internal sealed class Sample { internal uint Tick; internal IntPtr Foreground; internal Point Cursor,Contact; internal bool Pen,Corroborated,Rejected; }
+        internal sealed class Sample { internal uint Tick; internal IntPtr Foreground; internal Point Cursor,Contact; internal bool Pen,Corroborated,Rejected; internal string Device = ""; }
         readonly ConcurrentQueue<Sample> anchors=new ConcurrentQueue<Sample>();
         readonly Native.HookProc mouseCallback,keyCallback;
         readonly Thread thread;
@@ -140,7 +140,7 @@ namespace TaskbarTiles
         readonly List<int> hotkeys = new List<int>();
         bool manualReturn;
         int rawMouseVersion, rawKeyVersion;
-        internal bool HasProbeAnchor(string device, string screen) { string found; return probeAnchors.TryGetValue(device,out found) && found==screen; }
+        internal bool HasProbeAnchor(string device, string screen) { string found; return fault.Length==0 && !environmentChanged && probeAnchors.TryGetValue(device,out found) && found==screen; }
         readonly TouchReturnEngine engine=new TouchReturnEngine();
         readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer {Interval=40};
         readonly Control owner;
@@ -158,7 +158,7 @@ namespace TaskbarTiles
         volatile bool environmentChanged;
         internal bool Stay {get{return engine.Stay;}}
         internal bool Paused {get{return paused;}}
-        internal bool Testing {get{return tests>0;}}
+        internal bool Testing {get{return Volatile.Read(ref tests)>0;}}
         internal IEnumerable<TouchDeviceEvidence> Devices {get{return source==null?new TouchDeviceEvidence[0]:source.Devices;}}
         internal string Status {get{return fault.Length>0?"Blocked: "+fault:Testing?"Detection test only — no automatic return":paused?"Paused":engine.Status;}}
         internal string Report {get{return Status+Environment.NewLine+(source==null?"Input observer stopped":source.Status)+Environment.NewLine+
@@ -200,7 +200,7 @@ namespace TaskbarTiles
         }
         internal IDisposable DetectionTest()
         {
-            tests++; engine.Cancel("input detection test"); Start();
+            tests++; engine.Cancel("input detection test"); if(tests==1) ResetDetection(); else Start();
             return new TouchTestLease(delegate{tests=Math.Max(0,tests-1);engine.Cancel("detection test finished");if(tests==0&&!options.TouchSupportEnabled)Stop();});
         }
         sealed class TouchTestLease:IDisposable {Action end;internal TouchTestLease(Action action){end=action;}public void Dispose(){var e=end;end=null;if(e!=null)e();}}
@@ -216,14 +216,14 @@ namespace TaskbarTiles
             delayed.Add(frame);
         }
         void Block(string reason){fault=reason;manualReturn=false;engine.Cancel(reason);delayed.Clear();}
-        internal void Cancel(string reason){manualReturn=false;engine.Cancel(reason);delayed.Clear();}
+        internal void Cancel(string reason){manualReturn=false;engine.Cancel(reason);delayed.Clear();if(observer!=null)foreach(var anchor in observer.Recent)anchor.Rejected=true;}
         internal void SetPaused(bool value){paused=value;Cancel(value?"support paused":"support resumed; waiting for fresh interaction");}
         internal void SetStay(bool value){engine.SetStay(value,Clock());}
         static double Clock(){return Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency;}
         TouchReturnPoint Anchor(TouchFrame frame,MonitorData monitor)
         {
             observer.Drain();
-            var a=observer.Recent.LastOrDefault(s=>s.Pen==frame.Pen && Math.Abs(unchecked((int)(frame.Tick-s.Tick)))<=150 && monitor.Bounds.Contains(s.Contact));
+            var a=observer.Recent.LastOrDefault(s=>s.Pen==frame.Pen && Math.Abs(unchecked((int)(frame.Tick-s.Tick)))<=150 && s.Corroborated && !s.Rejected && s.Device==frame.Device && TouchAnchorPolicy.Matches(frame,s.Contact,monitor.Bounds));
             if(a==null || a.Foreground==IntPtr.Zero || !Native.IsWindow(a.Foreground)) return null;
             // Some pointer stacks activate the target before mouse promotion. Do not
             // call that a pre-touch return point. This implementation intentionally
@@ -250,6 +250,7 @@ namespace TaskbarTiles
                 mouseVersion=observer.PhysicalVersion;keyVersion=observer.TypingVersion;navigationVersion=observer.NavigationVersion;rawMouseVersion=source.PhysicalVersion;rawKeyVersion=source.TypingVersion;
                 if(moved || nav || (typed && options.TouchTypingCancels))
                 {
+                    foreach(var stale in observer.Recent)stale.Rejected=true;
                     manualReturn=false;engine.Cancel(moved?"physical/unclassified mouse or trackpad input":nav?"deliberate keyboard navigation":"typing");
                     // Do not allow an earlier queued raw report to create a new session
                     // after the user's deliberate input already cancelled it.
@@ -260,9 +261,24 @@ namespace TaskbarTiles
                 {
                     var f=delayed[0];delayed.RemoveAt(0);
                     var pre=observer.Recent.LastOrDefault(s=>s.Pen==f.Pen && Math.Abs(unchecked((int)(f.Tick-s.Tick)))<=150);
-                    if(pre!=null && f.Valid)pre.Corroborated=true;
-                    if(pre!=null && pre.Foreground!=IntPtr.Zero && WindowNative.ProcessId(pre.Foreground)!=(uint)Process.GetCurrentProcess().Id)
-                    { var observedMonitor=monitors.FirstOrDefault(m=>m.Bounds.Contains(pre.Contact)); if(observedMonitor!=null && Native.IsWindow(pre.Foreground) && Screen.FromHandle(pre.Foreground).DeviceName!=observedMonitor.DeviceName)probeAnchors[f.Device]=observedMonitor.Key; }
+                    if(pre!=null && !pre.Rejected && f.Valid && f.Complete && f.Down>0)
+                    {
+                        var observedMonitor=monitors.FirstOrDefault(m=>TouchAnchorPolicy.Matches(f,pre.Contact,m.Bounds));
+                        if(observedMonitor!=null)
+                        {
+                            if(pre.Corroborated && pre.Device!=f.Device)
+                            {
+                                pre.Rejected=true; probeAnchors.Remove(pre.Device); probeAnchors.Remove(f.Device);
+                                Block("ambiguous digitizer-to-pointer correlation; retest one device at a time");
+                            }
+                            else
+                            {
+                                pre.Corroborated=true; pre.Device=f.Device;
+                                if(pre.Foreground!=IntPtr.Zero && Native.IsWindow(pre.Foreground) && WindowNative.ProcessId(pre.Foreground)!=(uint)Process.GetCurrentProcess().Id &&
+                                    Screen.FromHandle(pre.Foreground).DeviceName!=observedMonitor.DeviceName)probeAnchors[f.Device]=observedMonitor.Key;
+                            }
+                        }
+                    }
                     var matching=rules.Where(r=>r.Enabled && (f.Pen?r.Pen&&r.PenVerified&&r.PenDevice==f.Device:r.Touch&&r.TouchVerified&&r.TouchDevice==f.Device)).ToList();
                     var rule=matching.Count==1?matching[0]:null;
                     var screen=rule==null?null:monitors.SingleOrDefault(m=>m.Key==rule.Key);
@@ -358,7 +374,7 @@ namespace TaskbarTiles
             try { owner.BeginInvoke(new Action(delegate
             {
                 if(disposed)return;
-                Cancel(reason); engine.ClearInput(reason);
+                Cancel(reason); engine.ClearInput(reason); probeAnchors.Clear();
                 monitors=DisplayNative.Monitors();layout=Fingerprint(monitors);
                 // Require fresh neutral reports and verified snapshots after a device,
                 // lock or power transition; never reuse a pre-transition destination.

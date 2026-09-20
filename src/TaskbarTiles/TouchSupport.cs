@@ -106,7 +106,7 @@ namespace TaskbarTiles
         {
             if (!f.Valid) { ClearInput("input report not reliable"); return; }
             ContactState old; if (!contacts.TryGetValue(f.Device, out old)) old = new ContactState();
-            bool entering = (f.Down > 0 && old.Down == 0) || (f.Hover && !old.Hover && old.Down == 0);
+            bool entering = f.Complete && ((f.Down > 0 && (old.Down == 0 || old.Partial)) || (f.Hover && !old.Hover && old.Down == 0));
             contacts[f.Device] = new ContactState { Down = f.Down, Hover = f.Pen && f.Hover && f.HoverKnown, Partial = !f.Complete };
             if (!Enabled || !allowed) { if (f.Down > 0) Cancel("input is outside validated enabled screens"); return; }
             if (Saved == null && entering)

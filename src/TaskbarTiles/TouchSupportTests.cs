@@ -21,6 +21,14 @@ namespace TaskbarTiles
         internal static void Run(StringBuilder log)
         {
             checks=0;var e=Engine();var p=Anchor();
+            var bounds=new Rectangle(1000,0,1000,1000); var coordinate=F("position",false,true);
+            Require(TouchAnchorPolicy.Matches(coordinate,new Point(1500,500),bounds),"matching normalized contact and promoted screen point");
+            Require(!TouchAnchorPolicy.Matches(coordinate,new Point(1800,500),bounds),"nearby time alone cannot associate a device");
+            Require(!TouchAnchorPolicy.Matches(coordinate,new Point(500,500),bounds),"wrong monitor rejected");
+            coordinate.Complete=false;Require(!TouchAnchorPolicy.Matches(coordinate,new Point(1500,500),bounds),"incomplete HID frame cannot certify an anchor");
+            e.Activity(coordinate,true,p,1000,0);Require(e.Saved==null,"partial first frame cannot save an unverified return point");
+            coordinate.Complete=true;e.Activity(coordinate,true,p,1000,1);Require(e.Saved==p,"complete continuation can start a verified session");e=Engine();
+            coordinate.Contacts[0].X=double.NaN;Require(!TouchAnchorPolicy.Matches(coordinate,new Point(1500,500),bounds),"invalid coordinate rejected");
             e.Activity(F("touch",false,true),true,p,1000,0);
             Require(e.Take(999999,false,false)==null,"stationary held finger never times out");
             e.Activity(F("touch",false,false),true,null,1000,10000);
@@ -72,6 +80,11 @@ namespace TaskbarTiles
                     hook.Enabled=false;hook.Repair();wait.Restart();int next=hook.Generation;while(hook.Generation==next&&wait.ElapsedMilliseconds<3500){Application.DoEvents();Thread.Sleep(10);}
                     Require(!hook.Enabled,"repair preserves deliberate disabled state");
                     Require(delivered==1,"registration test generates no extra shortcut or input");
+                    hook.TestStopPump();wait.Restart();while(hook.WorkerRunning&&wait.ElapsedMilliseconds<3500){Application.DoEvents();Thread.Sleep(10);}
+                    Require(!hook.WorkerRunning,"test pump stopped without affecting other applications");
+                    hook.Enabled=true;int prior=hook.Generation;hook.Repair();wait.Restart();
+                    while((!hook.WorkerRunning||hook.Generation==prior)&&wait.ElapsedMilliseconds<3500){Application.DoEvents();Thread.Sleep(10);}
+                    Require(hook.WorkerRunning&&hook.Generation>prior,"explicit repair recreates a stopped hook worker");
                 }
                 log.AppendLine("PASS: native shortcut registration, forced revocation/repair and disabled preference. No user key was synthesised.");
                 using(var window=new Form())

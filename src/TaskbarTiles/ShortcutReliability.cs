@@ -37,6 +37,19 @@ namespace TaskbarTiles
         readonly System.Windows.Forms.Timer delivery = new System.Windows.Forms.Timer { Interval = 15 };
         IntPtr hook;
         uint threadId;
+        Thread worker;
+        readonly object workerGate = new object();
+        readonly System.Windows.Forms.Timer supervisor = new System.Windows.Forms.Timer { Interval = 1000 };
+        internal bool WorkerRunning { get { return worker != null && worker.IsAlive; } }
+        void StartWorker()
+        {
+            lock (workerGate)
+            {
+                if (stopped || WorkerRunning) return;
+                worker = new Thread(Run) { IsBackground = true, Name = "Taskbar Tiles shortcut pump" };
+                worker.SetApartmentState(ApartmentState.MTA); worker.Start();
+            }
+        }
         bool swallowTabUp, session;
         volatile bool stopped;
         int queued, repairRequested, generation, fault;
@@ -48,8 +61,8 @@ namespace TaskbarTiles
         {
             callback = OnKey;
             delivery.Tick += delegate { Drain(); }; delivery.Start();
-            var worker = new Thread(Run) { IsBackground = true, Name = "Taskbar Tiles shortcut pump" };
-            worker.SetApartmentState(ApartmentState.MTA); worker.Start();
+            supervisor.Tick += delegate { if (!stopped && Enabled && !WorkerRunning) StartWorker(); };
+            supervisor.Start(); StartWorker();
             if (ready.WaitOne(2000)) ready.Dispose();
         }
         void Ready() { try { ready.Set(); } catch (ObjectDisposedException) { } }
@@ -102,11 +115,12 @@ namespace TaskbarTiles
             lastInstalled = Stopwatch.GetTimestamp(); Interlocked.Exchange(ref repairRequested, 0);
             Interlocked.Increment(ref generation);
         }
-        public void Repair() { Interlocked.Exchange(ref repairRequested, 1); }
-        void Enqueue(int signal)
+        public void Repair() { Interlocked.Exchange(ref repairRequested, 1); if (!stopped) StartWorker(); }
+        internal void TestStopPump() { if (threadId != 0) Native.PostThreadMessage(threadId, 0x12, IntPtr.Zero, IntPtr.Zero); }
+        bool Enqueue(int signal)
         {
-            if (Interlocked.Increment(ref queued) > 64) { Interlocked.Decrement(ref queued); return; }
-            signals.Enqueue(signal);
+            if (Interlocked.Increment(ref queued) > 64) { Interlocked.Decrement(ref queued); return false; }
+            signals.Enqueue(signal); return true;
         }
         internal void Drain()
         {
@@ -119,7 +133,7 @@ namespace TaskbarTiles
                 try
                 {
                     if (signal == 4) { if (Released != null) Released(); }
-                    else if (Pressed != null) Pressed((signal & 1) != 0, (signal & 2) != 0);
+                    else if (Enabled && !TouchReturnService.TestActive && Pressed != null) Pressed((signal & 1) != 0, (signal & 2) != 0);
                 }
                 catch (Exception ex) { ShortcutDiagnostics.Write("shortcut delivery failed: " + ex.GetType().Name); Repair(); }
             }
@@ -139,12 +153,12 @@ namespace TaskbarTiles
                     if (vk == 9)
                     {
                         if (up && swallowTabUp) { swallowTabUp = false; return new IntPtr(1); }
-                        if (down && Enabled && alt)
+                        if (down && Enabled && alt && !TouchReturnService.TestActive)
                         {
-                            swallowTabUp = session = true;
                             bool ctrl = modifiers[0x11] || modifiers[0xA2] || modifiers[0xA3];
                             bool shift = modifiers[0x10] || modifiers[0xA0] || modifiers[0xA1];
-                            Enqueue((ctrl ? 1 : 0) | (shift ? 2 : 0)); return new IntPtr(1);
+                            if (Enqueue((ctrl ? 1 : 0) | (shift ? 2 : 0)))
+                            { swallowTabUp = session = true; return new IntPtr(1); }
                         }
                     }
                     if (up && session && (vk == 0x12 || vk == 0xA4 || vk == 0xA5))
@@ -158,7 +172,7 @@ namespace TaskbarTiles
         internal void TestRevoke() { if (hook != IntPtr.Zero) Native.UnhookWindowsHookEx(hook); Repair(); }
         public void Dispose()
         {
-            if (stopped) return; stopped = true; Enabled = false; delivery.Stop(); delivery.Dispose();
+            if (stopped) return; stopped = true; Enabled = false; delivery.Stop(); delivery.Dispose(); supervisor.Stop(); supervisor.Dispose();
             if (threadId != 0) Native.PostThreadMessage(threadId, 0x12, IntPtr.Zero, IntPtr.Zero);
         }
     }
@@ -187,6 +201,12 @@ namespace TaskbarTiles
             Microsoft.Win32.SystemEvents.PowerModeChanged -= ShortcutPowerChanged;
             Microsoft.Win32.SystemEvents.SessionSwitch -= ShortcutSessionChanged;
             ShortcutDiagnostics.Write("resident exiting normally");
+        }
+        internal void HandleUiException(Exception ex)
+        {
+            if (closing) return;
+            try { NavigationFailed(ex); }
+            catch (Exception failure) { ShortcutDiagnostics.Write("UI recovery failed: " + failure.GetType().Name); if (hook != null) hook.Repair(); }
         }
         void NavigationFailed(Exception ex)
         {

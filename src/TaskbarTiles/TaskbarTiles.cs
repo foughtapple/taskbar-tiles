@@ -93,7 +93,14 @@ namespace TaskbarTiles
                     catch { try { Native.SetProcessDPIAware(); } catch { } }
                     Application.EnableVisualStyles();
                     Application.SetCompatibleTextRenderingDefault(false);
-                    Application.ThreadException += delegate(object sender, ThreadExceptionEventArgs e) { Log(e.Exception.ToString()); };
+                    Application.ThreadException += delegate(object sender, ThreadExceptionEventArgs e)
+                    {
+                        Log(e.Exception.ToString());
+                        var resident = Application.OpenForms.OfType<Switcher>().FirstOrDefault();
+                        if (resident != null) resident.HandleUiException(e.Exception);
+                    };
+                    AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs e)
+                    { Log(Convert.ToString(e.ExceptionObject)); ShortcutDiagnostics.Write("unhandled exception; terminating=" + e.IsTerminating); };
                     Options.Migrate();
                     using (var popup = new Switcher())
                     using (var quit = new EventWaitHandle(false, EventResetMode.AutoReset, EventName))
