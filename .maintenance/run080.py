@@ -14,7 +14,6 @@ for i,line in enumerate(lines):
   assert args[1]=='# Changelog\n'
   args[1]+='\n## 0.7.6';args[2]+='\n## 0.7.6'
   lines[i]='edit('+','.join(repr(a) for a in args)+')'
-# Execute without dirtying the tracked one-time helper, so git rm is safe later.
 exec(compile('\n'.join(lines)+'\n',str(p),'exec'),{'__name__':'__main__'})
 runpy.run_path('.maintenance/finalize080.py')
 B=Path('src/TaskbarTiles')
@@ -42,12 +41,18 @@ edit(r,'                bool blocked=delayed.Count>0 ||','''                fore
                     Math.Abs(unchecked((int)(observer.LastPromotedTick-source.LastDigitizerTick)))>180;
                 if(unknownPromotion && unchecked((int)(now-observer.LastPromotedTick))>180)Cancel("unclassified touch/pen input");
                 bool blocked=observer.PromotedButtons!=0 || unknownPromotion || observer.Recent.Any(a=>!a.Corroborated&&!a.Rejected) || delayed.Count>0 ||''')
-# Existing raw input can arrive after physical movement. The observer's explicit
-# cancellation version and pending frames are both checked immediately before return.
 edit(r,'                int input=observer.PhysicalVersion,key=observer.TypingVersion;','                int input=observer.PhysicalVersion,key=observer.TypingVersion;\n                if(input!=mouseVersion || (options.TouchTypingCancels&&key!=keyVersion) || observer.PromotedButtons!=0 || delayed.Count!=0){engine.Status="Cancelled: new input before return";return;}')
 edit(r,'            fault=""; observer=new TouchInputObserver();\n            source=new RawTouchSource(OnFrame,Block);','''            fault=""; observer=new TouchInputObserver();
             try { source=new RawTouchSource(OnFrame,Block); }
             catch { observer.Dispose();observer=null;throw; }''')
-# Once manual return is cancelled by real input, do not apply it to the next touch.
 edit(r,'                    engine.Cancel(moved?','                    manualReturn=false;engine.Cancel(moved?')
+edit(r,'Native.RegisterHotKey(owner.Handle,0xB100+i,0x4000|mods,key)','Native.RegisterHotKey(owner.Handle,0xB100+i,0x4000|mods,(uint)key)')
+t=B/'TouchSupportTests.cs'
+edit(t,'                log.AppendLine("Hardware compatibility NOT established:', '''                using(var settings=new SettingsWindow(new Options(),delegate(Options o){throw new InvalidOperationException("Native UI test must never save");},null,new List<AppButton>(),"Touch screen monitor support"))
+                using(var image=new Bitmap(settings.Width,settings.Height))
+                { settings.DrawToBitmap(image,new Rectangle(Point.Empty,image.Size));Require(settings.Controls.Count>0,"actual Settings pages construct and paint without saving"); }
+                using(var monitor=new TouchMonitorDialog(""))
+                using(var image=new Bitmap(monitor.Width,monitor.Height))
+                { monitor.DrawToBitmap(image,new Rectangle(Point.Empty,image.Size));Require(monitor.Controls.Count>0,"monitor test UI constructs without enabling or saving devices"); }
+                log.AppendLine("Hardware compatibility NOT established:''')
 print('Unknown touch/pen promotion and raw-input cleanup safety checks integrated.')
