@@ -1,16 +1,12 @@
-name: Validate outside-click dismissal
+name: Validate shortcut recovery and touch probe
 on:
   push:
-    branches: ['fix/outside-click-0.7.6']
-    paths: ['.maintenance/*.py', '.github/workflows/prepare-clickaway.yml', 'src/TaskbarTiles/OutsideClick*.cs']
+    branches: ['fix/shortcut-health-touch-test-0.7.7']
+    paths: ['.maintenance/apply077.py', 'src/TaskbarTiles/ShortcutHealth.cs', 'src/TaskbarTiles/TouchSupport.cs', 'src/TaskbarTiles/InputSupportTests.cs', '.github/workflows/prepare-input-health.yml']
 permissions:
   contents: read
-concurrency:
-  group: prepare-outside-click-076
-  cancel-in-progress: false
 jobs:
   prepare:
-    if: github.repository == 'foughtapple/taskbar-tiles'
     runs-on: windows-2022
     timeout-minutes: 15
     permissions:
@@ -24,9 +20,9 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          if ($env:GITHUB_REF -cne 'refs/heads/fix/outside-click-0.7.6') { throw 'Unexpected branch.' }
-          & python .maintenance/apply076.py
-          if ($LASTEXITCODE -ne 0) { throw 'Source assertions failed. No changes are pushed.' }
+          if ($env:GITHUB_REF -cne 'refs/heads/fix/shortcut-health-touch-test-0.7.7') { throw 'Unexpected branch.' }
+          & python .maintenance/apply077.py
+          if ($LASTEXITCODE -ne 0) { throw 'Source assertions failed. Nothing is pushed.' }
           & git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed.' }
       - name: Compile and run helper regressions
@@ -35,19 +31,22 @@ jobs:
       - name: Test real menu rendering and recovery
         shell: powershell
         run: ./tools/Test-Rendering.ps1
-      - name: Test native nonactivating outside clicks
+      - name: Test native outside-click dismissal
         shell: powershell
         run: ./tools/Test-OutsideClick.ps1
+      - name: Test shortcut registration recovery
+        shell: powershell
+        run: ./tools/Test-InputSupport.ps1
       - name: Test native switcher topmost ordering
         shell: powershell
         run: ./tools/Test-SwitcherLayer.ps1
-      - name: Test native app-managed launch outcomes
+      - name: Test app-managed launches
         shell: powershell
         run: ./tools/Test-AppLaunch.ps1
       - name: Test actual updater HTTPS and verified download
         shell: powershell
         run: ./tools/Test-UpdateHttps.ps1
-      - name: Commit tested source on the fix branch
+      - name: Commit tested source on the feature branch
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,20 +54,20 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & git config user.name 'github-actions[bot]'
           & git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          & git add -- src/TaskbarTiles version.txt CHANGELOG.md
-          & git rm -- .maintenance/apply076.py
-          if ($LASTEXITCODE -ne 0) { throw 'Could not remove one-time helper.' }
-          & git commit -m 'Dismiss nonactivating menus on outside clicks while retaining rendering recovery (0.7.6)'
+          & git add -- src/TaskbarTiles version.txt CHANGELOG.md .github/workflows/build.yml .github/workflows/release.yml
+          & git rm -- .maintenance/apply077.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not remove source helper.' }
+          & git commit -m 'Recover shortcut handling and add safe touchscreen compatibility tests (0.7.7)'
           if ($LASTEXITCODE -ne 0) { throw 'Could not commit tested source.' }
           & gh auth setup-git
           if ($LASTEXITCODE -ne 0) { throw 'Git authentication setup failed.' }
-          & git push origin HEAD:refs/heads/fix/outside-click-0.7.6
-          if ($LASTEXITCODE -ne 0) { throw 'Branch advanced or push rejected. No force push is used.' }
+          & git push origin HEAD:refs/heads/fix/shortcut-health-touch-test-0.7.7
+          if ($LASTEXITCODE -ne 0) { throw 'Branch changed or push rejected. No force push is used.' }
       - name: Retain validation records
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: outside-click-076-validation
+          name: input-health-077-validation
           path: build/
           if-no-files-found: warn
           retention-days: 14
