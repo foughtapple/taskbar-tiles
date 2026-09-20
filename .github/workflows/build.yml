@@ -20,6 +20,12 @@ jobs:
       - name: Test real menu rendering and recovery
         shell: powershell
         run: ./tools/Test-Rendering.ps1
+      - name: Test native outside-click dismissal
+        shell: powershell
+        run: ./tools/Test-OutsideClick.ps1
+      - name: Test Touch Return policy and shortcut recovery
+        shell: powershell
+        run: ./tools/Test-TouchSupport.ps1
       - name: Test native switcher topmost ordering
         shell: powershell
         run: ./tools/Test-SwitcherLayer.ps1
