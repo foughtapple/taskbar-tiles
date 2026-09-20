@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0
+
+- Recover Alt+Tab interception after transient UI errors without changing the saved preference. Keep callbacks off the low-level pump, periodically renew between gestures, rearm after wake/unlock and repair on explicit reopen. Add Shortcut health and diagnostics.
+- Include the previously staged outside-click fix from 0.7.6 and all published rendering/launch/updater repairs.
+- Add experimental Touch screen monitor support: passive HID detection, full-frame contact tracking, per-monitor verified device association, touch/pen idle delays, Stay here, pause, optional hotkeys and one-shot focus/cursor return. Physical mouse always cancels.
+- Default Touch Return off. Unsupported reports, virtual mouse-only input, unknown pre-touch state or missing required hover information cannot trigger automatic return. A local cross-application detection test is mandatory; CI does not certify spacedesk/Apollo hardware.
+
+## 0.7.6
+
+- Close the menu on an outside mouse-down even when it never received foreground activation; do not consume the click.
+- Reject stale observations from an earlier open/hide session. Preserve clicks inside the menu, embedded search, owned dialogs and X-Mouse toggle behaviour.
+- Verify settled external focus after the menu has held focus. Stop all observation on dismissal/selection/shutdown and respect the existing click-away preference.
+- Apply the same click event handling to Settings; discard unapplied drafts, retain explicit Apply saves and unwind owned dialogs safely.
+- Retain the complete 0.7.5 font lifetime, icon isolation, guarded-paint and bounded recovery fix and its actual-menu rendering tests.
+- Add native outside-click regression tests using a disposable nonactivating window in a separate process. Existing layout, launch-instance, topmost, placement and secure updater behavior remains.
+
 ## 0.7.5
 
 - Fix font lifetime across repeated opens and settings previews: WinForms may retain an equal old Font, so detach control bindings before disposing its owner. Reuse unchanged font generations.

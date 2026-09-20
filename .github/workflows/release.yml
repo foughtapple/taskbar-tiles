@@ -42,6 +42,12 @@ jobs:
       - name: Test real menu rendering and recovery
         shell: powershell
         run: ./tools/Test-Rendering.ps1
+      - name: Test native outside-click dismissal
+        shell: powershell
+        run: ./tools/Test-OutsideClick.ps1
+      - name: Test Touch Return policy and shortcut recovery
+        shell: powershell
+        run: ./tools/Test-TouchSupport.ps1
       - name: Test native switcher topmost ordering
         shell: powershell
         run: ./tools/Test-SwitcherLayer.ps1
@@ -65,6 +71,8 @@ jobs:
             built_utc = (Get-Date).ToUniversalTime().ToString('o')
             runner = 'windows-2022'
             helper_tests = 'passed'
+            native_clickaway_tests = 'passed on disposable nonactivating windows'
+            touch_shortcut_tests = 'passed: policy, native listener lifecycle and hook recovery; no hardware compatibility claim'
             native_rendering_tests = 'passed: real-menu/preview rendering, disposed-font reproduction, icon isolation and bounded recovery'
             native_switcher_layer_tests = 'passed on disposable test Forms; not the user desktop'
             native_app_managed_launch_tests = 'passed on disposable out-of-process fixtures; actual Steam/Bambu not tested'

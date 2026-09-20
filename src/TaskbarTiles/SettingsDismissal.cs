@@ -19,6 +19,7 @@ namespace TaskbarTiles
     }
     sealed partial class SettingsWindow
     {
+        PopupClickWatcher settingsOutsideClicks;
         readonly Timer dismissTimer = new Timer { Interval = 80 };
         readonly uint settingsProcess = (uint)Process.GetCurrentProcess().Id;
         bool dismissOnFocusLoss, dismissalArmed, closingSettings;
@@ -27,6 +28,8 @@ namespace TaskbarTiles
         void SetupSettingsDismissal(bool enabled)
         {
             dismissOnFocusLoss = enabled;
+            settingsOutsideClicks = new PopupClickWatcher(this, delegate
+            { return dismissOnFocusLoss && !DismissedByFocusLoss && !closingSettings && !TouchReturnService.TestActive; }, RequestOutsideSettingsDismissal);
             Activated += delegate { if (!DismissedByFocusLoss) { dismissalArmed = true; outsideSince = null; } };
             Shown += delegate { dismissTimer.Start(); };
             FormClosed += delegate { closingSettings = true; dismissTimer.Stop(); };
@@ -50,6 +53,7 @@ namespace TaskbarTiles
         void CheckSettingsFocus()
         {
             if (IsDisposed || closingSettings) return;
+            if (TouchReturnService.TestActive) { outsideSince = null; return; }
             if (DismissedByFocusLoss) { FinishOutsideDismissal(); return; }
             if (!Visible) { outsideSince = null; return; }
             IntPtr foreground = Native.GetForegroundWindow();
@@ -63,6 +67,11 @@ namespace TaskbarTiles
             DateTime now = DateTime.UtcNow;
             if (!outsideSince.HasValue) { outsideSince = now; return; }
             if ((now - outsideSince.Value).TotalMilliseconds < 120) return;
+            RequestOutsideSettingsDismissal();
+        }
+        void RequestOutsideSettingsDismissal()
+        {
+            if (IsDisposed || closingSettings || DismissedByFocusLoss) return;
             DismissedByFocusLoss = true;
             previewTimer.Stop(); settingHints.RemoveAll();
             FinishOutsideDismissal();
@@ -94,6 +103,6 @@ namespace TaskbarTiles
             Close();
         }
         void DisposeSettingsDismissal()
-        { closingSettings = true; dismissTimer.Stop(); dismissTimer.Dispose(); }
+        { closingSettings = true; if (settingsOutsideClicks != null) settingsOutsideClicks.Dispose(); dismissTimer.Stop(); dismissTimer.Dispose(); }
     }
 }

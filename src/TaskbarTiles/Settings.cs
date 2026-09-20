@@ -13,6 +13,10 @@ namespace TaskbarTiles
     sealed class Options
     {
         public int ConfigVersion = 8;
+        public bool TouchSupportEnabled = false;
+        public int TouchReturnDelayMs = 1000, PenReturnDelayMs = 2000, TouchReturnAction = 0;
+        public bool TouchWaitForHover = true, TouchTypingCancels = true, TouchPauseForMenus = true;
+        public string TouchMonitorRules = "", TouchExcludedApps = "", TouchPauseShortcut = "", TouchStayShortcut = "", TouchReturnShortcut = "";
         public int TileSize = 120;
         public int PreviewScale = 120;
         public int MaxPanelWidth = 1500;
@@ -80,6 +84,7 @@ namespace TaskbarTiles
         public bool FavouriteNumberKeys = true;
 
         static readonly Dictionary<string, int[]> Limits = new Dictionary<string, int[]> {
+            { "TouchReturnDelayMs", new[] { 250, 60000 } }, { "PenReturnDelayMs", new[] { 250, 60000 } }, { "TouchReturnAction", new[] { 0, 2 } },
             { "TileSize", new[] { 56, 256 } }, { "PreviewScale", new[] { 70, 220 } },
             { "MaxPanelWidth", new[] { 760, 3600 } }, { "WindowRows", new[] { 1, 3 } },
             { "WindowColumns", new[] { 1, 12 } },
@@ -106,6 +111,8 @@ namespace TaskbarTiles
             }
             FancyZonesFolder = (FancyZonesFolder ?? "").Trim();
             MonitorOverrides = MonitorOverrides ?? "";
+            TouchMonitorRules = TouchMonitorRules ?? ""; TouchExcludedApps = TouchExcludedApps ?? "";
+            TouchPauseShortcut = TouchPauseShortcut ?? ""; TouchStayShortcut = TouchStayShortcut ?? ""; TouchReturnShortcut = TouchReturnShortcut ?? "";
         }
         internal static Options Parse(IEnumerable<string> lines)
         {
@@ -348,6 +355,7 @@ namespace TaskbarTiles
             AddQuickAccessPage();
             AddFavouritesPage();
             AddSearchSettingsPage();
+            AddTouchSupportPage(); AddShortcutRecoveryPage();
             LoadControls(); HookLiveChanges(); InstallSettingHints();
             if (!string.IsNullOrEmpty(initialTab))
                 foreach (TabPage page in tabs.TabPages) if (page.Text == initialTab) tabs.SelectedTab = page;
