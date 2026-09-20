@@ -20,6 +20,7 @@ namespace TaskbarTiles
         static TouchReturnEngine Engine(){return new TouchReturnEngine {Enabled=true,WaitHover=true};}
         internal static void Run(StringBuilder log)
         {
+            TouchSetupTests.Run(log);
             checks=0;var e=Engine();var p=Anchor();
             var bounds=new Rectangle(1000,0,1000,1000); var coordinate=F("position",false,true);
             Require(TouchAnchorPolicy.Matches(coordinate,new Point(1500,500),bounds),"matching normalized contact and promoted screen point");
@@ -97,6 +98,7 @@ namespace TaskbarTiles
                 using(var image=new Bitmap(monitor.Width,monitor.Height))
                 { monitor.DrawToBitmap(image,new Rectangle(Point.Empty,image.Size));Require(monitor.Controls.Count>0,"monitor test UI constructs without enabling or saving devices"); }
                 log.AppendLine("Hardware compatibility NOT established: no Surface, spacedesk, Apollo, pen or real digitizer was exercised. Local passive acceptance test remains mandatory.");
+                TouchSetupTests.RunNative(log);
                 File.WriteAllText(Path.Combine(Program.Home,"touch-shortcut-test.log"),log.ToString());return 0;
             }
             catch(Exception ex){log.AppendLine(ex.ToString());File.WriteAllText(Path.Combine(Program.Home,"touch-shortcut-test.log"),log.ToString());return 1;}

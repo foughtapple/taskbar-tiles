@@ -135,12 +135,14 @@ namespace TaskbarTiles
             return new TouchFrame { Device=Evidence.Key,Pen=pen,HoverKnown=Evidence.HoverKnown,Hover=hover,Complete=contacts!=null,
                 Contacts=contacts??new List<TouchContact> { new TouchContact { Id=-1,Down=true } },Tick=tick };
         }
+        internal void ResetTestEvidence() { assembler.Reset(); Evidence.ResetTest(); }
         public void Dispose() { if(parsed!=IntPtr.Zero) { Marshal.FreeHGlobal(parsed); parsed=IntPtr.Zero; } }
     }
     sealed class RawTouchSource : NativeWindow, IDisposable
     {
         readonly Dictionary<IntPtr,TouchHidDevice> devices=new Dictionary<IntPtr,TouchHidDevice>();
         readonly HashSet<IntPtr> rejected=new HashSet<IntPtr>();
+        readonly Dictionary<IntPtr,TouchInputKind> inputKinds=new Dictionary<IntPtr,TouchInputKind>();
         readonly Action<TouchFrame> frame;
         readonly Action<string> invalid;
         bool disposed;
@@ -164,13 +166,47 @@ namespace TaskbarTiles
             uint count=0,size=(uint)Marshal.SizeOf(typeof(TouchHidNative.DeviceList));
             if(TouchHidNative.GetRawInputDeviceList(null,ref count,size)==uint.MaxValue || count>4096) return;
             var list=new TouchHidNative.DeviceList[count]; uint n=TouchHidNative.GetRawInputDeviceList(list,ref count,size); if(n==uint.MaxValue) return;
-            foreach(var d in list.Take((int)n).Where(d=>d.Type==2)) GetDevice(d.Device);
+            foreach(var d in list.Take((int)n))
+            {
+                var kind=d.Type==0?TouchInputKind.Mouse:d.Type==1?TouchInputKind.Keyboard:TouchSetupPolicy.Kind(d.Device);
+                inputKinds[d.Device]=kind;
+                if(kind==TouchInputKind.Digitizer) GetDevice(d.Device);
+            }
         }
         TouchHidDevice GetDevice(IntPtr h)
         {
             TouchHidDevice d; if(devices.TryGetValue(h,out d)) return d; if(rejected.Contains(h)) return null;
             try { d=new TouchHidDevice(h); devices[h]=d; return d; }
             catch { rejected.Add(h); return null; }
+        }
+        internal void ResetTestEvidence()
+        { foreach(var d in devices.Values) d.ResetTestEvidence(); }
+        internal int ReplayKnownArrivalsForTest()
+        {
+            var known=inputKinds.Where(p=>p.Value!=TouchInputKind.Unknown).Select(p=>p.Key).ToArray();
+            foreach(var h in known) HandleDeviceChange(1,h);
+            return known.Length;
+        }
+        internal void HandleDeviceChange(int change,IntPtr handle)
+        {
+            TouchInputKind kind; bool known=inputKinds.TryGetValue(handle,out kind);
+            if(!known) kind=TouchSetupPolicy.Kind(handle);
+            var action=TouchSetupPolicy.DeviceChange(change,known,kind);
+            if(change==2)
+            {
+                TouchHidDevice old;
+                if(devices.TryGetValue(handle,out old)) { old.Dispose(); devices.Remove(handle); }
+                rejected.Remove(handle); inputKinds.Remove(handle);
+            }
+            else if(change==1)
+            {
+                inputKinds[handle]=kind;
+                if(kind==TouchInputKind.Digitizer) GetDevice(handle);
+            }
+            if(action==TouchChangeAction.Cancel) PhysicalVersion++; // Cancel a pending return, not the entire provider.
+            if(action==TouchChangeAction.Retest)
+                invalid((kind==TouchInputKind.Unknown?"Unknown input device":"Touch/pen device")+
+                    (change==2?" removed":" changed")+"; pending return discarded; Restart test after the connection settles");
         }
         protected override void WndProc(ref Message m)
         {
@@ -179,11 +215,10 @@ namespace TaskbarTiles
         }
         void ReadMessage(ref Message m)
         {
-            if(m.Msg==0x00FE)
+            if(m.Msg==0x00FE && !disposed)
             {
-                invalid("input device connected/disconnected; pending return discarded");
-                if(m.WParam.ToInt32()==2) { TouchHidDevice old; if(devices.TryGetValue(m.LParam,out old)) { old.Dispose(); devices.Remove(m.LParam); } rejected.Remove(m.LParam); }
-                else GetDevice(m.LParam);
+                HandleDeviceChange(m.WParam.ToInt32(),m.LParam);
+                return;
             }
             if(m.Msg==0x00FF && !disposed)
             {
