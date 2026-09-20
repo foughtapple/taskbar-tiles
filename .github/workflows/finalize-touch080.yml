@@ -54,7 +54,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & git config user.name 'github-actions[bot]'
           & git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          & git add -- src/TaskbarTiles docs/releases/v0.8.0.md .github/workflows/build.yml .github/workflows/release.yml
+          # Permanent workflow edits are committed through the authorized connector.
+          & git restore -- .github/workflows/build.yml .github/workflows/release.yml
+          if ($LASTEXITCODE -ne 0) { throw 'Could not separate workflow edits from the source commit.' }
+          & git add -- src/TaskbarTiles docs/releases/v0.8.0.md
           & git rm -- .maintenance/finalize080.py
           if ($LASTEXITCODE -ne 0) { throw 'Could not remove source helper.' }
           & git commit -m 'Validate input recovery and strengthen Touch Return association safeguards'
