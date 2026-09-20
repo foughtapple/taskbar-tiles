@@ -21,10 +21,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           if ($env:GITHUB_REF -cne 'refs/heads/feature/touch-support-shortcut-recovery-0.8.0') { throw 'Wrong branch.' }
-          & python .maintenance/apply080.py
+          & python .maintenance/run080.py
           if ($LASTEXITCODE -ne 0) { throw 'Source integration assertions failed.' }
-          & python .maintenance/finalize080.py
-          if ($LASTEXITCODE -ne 0) { throw 'Safety review assertions failed.' }
           & git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace validation failed.' }
       - name: Compile and run helper regressions
@@ -57,7 +55,7 @@ jobs:
           & git config user.name 'github-actions[bot]'
           & git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           & git add -- src/TaskbarTiles version.txt config/settings.ini CHANGELOG.md .github/workflows/build.yml .github/workflows/release.yml docs tools/Test-TouchSupport.ps1
-          & git rm -- .maintenance/apply080.py .maintenance/finalize080.py
+          & git rm -- .maintenance/apply080.py .maintenance/finalize080.py .maintenance/run080.py
           if ($LASTEXITCODE -ne 0) { throw 'One-time helper removal failed.' }
           & git commit -m 'Recover shortcuts and add capability-gated Touch Return (0.8.0)'
           if ($LASTEXITCODE -ne 0) { throw 'No tested commit created.' }
@@ -70,6 +68,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: touch080-validation
-          path: build/
+          path: |
+            build/
+            src/TaskbarTiles/
           if-no-files-found: warn
           retention-days: 14
