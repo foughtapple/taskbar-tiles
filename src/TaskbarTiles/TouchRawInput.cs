@@ -49,7 +49,7 @@ namespace TaskbarTiles
             TouchHidNative.GetRawInputDeviceInfo(device,0x20000007,IntPtr.Zero,ref size);
             if(size==0 || size>32768) throw new InvalidOperationException("No stable input device identity.");
             IntPtr name=Marshal.AllocHGlobal(checked((int)(size+1)*2)); string path;
-            try { if(TouchHidNative.GetRawInputDeviceInfo(device,0x20000007,name,ref size)==uint.MaxValue) throw new InvalidOperationException(); path=Marshal.PtrToStringUni(name); }
+            try { if(TouchHidNative.GetRawInputDeviceInfo(device,0x20000007,name,ref size)==uint.MaxValue) throw new InvalidOperationException(); path=Marshal.PtrToStringUni(name,(int)size).TrimEnd('\0'); }
             finally { Marshal.FreeHGlobal(name); }
             size=0; TouchHidNative.GetRawInputDeviceInfo(device,0x20000005,IntPtr.Zero,ref size);
             if(size==0 || size>1048576) throw new InvalidOperationException("Digitizer metadata unavailable.");
@@ -144,6 +144,8 @@ namespace TaskbarTiles
         readonly Action<TouchFrame> frame;
         readonly Action<string> invalid;
         bool disposed;
+        internal int PhysicalVersion, TypingVersion;
+        internal uint LastDigitizerTick;
         internal bool Registered { get; private set; }
         internal string Status="Not listening";
         internal IEnumerable<TouchDeviceEvidence> Devices { get { return devices.Values.Select(d=>d.Evidence).ToArray(); } }
@@ -151,7 +153,7 @@ namespace TaskbarTiles
         {
             frame=onFrame; invalid=onInvalid;
             CreateHandle(new CreateParams { Caption="Taskbar Tiles passive digitizer input",Parent=new IntPtr(-3) });
-            var registrations=new ushort[] {1,2,4}.Select(u=>new TouchHidNative.DeviceRegistration {Page=13,Usage=u,Flags=0x100|0x2000,Target=Handle}).ToArray();
+            var registrations=new ushort[] {1,2,4}.Select(u=>new TouchHidNative.DeviceRegistration {Page=13,Usage=u,Flags=0x100|0x2000,Target=Handle}).Concat(new[] { new TouchHidNative.DeviceRegistration {Page=1,Usage=2,Flags=0x100|0x2000,Target=Handle}, new TouchHidNative.DeviceRegistration {Page=1,Usage=6,Flags=0x100|0x2000,Target=Handle} }).ToArray();
             Registered=TouchHidNative.RegisterRawInputDevices(registrations,(uint)registrations.Length,(uint)Marshal.SizeOf(typeof(TouchHidNative.DeviceRegistration)));
             Status=Registered?"Passive Raw Input active; no touch input is intercepted":"Raw Input registration failed; automatic return unavailable";
             Scan();
@@ -172,6 +174,11 @@ namespace TaskbarTiles
         }
         protected override void WndProc(ref Message m)
         {
+            try { ReadMessage(ref m); }
+            finally { base.WndProc(ref m); }
+        }
+        void ReadMessage(ref Message m)
+        {
             if(m.Msg==0x00FE)
             {
                 invalid("input device connected/disconnected; pending return discarded");
@@ -186,26 +193,42 @@ namespace TaskbarTiles
                     uint size=0,header=(uint)(8+2*IntPtr.Size);
                     if(TouchHidNative.GetRawInputData(m.LParam,0x10000003,IntPtr.Zero,ref size,header)==uint.MaxValue || size<header+8 || size>1048576) return;
                     buffer=Marshal.AllocHGlobal((int)size);
-                    if(TouchHidNative.GetRawInputData(m.LParam,0x10000003,buffer,ref size,header)==uint.MaxValue || Marshal.ReadInt32(buffer)!=2) return;
+                    if(TouchHidNative.GetRawInputData(m.LParam,0x10000003,buffer,ref size,header)==uint.MaxValue ) return;
+                    int type=Marshal.ReadInt32(buffer);
+                    if(type==0)
+                    {
+                        if(size<header+24) return;
+                        uint extra=unchecked((uint)Marshal.ReadInt32(buffer,(int)header+20));
+                        if((extra & 0xFFFFFF00u)!=0xFF515700u && (Marshal.ReadInt32(buffer,(int)header+12)!=0 || Marshal.ReadInt32(buffer,(int)header+16)!=0 || Marshal.ReadInt16(buffer,(int)header+4)!=0)) PhysicalVersion++;
+                        return;
+                    }
+                    if(type==1)
+                    {
+                        if(size<header+16) return; int key=Marshal.ReadInt16(buffer,(int)header+6);
+                        if((Marshal.ReadInt16(buffer,(int)header+2)&1)==0 && !TouchShortcutKeys.IsShortcut(key) && key!=0x10&&key!=0x11&&key!=0x12&&!(key>=0xA0&&key<=0xA5)) TypingVersion++;
+                        return;
+                    }
+                    if(type!=2)return;
                     IntPtr handle=Marshal.ReadIntPtr(buffer,8); var d=GetDevice(handle); if(d==null) return;
+                    if(!d.Evidence.Supported){invalid("unclassified digitizer activity; automatic return blocked");return;}
                     int bytes=Marshal.ReadInt32(buffer,(int)header),count=Marshal.ReadInt32(buffer,(int)header+4);
                     if(bytes<=0 || count<0 || count>4096 || (long)bytes*count>size-header-8) throw new InvalidOperationException("Invalid HID packet size.");
                     for(int i=0;i<count;i++)
                     {
                         var data=new byte[bytes]; Marshal.Copy(IntPtr.Add(buffer,(int)header+8+i*bytes),data,0,bytes);
                         var f=d.Read(data,unchecked((uint)TouchHidNative.GetMessageTime()));
-                        if(f!=null) { d.Evidence.Observe(f,Environment.TickCount & int.MaxValue); frame(f); }
+                        if(f!=null) { LastDigitizerTick=f.Tick; d.Evidence.Observe(f,Environment.TickCount & int.MaxValue); frame(f); }
                     }
                 }
                 catch(Exception ex) { Status="Input rejected: "+ex.Message; invalid("incomplete or unsupported input report"); }
                 finally { if(buffer!=IntPtr.Zero) Marshal.FreeHGlobal(buffer); }
             }
-            base.WndProc(ref m); // DefWindowProc cleans up foreground WM_INPUT.
+
         }
         public void Dispose()
         {
             if(disposed) return; disposed=true;
-            var remove=new ushort[] {1,2,4}.Select(u=>new TouchHidNative.DeviceRegistration {Page=13,Usage=u,Flags=1,Target=IntPtr.Zero}).ToArray();
+            var remove=new ushort[] {1,2,4}.Select(u=>new TouchHidNative.DeviceRegistration {Page=13,Usage=u,Flags=1,Target=IntPtr.Zero}).Concat(new[] { new TouchHidNative.DeviceRegistration {Page=1,Usage=2,Flags=1}, new TouchHidNative.DeviceRegistration {Page=1,Usage=6,Flags=1} }).ToArray();
             if(Registered) TouchHidNative.RegisterRawInputDevices(remove,(uint)remove.Length,(uint)Marshal.SizeOf(typeof(TouchHidNative.DeviceRegistration)));
             foreach(var d in devices.Values) d.Dispose(); devices.Clear(); DestroyHandle();
         }

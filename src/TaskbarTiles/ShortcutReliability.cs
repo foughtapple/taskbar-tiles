@@ -40,7 +40,7 @@ namespace TaskbarTiles
         bool swallowTabUp, session;
         volatile bool stopped;
         int queued, repairRequested, generation, fault;
-        long lastInstalled;
+        long lastInstalled, lastEvent;
         internal int Generation { get { return Volatile.Read(ref generation); } }
         public bool Installed { get { return !stopped && Volatile.Read(ref generation) > 0 && hook != IntPtr.Zero; } }
         internal string Status { get { return (Enabled ? "Enabled" : "Disabled / temporary recovery pause") + "; hook registration " + Generation + ". Registration is not proof Windows has retained a hook."; } }
@@ -79,9 +79,14 @@ namespace TaskbarTiles
         }
         bool IdleKeys()
         {
-            if (swallowTabUp || session) return false;
+
             foreach (int key in new[] { 9, 0x10, 0x11, 0x12, 0x5B, 0x5C, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5 })
                 if (Native.Down(key)) return false;
+            if (swallowTabUp || session)
+            {
+                if ((Stopwatch.GetTimestamp() - lastEvent) / (double)Stopwatch.Frequency < 2) return false;
+                swallowTabUp = session = false; Array.Clear(modifiers, 0, modifiers.Length);
+            }
             return true;
         }
         void Install()
@@ -126,6 +131,7 @@ namespace TaskbarTiles
                 if (!stopped && code >= 0)
                 {
                     var k = (Native.KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lp, typeof(Native.KBDLLHOOKSTRUCT));
+                    lastEvent = Stopwatch.GetTimestamp();
                     int msg = wp.ToInt32(), vk = (int)k.vkCode;
                     bool down = msg == 0x100 || msg == 0x104, up = msg == 0x101 || msg == 0x105;
                     if ((down || up) && (vk == 0x10 || vk == 0x11 || vk == 0x12 || (vk >= 0xA0 && vk <= 0xA5))) modifiers[vk] = down;
@@ -148,6 +154,7 @@ namespace TaskbarTiles
             catch { Interlocked.Exchange(ref repairRequested, 1); }
             return Native.CallNextHookEx(IntPtr.Zero, code, wp, lp);
         }
+        internal void TestDeliver() { Enqueue(0); Drain(); }
         internal void TestRevoke() { if (hook != IntPtr.Zero) Native.UnhookWindowsHookEx(hook); Repair(); }
         public void Dispose()
         {
@@ -163,12 +170,23 @@ namespace TaskbarTiles
         void SetupShortcutRecovery()
         {
             ShortcutDiagnostics.Write("resident started; " + hook.Status);
+            Microsoft.Win32.SystemEvents.PowerModeChanged += ShortcutPowerChanged;
+            Microsoft.Win32.SystemEvents.SessionSwitch += ShortcutSessionChanged;
             shortcutRecoveryTimer.Tick += delegate
             {
                 shortcutRecoveryTimer.Stop(); if (closing) return;
                 hook.Enabled = options.InterceptAltTab; interceptItem.Checked = options.InterceptAltTab; hook.Repair();
                 ShortcutDiagnostics.Write("temporary navigation recovery ended; requested Alt+Tab=" + options.InterceptAltTab);
             };
+        }
+        void ShortcutPowerChanged(object sender, Microsoft.Win32.PowerModeChangedEventArgs e) { Post(delegate { RepairShortcuts(); }); }
+        void ShortcutSessionChanged(object sender, Microsoft.Win32.SessionSwitchEventArgs e) { Post(delegate { RepairShortcuts(); }); }
+        void DisposeShortcutRecovery()
+        {
+            shortcutRecoveryTimer.Stop(); shortcutRecoveryTimer.Dispose();
+            Microsoft.Win32.SystemEvents.PowerModeChanged -= ShortcutPowerChanged;
+            Microsoft.Win32.SystemEvents.SessionSwitch -= ShortcutSessionChanged;
+            ShortcutDiagnostics.Write("resident exiting normally");
         }
         void NavigationFailed(Exception ex)
         {

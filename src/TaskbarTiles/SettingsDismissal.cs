@@ -29,7 +29,7 @@ namespace TaskbarTiles
         {
             dismissOnFocusLoss = enabled;
             settingsOutsideClicks = new PopupClickWatcher(this, delegate
-            { return dismissOnFocusLoss && !DismissedByFocusLoss && !closingSettings; }, RequestOutsideSettingsDismissal);
+            { return dismissOnFocusLoss && !DismissedByFocusLoss && !closingSettings && !TouchReturnService.TestActive; }, RequestOutsideSettingsDismissal);
             Activated += delegate { if (!DismissedByFocusLoss) { dismissalArmed = true; outsideSince = null; } };
             Shown += delegate { dismissTimer.Start(); };
             FormClosed += delegate { closingSettings = true; dismissTimer.Stop(); };
@@ -53,6 +53,7 @@ namespace TaskbarTiles
         void CheckSettingsFocus()
         {
             if (IsDisposed || closingSettings) return;
+            if (TouchReturnService.TestActive) { outsideSince = null; return; }
             if (DismissedByFocusLoss) { FinishOutsideDismissal(); return; }
             if (!Visible) { outsideSince = null; return; }
             IntPtr foreground = Native.GetForegroundWindow();

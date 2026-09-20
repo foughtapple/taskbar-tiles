@@ -65,17 +65,24 @@ namespace TaskbarTiles
                 {
                     Require(hook.Installed,"keyboard hook registered");
                     hook.Pressed=delegate{Require(Thread.CurrentThread.ManagedThreadId==thread,"shortcut delivered outside low-level pump on UI thread");delivered++;};
+                    hook.TestDeliver();Require(delivered==1,"queued delivery reached UI callback");
                     int first=hook.Generation;hook.TestRevoke();
                     var wait=Stopwatch.StartNew();while(hook.Generation==first&&wait.ElapsedMilliseconds<3500){Application.DoEvents();Thread.Sleep(10);}
                     Require(hook.Generation>first,"removed hook repaired without application restart or probe input");
                     hook.Enabled=false;hook.Repair();wait.Restart();int next=hook.Generation;while(hook.Generation==next&&wait.ElapsedMilliseconds<3500){Application.DoEvents();Thread.Sleep(10);}
                     Require(!hook.Enabled,"repair preserves deliberate disabled state");
-                    Require(delivered==0,"registration test generates no shortcut or input");
+                    Require(delivered==1,"registration test generates no extra shortcut or input");
                 }
                 log.AppendLine("PASS: native shortcut registration, forced revocation/repair and disabled preference. No user key was synthesised.");
                 using(var window=new Form())
                 using(var service=new TouchReturnService(window,new Options()))
                 {Require(!service.Devices.Any(),"disabled support installs no digitizer listeners");using(service.DetectionTest()){Require(service.Testing,"diagnostic mode cannot auto-return");}Require(!service.Testing,"diagnostic lease released");}
+                using(var settings=new SettingsWindow(new Options(),delegate(Options o){throw new InvalidOperationException("Native UI test must never save");},null,new List<AppButton>(),"Touch screen monitor support"))
+                using(var image=new Bitmap(settings.Width,settings.Height))
+                { settings.DrawToBitmap(image,new Rectangle(Point.Empty,image.Size));Require(settings.Controls.Count>0,"actual Settings pages construct and paint without saving"); }
+                using(var monitor=new TouchMonitorDialog(""))
+                using(var image=new Bitmap(monitor.Width,monitor.Height))
+                { monitor.DrawToBitmap(image,new Rectangle(Point.Empty,image.Size));Require(monitor.Controls.Count>0,"monitor test UI constructs without enabling or saving devices"); }
                 log.AppendLine("Hardware compatibility NOT established: no Surface, spacedesk, Apollo, pen or real digitizer was exercised. Local passive acceptance test remains mandatory.");
                 File.WriteAllText(Path.Combine(Program.Home,"touch-shortcut-test.log"),log.ToString());return 0;
             }

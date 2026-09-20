@@ -11,6 +11,13 @@ namespace TaskbarTiles
     static class SettingsHelp
     {
         static readonly Dictionary<string, string> hints = new Dictionary<string, string> {
+            { "TouchSupportEnabled", "Opt in to automatic return only for explicitly associated, tested touchscreen devices. Default off. Run the passive detection test first. Unknown or incomplete input never triggers a return; enabling this alone does not enable every display." },
+            { "TouchWaitForHover", "Keep focus while the pen reports that it remains in detection range, including pauses between strokes. This requires actual in-range reports. A pen device without hover information cannot auto-return while this option is enabled; the utility never invents hover state." },
+            { "TouchTypingCancels", "Typing cancels the current return point so focus does not jump away while entering text. Physical mouse/trackpad use and deliberate task navigation always cancel independently of this option. Touch Return's own assigned shortcuts are excluded." },
+            { "TouchPauseForMenus", "Prevent return while Windows reliably reports an open menu or standard dialog. Some applications draw custom menus that Windows cannot identify. Use Stay here for extended reading, drawing or any task that must keep focus." },
+            { "TouchReturnDelayMs", "Milliseconds after all reported fingers have lifted. Subsequent touch restarts the timer; a still-held finger never expires. Default 1000. A monitor can override this value." },
+            { "PenReturnDelayMs", "Milliseconds after pen contact and, when enabled and supported, hover range have ended. Default 2000. A mixed touch/pen session uses the longer applicable delay." },
+            { "TouchReturnAction", "Return focus and cursor, focus only, or cursor only. No click is synthesised. Cursor clipping is respected. When focus is requested but Windows denies it, the cursor is not moved." },
             { "MinimizeFullscreenOnOpen", "Opening with Alt+Tab, Ctrl+Alt+Space or your X-Mouse command sends a normal minimise request to the foreground fullscreen app. Only that foreground app is affected. Ordinary maximised title-bar windows are left alone.\n\nThe app stays running and can be restored from its preview. Some games may briefly change display modes or refuse the request. No F11, forced shutdown or process injection is used. Turning this off restores overlay-only behaviour." },
             { "ShowAppLabels", "Show names beneath the square taskbar app tiles. Turn off for an icon-only strip; hover still identifies the app." },
             { "ShowLivePreviews", "Show live Windows-composited thumbnails of open windows. Turning this off leaves labelled cards and avoids live thumbnail rendering. Some minimised or protected apps cannot supply a preview." },
@@ -105,7 +112,7 @@ namespace TaskbarTiles
                     page.Text == "Navigation" ? "Window switching, closing, filtering and placement behaviour." :
                     page.Text == "Screens & zones" ? "Monitor picker size, full-screen buttons and zone geometry." :
                     page.Text == "Monitor layouts" ? "Choose the layout for each monitor without changing PowerToys files." :
-                    page.Text == "Quick access" ? "Bottom-bar buttons, local keyboard shortcuts and live preview." : "Startup, diagnostics and X-Mouse setup.";
+                    page.Text == "Quick access" ? "Bottom-bar buttons, local keyboard shortcuts and live preview." : page.Text == "Touch screen monitor support" ? "Detection-first Touch Return, monitor associations and safe idle timings." : page.Text == "Shortcut health" ? "Repair Alt+Tab interception and inspect local shortcut diagnostics." : "Startup, diagnostics and X-Mouse setup.";
             HintTree(startup, "Start the tray app when you sign in. Apply saves this choice; no administrator service is installed.");
             if (favouritesList != null) HintTree(favouritesList, "Tick entries to show them. Unticking hides without removing. Select a row to Edit / Remove / Move it; double-click to edit. Apply saves your list.");
             FillHints(this);

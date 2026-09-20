@@ -13,10 +13,21 @@ using Microsoft.Win32;
 
 namespace TaskbarTiles
 {
+    static class TouchShortcutKeys
+    {
+        internal static volatile Keys[] Registered = new Keys[0];
+        internal static bool IsShortcut(int key)
+        {
+            if(Registered.Length==0)return false;
+            Keys value=(Keys)key;
+            if(Native.Down(0x11))value|=Keys.Control;if(Native.Down(0x12))value|=Keys.Alt;if(Native.Down(0x10))value|=Keys.Shift;
+            return Registered.Contains(value);
+        }
+    }
     sealed class TouchInputObserver : IDisposable
     {
         [StructLayout(LayoutKind.Sequential)] struct Mouse { internal Native.POINT Point; internal uint Data,Flags,Time; internal UIntPtr Extra; }
-        internal sealed class Sample { internal uint Tick; internal IntPtr Foreground; internal Point Cursor,Contact; internal bool Pen; }
+        internal sealed class Sample { internal uint Tick; internal IntPtr Foreground; internal Point Cursor,Contact; internal bool Pen,Corroborated,Rejected; }
         readonly ConcurrentQueue<Sample> anchors=new ConcurrentQueue<Sample>();
         readonly Native.HookProc mouseCallback,keyCallback;
         readonly Thread thread;
@@ -25,6 +36,8 @@ namespace TaskbarTiles
         uint threadId;
         int physicalVersion,typingVersion,navigationVersion,count;
         Point lastMouse;
+        internal volatile uint LastPromotedTick;
+        internal volatile int PromotedButtons;
         internal int PhysicalVersion { get { return Volatile.Read(ref physicalVersion); } }
         internal int TypingVersion { get { return Volatile.Read(ref typingVersion); } }
         internal int NavigationVersion { get { return Volatile.Read(ref navigationVersion); } }
@@ -48,6 +61,7 @@ namespace TaskbarTiles
                     if(!stopped) Application.Run();
                 }
             }
+            catch { Installed=false; Interlocked.Increment(ref physicalVersion); }
             finally { Installed=false; if(mouse!=IntPtr.Zero) Native.UnhookWindowsHookEx(mouse); if(key!=IntPtr.Zero) Native.UnhookWindowsHookEx(key); }
         }
         IntPtr MouseEvent(int code,IntPtr message,IntPtr data)
@@ -60,6 +74,9 @@ namespace TaskbarTiles
                     ulong extra=m.Extra.ToUInt64(); bool promoted=(extra & 0xFFFFFF00UL)==0xFF515700UL;
                     if(promoted)
                     {
+                        LastPromotedTick=m.Time;
+                        if(msg==0x201) PromotedButtons|=((extra & 0x80)==0?2:1);
+                        if(msg==0x202) PromotedButtons&=~((extra & 0x80)==0?2:1);
                         if(msg==0x201 && Interlocked.Increment(ref count)<=32)
                             anchors.Enqueue(new Sample { Tick=m.Time,Foreground=Native.GetForegroundWindow(),Cursor=lastMouse,
                                 Contact=new Point(m.Point.x,m.Point.y),Pen=(extra & 0x80)==0 });
@@ -83,6 +100,7 @@ namespace TaskbarTiles
                 if(code>=0 && !stopped && (message.ToInt32()==0x100 || message.ToInt32()==0x104))
                 {
                     var k=(Native.KBDLLHOOKSTRUCT)Marshal.PtrToStructure(data,typeof(Native.KBDLLHOOKSTRUCT)); int v=(int)k.vkCode;
+                    if(TouchShortcutKeys.IsShortcut(v)) return Native.CallNextHookEx(IntPtr.Zero,code,message,data);
                     if(v!=0x10 && v!=0x11 && v!=0x12 && !(v>=0xA0 && v<=0xA5)) Interlocked.Increment(ref typingVersion);
                     if(v==9 || v==0x5B || v==0x5C || v==0x1B) Interlocked.Increment(ref navigationVersion);
                 }
@@ -93,7 +111,7 @@ namespace TaskbarTiles
         internal void Drain()
         {
             Sample s; while(anchors.TryDequeue(out s)) { Interlocked.Decrement(ref count); Recent.Add(s); }
-            while(Recent.Count>32) Recent.RemoveAt(0);
+            while(Recent.Count>32) { if(!Recent[0].Corroborated)Interlocked.Increment(ref physicalVersion); Recent.RemoveAt(0); }
         }
         public void Dispose() { if(stopped) return; stopped=true; if(threadId!=0) Native.PostThreadMessage(threadId,0x12,IntPtr.Zero,IntPtr.Zero); }
     }
@@ -117,6 +135,12 @@ namespace TaskbarTiles
     sealed class TouchReturnService : IDisposable
     {
         internal static TouchReturnService Current;
+        internal static bool TestActive { get { return Current != null && Current.Testing; } }
+        readonly Dictionary<string,string> probeAnchors = new Dictionary<string,string>();
+        readonly List<int> hotkeys = new List<int>();
+        bool manualReturn;
+        int rawMouseVersion, rawKeyVersion;
+        internal bool HasProbeAnchor(string device, string screen) { string found; return probeAnchors.TryGetValue(device,out found) && found==screen; }
         readonly TouchReturnEngine engine=new TouchReturnEngine();
         readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer {Interval=40};
         readonly Control owner;
@@ -131,6 +155,7 @@ namespace TaskbarTiles
         int mouseVersion,keyVersion,navigationVersion,tests;
         long lastPump;
         bool disposed,paused,restoring;
+        volatile bool environmentChanged;
         internal bool Stay {get{return engine.Stay;}}
         internal bool Paused {get{return paused;}}
         internal bool Testing {get{return tests>0;}}
@@ -150,9 +175,10 @@ namespace TaskbarTiles
         }
         internal void Configure(Options settings)
         {
-            options=settings.Clone(); engine.Cancel("settings changed"); delayed.Clear();
+            options=settings.Clone(); manualReturn=false; engine.Cancel("settings changed"); delayed.Clear();
             try{rules=TouchRules.Parse(options.TouchMonitorRules);}catch{rules=new List<TouchMonitorRule>();fault="invalid monitor rules";}
             monitors=DisplayNative.Monitors(); layout=Fingerprint(monitors);
+            RegisterShortcuts();
             engine.Enabled=options.TouchSupportEnabled; engine.WaitHover=options.TouchWaitForHover;
             if(options.TouchSupportEnabled || tests>0) Start(); else Stop();
         }
@@ -162,13 +188,14 @@ namespace TaskbarTiles
         {
             if(source!=null || disposed) return;
             fault=""; observer=new TouchInputObserver();
-            source=new RawTouchSource(OnFrame,Block);
-            mouseVersion=observer.PhysicalVersion; keyVersion=observer.TypingVersion; navigationVersion=observer.NavigationVersion;
+            try { source=new RawTouchSource(OnFrame,Block); }
+            catch { observer.Dispose();observer=null;throw; }
+            mouseVersion=observer.PhysicalVersion; keyVersion=observer.TypingVersion; navigationVersion=observer.NavigationVersion;rawMouseVersion=source.PhysicalVersion;rawKeyVersion=source.TypingVersion;
             lastPump=Environment.TickCount & int.MaxValue;
         }
         void Stop()
         {
-            engine.ClearInput("monitor support stopped"); delayed.Clear();
+            manualReturn=false; engine.ClearInput("monitor support stopped"); delayed.Clear();
             if(source!=null) source.Dispose(); source=null; if(observer!=null) observer.Dispose(); observer=null;
         }
         internal IDisposable DetectionTest()
@@ -179,7 +206,7 @@ namespace TaskbarTiles
         sealed class TouchTestLease:IDisposable {Action end;internal TouchTestLease(Action action){end=action;}public void Dispose(){var e=end;end=null;if(e!=null)e();}}
         internal void ResetDetection()
         {
-            Stop(); fault=""; Start(); engine.Cancel("test restarted; no automatic return during test");
+            Stop(); fault=""; environmentChanged=false; probeAnchors.Clear(); Start(); engine.Cancel("test restarted; no automatic return during test");
         }
         void OnFrame(TouchFrame frame)
         {
@@ -188,8 +215,8 @@ namespace TaskbarTiles
             if(delayed.Count>=512){Block("input queue overflow; run detection again");delayed.Clear();return;}
             delayed.Add(frame);
         }
-        void Block(string reason){fault=reason;engine.Cancel(reason);delayed.Clear();}
-        internal void Cancel(string reason){engine.Cancel(reason);delayed.Clear();}
+        void Block(string reason){fault=reason;manualReturn=false;engine.Cancel(reason);delayed.Clear();}
+        internal void Cancel(string reason){manualReturn=false;engine.Cancel(reason);delayed.Clear();}
         internal void SetPaused(bool value){paused=value;Cancel(value?"support paused":"support resumed; waiting for fresh interaction");}
         internal void SetStay(bool value){engine.SetStay(value,Clock());}
         static double Clock(){return Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency;}
@@ -198,6 +225,11 @@ namespace TaskbarTiles
             observer.Drain();
             var a=observer.Recent.LastOrDefault(s=>s.Pen==frame.Pen && Math.Abs(unchecked((int)(frame.Tick-s.Tick)))<=150 && monitor.Bounds.Contains(s.Contact));
             if(a==null || a.Foreground==IntPtr.Zero || !Native.IsWindow(a.Foreground)) return null;
+            // Some pointer stacks activate the target before mouse promotion. Do not
+            // call that a pre-touch return point. This implementation intentionally
+            // requires an origin window on a different screen; it never guesses back
+            // through foreground history to resurrect an older application.
+            if(Screen.FromHandle(a.Foreground).DeviceName==monitor.DeviceName) return null;
             uint pid=WindowNative.ProcessId(a.Foreground);
             if(pid==0 || pid==(uint)Process.GetCurrentProcess().Id) return null;
             long start=PackageIdentity.StartTicks(pid);if(start==0)return null;
@@ -206,18 +238,19 @@ namespace TaskbarTiles
         void Tick()
         {
             if(disposed || observer==null || source==null || restoring)return;
+            if(environmentChanged){Cancel("display/session environment changed");return;}
             try
             {
                 long pump=Environment.TickCount & int.MaxValue;
                 if(lastPump!=0 && pump-lastPump>1500)Block("input processing paused; run detection again before automatic return");
                 lastPump=pump;observer.Drain();
-                bool moved=mouseVersion!=observer.PhysicalVersion;
-                bool typed=keyVersion!=observer.TypingVersion;
+                bool moved=mouseVersion!=observer.PhysicalVersion || rawMouseVersion!=source.PhysicalVersion;
+                bool typed=keyVersion!=observer.TypingVersion || rawKeyVersion!=source.TypingVersion;
                 bool nav=navigationVersion!=observer.NavigationVersion;
-                mouseVersion=observer.PhysicalVersion;keyVersion=observer.TypingVersion;navigationVersion=observer.NavigationVersion;
+                mouseVersion=observer.PhysicalVersion;keyVersion=observer.TypingVersion;navigationVersion=observer.NavigationVersion;rawMouseVersion=source.PhysicalVersion;rawKeyVersion=source.TypingVersion;
                 if(moved || nav || (typed && options.TouchTypingCancels))
                 {
-                    engine.Cancel(moved?"physical/unclassified mouse or trackpad input":nav?"deliberate keyboard navigation":"typing");
+                    manualReturn=false;engine.Cancel(moved?"physical/unclassified mouse or trackpad input":nav?"deliberate keyboard navigation":"typing");
                     // Do not allow an earlier queued raw report to create a new session
                     // after the user's deliberate input already cancelled it.
                     foreach(var f in delayed) engine.Activity(f,false,null,1000,Clock());delayed.Clear();
@@ -226,6 +259,10 @@ namespace TaskbarTiles
                 while(delayed.Count>0 && unchecked((int)(now-delayed[0].Tick))>=90)
                 {
                     var f=delayed[0];delayed.RemoveAt(0);
+                    var pre=observer.Recent.LastOrDefault(s=>s.Pen==f.Pen && Math.Abs(unchecked((int)(f.Tick-s.Tick)))<=150);
+                    if(pre!=null && f.Valid)pre.Corroborated=true;
+                    if(pre!=null && pre.Foreground!=IntPtr.Zero && WindowNative.ProcessId(pre.Foreground)!=(uint)Process.GetCurrentProcess().Id)
+                    { var observedMonitor=monitors.FirstOrDefault(m=>m.Bounds.Contains(pre.Contact)); if(observedMonitor!=null && Native.IsWindow(pre.Foreground) && Screen.FromHandle(pre.Foreground).DeviceName!=observedMonitor.DeviceName)probeAnchors[f.Device]=observedMonitor.Key; }
                     var matching=rules.Where(r=>r.Enabled && (f.Pen?r.Pen&&r.PenVerified&&r.PenDevice==f.Device:r.Touch&&r.TouchVerified&&r.TouchDevice==f.Device)).ToList();
                     var rule=matching.Count==1?matching[0]:null;
                     var screen=rule==null?null:monitors.SingleOrDefault(m=>m.Key==rule.Key);
@@ -234,33 +271,41 @@ namespace TaskbarTiles
                         fault.Length==0 && !Testing && !paused && (!f.Pen || !options.TouchWaitForHover || f.HoverKnown);
                     int delay=f.Pen?(rule!=null&&rule.PenDelay>=0?rule.PenDelay:options.PenReturnDelayMs):(rule!=null&&rule.TouchDelay>=0?rule.TouchDelay:options.TouchReturnDelayMs);
                     // Application exception strings are exact executable leaf names; no content is inspected.
-                    string target=ShellIcons.ProcessFile(Native.GetForegroundWindow());
+                    string target=string.IsNullOrWhiteSpace(options.TouchExcludedApps)?"":ShellIcons.ProcessFile(Native.GetForegroundWindow());
                     if(options.TouchExcludedApps.Split(new[]{';',','},StringSplitOptions.RemoveEmptyEntries).Any(n=>n.Trim().Equals(Path.GetFileName(target),StringComparison.OrdinalIgnoreCase)))allowed=false;
                     engine.Enabled=options.TouchSupportEnabled && !Testing && !paused && fault.Length==0;
-                    engine.Activity(f,allowed,screen==null?null:Anchor(f,screen),Math.Max(250,delay),Clock());
+                    engine.Activity(f,allowed,engine.Saved!=null||screen==null?null:Anchor(f,screen),Math.Max(250,delay),Clock());
                 }
+                if(engine.Saved!=null && (!Native.IsWindow(engine.Saved.Window) || WindowNative.ProcessId(engine.Saved.Window)!=engine.Saved.Pid)) Cancel("saved window closed");
                 if(engine.Saved!=null)
                 {
                     IntPtr fg=Native.GetForegroundWindow();
                     if(fg==IntPtr.Zero)Cancel("foreground unavailable / secure desktop");
+                    else if(WindowNative.ProcessId(fg)==(uint)Process.GetCurrentProcess().Id)Cancel("Taskbar Tiles controls opened");
                     else if(fg!=engine.Saved.Window && !monitors.Any(m=>rules.Any(r=>r.Enabled&&r.Key==m.Key)&&m.Bounds.IntersectsWith(WindowNative.VisibleBounds(fg))))Cancel("foreground moved away from enabled touchscreen");
                 }
-                bool blocked=delayed.Count>0 || Native.Down(0x10)||Native.Down(0x11)||Native.Down(0x12)||Native.Down(0x5B)||Native.Down(0x5C)||
+                foreach(var unknown in observer.Recent.Where(a=>!a.Corroborated&&!a.Rejected&&unchecked((int)(now-a.Tick))>250))
+                { unknown.Rejected=true;Cancel("touch/pen promotion without a complete background input path"); }
+                bool unknownPromotion=observer.LastPromotedTick!=0 && unchecked((int)(now-observer.LastPromotedTick))<300 &&
+                    Math.Abs(unchecked((int)(observer.LastPromotedTick-source.LastDigitizerTick)))>180;
+                if(unknownPromotion && unchecked((int)(now-observer.LastPromotedTick))>180)Cancel("unclassified touch/pen input");
+                bool blocked=observer.PromotedButtons!=0 || unknownPromotion || observer.Recent.Any(a=>!a.Corroborated&&!a.Rejected) || delayed.Count>0 || Native.Down(0x10)||Native.Down(0x11)||Native.Down(0x12)||Native.Down(0x5B)||Native.Down(0x5C)||
                     (options.TouchPauseForMenus&&TouchReturnNative.MenusOrDialogs());
-                var point=engine.Take(Clock(),false,blocked);if(point!=null)Restore(point);
+                var point=engine.Take(Clock(),manualReturn,blocked);if(point!=null){manualReturn=false;Restore(point);}
                 RecordStatus();
             }
             catch(Exception ex){Block("input/return error: "+ex.GetType().Name);RecordStatus();}
         }
         void Restore(TouchReturnPoint saved)
         {
-            if(disposed||Testing||paused||fault.Length>0)return;
+            if(disposed||Testing||paused||fault.Length>0||environmentChanged)return;
             if(!saved.Verified||!Native.IsWindow(saved.Window)||WindowNative.ProcessId(saved.Window)!=saved.Pid||PackageIdentity.StartTicks(saved.Pid)!=saved.Start ||
                 saved.Layout!=Fingerprint(DisplayNative.Monitors())){engine.Status="Cancelled: saved window or display layout changed";return;}
             restoring=true;
             try
             {
                 int input=observer.PhysicalVersion,key=observer.TypingVersion;
+                if(input!=mouseVersion || (options.TouchTypingCancels&&key!=keyVersion) || observer.PromotedButtons!=0 || delayed.Count!=0){engine.Status="Cancelled: new input before return";return;}
                 bool focus=options.TouchReturnAction!=2,cursor=options.TouchReturnAction!=1;
                 if(focus && Native.GetForegroundWindow()!=saved.Window)
                 {
@@ -280,22 +325,54 @@ namespace TaskbarTiles
             }
             finally{restoring=false;}
         }
-        internal void ReturnNow()
+        internal void ReturnNow() { if(engine.Saved!=null) manualReturn=true; }
+        void RegisterShortcuts()
         {
-            if(observer==null)return;
-            var p=engine.Take(Clock(),true,Testing||paused||delayed.Count!=0||Native.Down(0x10)||Native.Down(0x11)||Native.Down(0x12)||(options.TouchPauseForMenus&&TouchReturnNative.MenusOrDialogs()));
-            if(p!=null)Restore(p);RecordStatus();
+            foreach(int id in hotkeys)Native.UnregisterHotKey(owner.Handle,id); hotkeys.Clear();
+            var combinations=new List<Keys>(); string[] values={options.TouchPauseShortcut,options.TouchStayShortcut,options.TouchReturnShortcut};
+            for(int i=0;i<values.Length;i++)
+            {
+                if(string.IsNullOrWhiteSpace(values[i]))continue;
+                try
+                {
+                    Keys value=(Keys)new KeysConverter().ConvertFromInvariantString(values[i]);int key=(int)(value&Keys.KeyCode);
+                    uint mods=(uint)(((value&Keys.Alt)!=0?1:0)|((value&Keys.Control)!=0?2:0)|((value&Keys.Shift)!=0?4:0));
+                    if(key<0x20 || key>0xFE || mods==0 || key==0x5B || key==0x5C)throw new ArgumentException();
+                    if(!Native.RegisterHotKey(owner.Handle,0xB100+i,0x4000|mods,(uint)key))throw new InvalidOperationException();
+                    hotkeys.Add(0xB100+i);combinations.Add(value);
+                }
+                catch {history.Add("Shortcut unavailable: "+values[i]+" (invalid or already assigned)");}
+            }
+            TouchShortcutKeys.Registered=combinations.ToArray();
+        }
+        internal bool HandleHotkey(int id)
+        {
+            if(!hotkeys.Contains(id))return false;
+            if(id==0xB100)SetPaused(!Paused);else if(id==0xB101)SetStay(!Stay);else ReturnNow();return true;
         }
         void RecordStatus()
         {if(Status==lastStatus)return;lastStatus=Status;history.Add(Status);while(history.Count>12)history.RemoveAt(0);}
         void PostCancel(string reason)
-        {try{owner.BeginInvoke(new Action(delegate{if(!disposed){Cancel(reason);monitors=DisplayNative.Monitors();layout=Fingerprint(monitors);}}));}catch{}}
+        {
+            environmentChanged=true;
+            try { owner.BeginInvoke(new Action(delegate
+            {
+                if(disposed)return;
+                Cancel(reason); engine.ClearInput(reason);
+                monitors=DisplayNative.Monitors();layout=Fingerprint(monitors);
+                // Require fresh neutral reports and verified snapshots after a device,
+                // lock or power transition; never reuse a pre-transition destination.
+                fault="Environment changed; use Restart test to recheck input before automatic return";
+                environmentChanged=false;
+            })); } catch { }
+        }
         void ChangedDisplay(object sender,EventArgs e){PostCancel("display layout changed");}
         void ChangedPower(object sender,PowerModeChangedEventArgs e){PostCancel("power/sleep transition");}
         void ChangedSession(object sender,SessionSwitchEventArgs e){PostCancel("session lock/unlock");}
         public void Dispose()
         {
             if(disposed)return;disposed=true;timer.Stop();timer.Dispose();Stop();
+            foreach(int id in hotkeys)Native.UnregisterHotKey(owner.Handle,id);hotkeys.Clear();TouchShortcutKeys.Registered=new Keys[0];
             SystemEvents.DisplaySettingsChanged-=ChangedDisplay;SystemEvents.PowerModeChanged-=ChangedPower;SystemEvents.SessionSwitch-=ChangedSession;
             if(Current==this)Current=null;
         }

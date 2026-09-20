@@ -1,4 +1,4 @@
-// Taskbar Tiles 0.7.6 - Windows utility. C# 5 / .NET Framework.
+// Taskbar Tiles 0.8.0 - Windows utility. C# 5 / .NET Framework.
 // No telemetry, keyboard logging, taskbar registry edits or process injection.
 // Network access is limited to explicit, user-initiated GitHub update checks/downloads.
 using System;
@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.7.6";
+        internal const string Version = "0.8.0";
         static bool SignalToggle()
         {
             try
@@ -63,6 +63,7 @@ namespace TaskbarTiles
         {
             if (args.Contains("--test-clickaway")) { Environment.Exit(OutsideClickTests.RunNative()); return; }
             if (args.Contains("--test-clickaway-target")) { Environment.Exit(OutsideClickTests.RunTarget(args)); return; }
+            if (args.Contains("--test-touch-shortcuts")) { Environment.Exit(TouchSupportTests.RunNative()); return; }
             if (args.Contains("--test-update-https")) { Environment.Exit(UpdateTlsTests.RunNetwork()); return; }
             if (args.Contains("--test-switcher-layer")) { Environment.Exit(SwitcherLayerTests.RunNative()); return; }
             if (args.Contains("--test-launch-fixture")) { Environment.Exit(LaunchOutcomeTests.Fixture(args)); return; }
@@ -79,7 +80,7 @@ namespace TaskbarTiles
             {
                 if (!first)
                 {
-                    if (args.Contains("--toggle") || args.Contains("--show"))
+                    if (args.Length == 0 || args.Contains("--toggle") || args.Contains("--show"))
                     {
                         // Covers a second launch while the resident copy is starting.
                         for (int i = 0; i < 25 && !SignalToggle(); i++) Thread.Sleep(40);
@@ -689,73 +690,6 @@ namespace TaskbarTiles
         }
     }
 
-    sealed class KeyboardHook : IDisposable
-    {
-        public volatile bool Enabled = true;
-        public Action<bool, bool> Pressed; // forceSticky, reverse
-        public Action Released;
-        IntPtr hook;
-        uint threadId;
-        bool swallowTabUp, session;
-        readonly bool[] modifiers = new bool[256];
-        readonly Native.HookProc callback;
-        readonly ManualResetEvent ready = new ManualResetEvent(false);
-        public KeyboardHook()
-        {
-            callback = OnKey;
-            var t = new Thread(delegate()
-            {
-                threadId = Native.GetCurrentThreadId();
-                hook = Native.SetWindowsHookEx(13, callback, Native.GetModuleHandle(null), 0);
-                if (hook == IntPtr.Zero) Program.Log("Keyboard hook error: " + Marshal.GetLastWin32Error());
-                ready.Set();
-                Application.Run();
-            });
-            t.IsBackground = true; t.Name = "Alt Tab hook"; t.Start(); ready.WaitOne(2000);
-        }
-        public bool Installed { get { return hook != IntPtr.Zero; } }
-        IntPtr OnKey(int code, IntPtr wp, IntPtr lp)
-        {
-            if (code >= 0)
-            {
-                var k = (Native.KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lp, typeof(Native.KBDLLHOOKSTRUCT));
-                int msg = wp.ToInt32();
-                bool down = msg == 0x100 || msg == 0x104, up = msg == 0x101 || msg == 0x105;
-                int vk = (int)k.vkCode;
-                if (vk == 0x10 || vk == 0x11 || vk == 0x12 || (vk >= 0xA0 && vk <= 0xA5))
-                    modifiers[vk] = down;
-                // Track modifier events as well as ALTDOWN. Fast injected Ctrl+Alt+Tab
-                // sequences need not have the same asynchronous state as physical keys.
-                bool alt = modifiers[0x12] || modifiers[0xA4] || modifiers[0xA5] || (k.flags & 0x20) != 0;
-                bool ctrl = modifiers[0x11] || modifiers[0xA2] || modifiers[0xA3];
-                bool shift = modifiers[0x10] || modifiers[0xA0] || modifiers[0xA1];
-                if (vk == 9)
-                {
-                    if (up && swallowTabUp) { swallowTabUp = false; return new IntPtr(1); }
-                    if (down && Enabled && alt)
-                    {
-                        swallowTabUp = true; session = true;
-                        if (Pressed != null) Pressed(ctrl, shift);
-                        return new IntPtr(1);
-                    }
-                }
-                if (up && session && (vk == 0x12 || vk == 0xA4 || vk == 0xA5))
-                {
-                    session = false;
-                    if (Released != null) Released();
-                    // Modifiers always pass through, including their key-up events.
-                }
-            }
-            return Native.CallNextHookEx(hook, code, wp, lp);
-        }
-        public void Dispose()
-        {
-            Enabled = false;
-            if (hook != IntPtr.Zero) { Native.UnhookWindowsHookEx(hook); hook = IntPtr.Zero; }
-            if (threadId != 0) Native.PostThreadMessage(threadId, 0x12, IntPtr.Zero, IntPtr.Zero);
-        }
-    }
-
     sealed class WindowItem
     {
         public IntPtr Handle;
@@ -824,6 +758,18 @@ namespace TaskbarTiles
             menu.Items.Add("Edit settings.ini (advanced)", null, delegate { OpenFile(Path.Combine(Program.Home, "settings.ini")); });
             menu.Items.Add("Undo last window move", null, delegate { UndoMove(); });
             menu.Items.Add("Refresh taskbar apps", null, delegate { RefreshApps(); });
+            menu.Items.Add("Repair shortcuts", null, delegate { RepairShortcuts(); });
+            menu.Items.Add("Open shortcut diagnostics", null, delegate { OpenFile(ShortcutDiagnostics.PathName); });
+            var touchMenu = new ToolStripMenuItem("Touch screen monitor support");
+            var pauseTouch = new ToolStripMenuItem("Pause automatic return") { CheckOnClick = true };
+            pauseTouch.Click += delegate { if (touchService != null) touchService.SetPaused(pauseTouch.Checked); };
+            var stayTouch = new ToolStripMenuItem("Stay here") { CheckOnClick = true };
+            stayTouch.Click += delegate { if (touchService != null) touchService.SetStay(stayTouch.Checked); };
+            touchMenu.DropDownOpening += delegate { if (touchService != null) { pauseTouch.Checked = touchService.Paused; stayTouch.Checked = touchService.Stay; } };
+            touchMenu.DropDownItems.Add(pauseTouch); touchMenu.DropDownItems.Add(stayTouch);
+            touchMenu.DropDownItems.Add("Return now (when safe)", null, delegate { if (touchService != null) touchService.ReturnNow(); });
+            touchMenu.DropDownItems.Add("Monitors, test and settings...", null, delegate { ShowTouchSupport(); });
+            menu.Items.Add(touchMenu);
             menu.Items.Add(new ToolStripSeparator());
             interceptItem = new ToolStripMenuItem("Replace Alt+Tab (uncheck to restore Windows)") { Checked = hook.Enabled, CheckOnClick = true };
             interceptItem.Click += delegate
@@ -876,7 +822,7 @@ namespace TaskbarTiles
             SetupFeatures(); SetupQuickAccess(); SetupFullscreen(); SetupActivation();
             switcherLayer = new SwitcherLayer(this, delegate
             { return !closing && transient == null && activation == null && !fullscreenOpening; });
-            SetupOutsideDismissal();
+            SetupOutsideDismissal(); SetupShortcutRecovery(); SetupTouchSupport();
             RefreshApps();
         }
         protected override CreateParams CreateParams
@@ -894,10 +840,7 @@ namespace TaskbarTiles
                     catch (Exception ex)
                     {
                         Program.Log("UI action: " + ex);
-                        if (hook != null) hook.Enabled = false;
-                        if (interceptItem != null) interceptItem.Checked = false;
-                        pending = null;
-                        try { Dismiss(); Notify("An error occurred. Native Alt+Tab has been restored. See TaskbarTiles.log."); } catch { }
+                        try { NavigationFailed(ex); } catch (Exception recovery) { Program.Log("Navigation recovery: " + recovery); }
                     }
                 }));
             }
@@ -920,6 +863,7 @@ namespace TaskbarTiles
                 if (!force && stamp == configStamp) return;
                 configStamp = stamp; options = Options.Load();
                 hook.Enabled = options.InterceptAltTab; interceptItem.Checked = hook.Enabled;
+                if (touchService != null) touchService.Configure(options);
                 ApplyFilter(false);
             }
             catch (Exception ex) { Program.Log("Settings: " + ex.Message); }
@@ -950,6 +894,8 @@ namespace TaskbarTiles
         { foreach (var a in list) if (a.Image != null) a.Image.Dispose(); }
         public void ToggleMenu()
         {
+            RepairShortcuts();
+            if (touchService != null) touchService.Cancel("switcher command");
             CancelPassiveLaunchObservation();
             if (fullscreenOpening) { CancelFullscreenOpen(); return; }
             if (launchPlacement != null && launchPlacement.ActiveDialog != null) { launchPlacement.ActiveDialog.Activate(); return; }
@@ -967,6 +913,7 @@ namespace TaskbarTiles
         }
         void OpenOrCycle(bool forceSticky, bool reverse, bool minimiseFullscreen = true)
         {
+            if (touchService != null) touchService.Cancel("switcher navigation");
             CancelPassiveLaunchObservation();
             if (closing || pending != null || transient != null) return;
             if (launchPlacement != null && launchPlacement.ActiveDialog != null) { launchPlacement.ActiveDialog.Activate(); return; }
@@ -1472,12 +1419,15 @@ namespace TaskbarTiles
         }
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == 0x312 && touchService != null && touchService.HandleHotkey(m.WParam.ToInt32())) return;
             if (m.Msg == 0x312 && m.WParam.ToInt32() == 10) { ToggleMenu(); return; }
             base.WndProc(ref m);
         }
         public void Shutdown()
         {
             if (closing) return; closing = true;
+            DisposeShortcutRecovery();
+            if (touchService != null) touchService.Dispose();
             DisposeOutsideDismissal();
             if (switcherLayer != null) switcherLayer.Dispose();
             CancelPendingLaunch(); DisposeActivation(); ShutdownFullscreen(); ShutdownQuickAccess(); ShutdownFeatures();
@@ -1613,6 +1563,7 @@ namespace TaskbarTiles
                 ActivationTests.Run(log);
                 SwitcherLayerTests.Run(log);
                 OutsideClickTests.Run(log);
+                TouchSupportTests.Run(log);
                 UpdateTests.Run(log);
                 log.AppendLine("These are unit/interop-layout tests, not live Windows, FancyZones or X-Mouse integration tests.");
                 File.WriteAllText(Path.Combine(Program.Home, "self-test.log"), log.ToString());

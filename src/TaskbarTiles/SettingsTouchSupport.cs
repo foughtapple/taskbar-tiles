@@ -24,7 +24,7 @@ namespace TaskbarTiles
             Number(p,"TouchReturnDelayMs","Touch return delay","Milliseconds after the final explicit contact UP. Further contact restarts the delay. Default: 1000.",250,60000,250);
             Number(p,"PenReturnDelayMs","Pen return delay","Milliseconds after the pen finishes. Default: 2000. Mixed touch/pen uses the longer applicable delay.",250,60000,250);
             Check(p,"TouchWaitForHover","Wait until the pen leaves hover range (requires detectable hover)");
-            Number(p,"TouchReturnAction","Return action","0 = focus and cursor; 1 = focus only; 2 = cursor only. No synthetic click is used.",0,2,1);
+            Choice(p,"TouchReturnAction","Return action","No synthetic click is used. Focus failure does not move the cursor.",new[] {"Focus + cursor","Focus only","Cursor only"});
             Check(p,"TouchTypingCancels","Typing cancels pending return");
             Check(p,"TouchPauseForMenus","Wait while Windows reports an open menu or standard dialog");
             Section(p,"Mouse always wins","Physical mouse/trackpad movement, clicks and scrolling always cancel. Unknown input is never treated as touch merely because of its location. Alt+Tab and other deliberate navigation also cancel.");
@@ -37,9 +37,8 @@ namespace TaskbarTiles
         }
         void TouchText(FlowLayoutPanel panel,string key,string label,string help)
         {
-            Section(panel,label,help);
             var box=new TextBox {Width=650,Text=Convert.ToString(typeof(Options).GetField(key).GetValue(edit)),BackColor=Theme.Card,ForeColor=Theme.Text};
-            fields[key]=box;panel.Controls.Add(box);settingHints.SetToolTip(box,help);
+            fields[key]=box;Row(panel,label,help,box);settingHints.SetToolTip(box,help);
         }
         void AddShortcutRecoveryPage()
         {
@@ -91,7 +90,7 @@ namespace TaskbarTiles
         IDisposable lease;
         TouchMonitorRule selected;
         bool loading;
-        PopupClickWatcher outside;
+
         internal string Result;
         internal TouchMonitorDialog(string json)
         {
@@ -100,7 +99,7 @@ namespace TaskbarTiles
             Text="Touch screen monitor support — monitors & passive test";ShowInTaskbar=false;StartPosition=FormStartPosition.CenterParent;
             ClientSize=new Size(940,760);MinimumSize=new Size(760,580);BackColor=Theme.Background;ForeColor=Theme.Text;Font=new Font("Segoe UI",10);
             var top=new FlowLayoutPanel {Dock=DockStyle.Top,Height=330,FlowDirection=FlowDirection.TopDown,WrapContents=false,Padding=new Padding(10),AutoScroll=true};
-            top.Controls.Add(new Label {Text="Test first: keep another app active, then touch/draw on the selected display. No returns happen while this test is open.",AutoSize=true});
+            top.Controls.Add(new Label {Text="Passive test stays open while you use another app. No returns occur. Close this test to restore normal click-away.",AutoSize=true});
             foreach(var r in rules)monitorList.Items.Add(r);monitorList.SelectedIndexChanged+=delegate{Store();SelectRule(monitorList.SelectedItem as TouchMonitorRule);};top.Controls.Add(monitorList);
             var row=new FlowLayoutPanel {Width=870,Height=35,WrapContents=false};row.Controls.Add(new Label {Text="Nickname",AutoSize=true,Margin=new Padding(3,7,3,3)});row.Controls.Add(nickname);row.Controls.Add(enabled);row.Controls.Add(touch);row.Controls.Add(pen);top.Controls.Add(row);
             var timing=new FlowLayoutPanel {Width=870,Height=36,WrapContents=false};timing.Controls.Add(new Label {Text="Touch ms (-1 = global)",AutoSize=true});timing.Controls.Add(touchDelay);timing.Controls.Add(new Label {Text="Pen ms (-1 = global)",AutoSize=true});timing.Controls.Add(penDelay);top.Controls.Add(timing);
@@ -118,9 +117,9 @@ namespace TaskbarTiles
             hints.SetToolTip(devices,"Only complete passive HID reports qualify. A virtual mouse is not a touchscreen. No supported device means automatic return remains unavailable.");
             hints.SetToolTip(touchDelay,"-1 uses the global touch delay; otherwise milliseconds. No timer starts until all contacts explicitly release.");
             hints.SetToolTip(penDelay,"-1 uses the global pen delay. Hover protection requires actual in-range reports; it is not inferred from mouse motion.");
-            Shown+=delegate{FormFit.Fit(this);if(TouchReturnService.Current!=null)lease=TouchReturnService.Current.DetectionTest();outside=new PopupClickWatcher(this,delegate{return true;},delegate{DialogResult=DialogResult.Cancel;Close();});outside.Arm();timer.Start();};
+            Shown+=delegate{FormFit.Fit(this);if(TouchReturnService.Current!=null)lease=TouchReturnService.Current.DetectionTest();timer.Start();};
             timer.Tick+=delegate{RefreshStatus();};
-            FormClosed+=delegate{timer.Stop();if(outside!=null)outside.Dispose();if(lease!=null)lease.Dispose();};
+            FormClosed+=delegate{timer.Stop();if(lease!=null)lease.Dispose();};
             if(monitorList.Items.Count>0)monitorList.SelectedIndex=0;
         }
         void Add(FlowLayoutPanel p,string text,int width,Action action){var b=Theme.Button(text,width);b.Click+=delegate{action();};p.Controls.Add(b);}
@@ -147,7 +146,7 @@ namespace TaskbarTiles
             if(d==null||screen==null||string.IsNullOrEmpty(screen.Instance)||!d.Ready||!confirmation.Checked)
             {MessageBox.Show(this,"Select a connected monitor with a stable identity and a supported device. Hold/release for 3 seconds, test two contacts for touch, and confirm unchanged input. No association was saved.","Detection not yet verified");return;}
             if(TouchReturnService.Current==null||!TouchReturnService.Current.HasProbeAnchor(d.Key,screen.Key))
-            {MessageBox.Show(this,"A matching pre-touch foreground/cursor snapshot has not been observed on that display. Test with a different app active first. This input path may not support safe background return; no association was saved.","Pre-touch capture not verified");return;}
+            {MessageBox.Show(this,"A matching pre-touch foreground/cursor snapshot from a different screen has not been observed on that display. Test with a different app active first. This input path may not support safe background return; no association was saved.","Pre-touch capture not verified");return;}
             if(d.Kind=="Pen"){selected.PenDevice=d.Key;selected.PenVerified=true;pen.Checked=true;}
             else{selected.TouchDevice=d.Key;selected.TouchVerified=true;touch.Checked=true;}
             RefreshStatus();
@@ -167,7 +166,11 @@ namespace TaskbarTiles
     {
         TouchReturnService touchService;
         internal void RequestShortcutRepair(){RepairShortcuts();}
-        void SetupTouchSupport(){touchService=new TouchReturnService(this,options);}
+        void SetupTouchSupport()
+        {
+            try { touchService=new TouchReturnService(this,options); }
+            catch(Exception ex){Program.Log("Touch support unavailable: "+ex);Notify("Touch screen monitor support could not initialise. The switcher is still available; see TaskbarTiles.log.");}
+        }
         void ShowTouchSupport(){CancelPassiveLaunchObservation();if(touchService!=null)touchService.Cancel("Settings opened");if(transient!=null){transient.Activate();return;}Dismiss();SettingsCore("Touch screen monitor support");}
     }
 }

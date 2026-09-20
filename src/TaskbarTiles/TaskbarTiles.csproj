@@ -64,6 +64,12 @@
     <Compile Include="Updates.cs" />
     <Compile Include="OutsideClickDismissal.cs" />
     <Compile Include="OutsideClickTests.cs" />
+    <Compile Include="ShortcutReliability.cs" />
+    <Compile Include="TouchSupport.cs" />
+    <Compile Include="TouchRawInput.cs" />
+    <Compile Include="TouchReturnRuntime.cs" />
+    <Compile Include="SettingsTouchSupport.cs" />
+    <Compile Include="TouchSupportTests.cs" />
     <Compile Include="SwitcherLayer.cs" />
     <Compile Include="SwitcherLayerTests.cs" />
     <Compile Include="Rendering.cs" />
