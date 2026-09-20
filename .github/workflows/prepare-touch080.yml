@@ -54,8 +54,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & git config user.name 'github-actions[bot]'
           & git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          & git add -- src/TaskbarTiles version.txt config/settings.ini CHANGELOG.md .github/workflows/build.yml .github/workflows/release.yml docs tools/Test-TouchSupport.ps1
-          & git rm -- .maintenance/apply080.py .maintenance/finalize080.py .maintenance/run080.py
+          # Runner token has contents permission, not workflow-edit permission.
+          # Permanent CI gates will be committed separately by the maintainer.
+          & git add -- src/TaskbarTiles version.txt config/settings.ini CHANGELOG.md docs tools/Test-TouchSupport.ps1
+          & git rm -r -- .maintenance
           if ($LASTEXITCODE -ne 0) { throw 'One-time helper removal failed.' }
           & git commit -m 'Recover shortcuts and add capability-gated Touch Return (0.8.0)'
           if ($LASTEXITCODE -ne 0) { throw 'No tested commit created.' }
