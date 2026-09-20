@@ -137,6 +137,7 @@ namespace TaskbarTiles
         internal static TouchReturnService Current;
         internal static bool TestActive { get { return Current != null && Current.Testing; } }
         readonly Dictionary<string,string> probeAnchors = new Dictionary<string,string>();
+        readonly Dictionary<string,string> probeNotes = new Dictionary<string,string>();
         readonly List<int> hotkeys = new List<int>();
         bool manualReturn;
         int rawMouseVersion, rawKeyVersion;
@@ -153,18 +154,37 @@ namespace TaskbarTiles
         List<MonitorData> monitors=new List<MonitorData>();
         string layout="",lastStatus="",fault="";
         int mouseVersion,keyVersion,navigationVersion,tests;
-        long lastPump;
+        uint lastPump;
         bool disposed,paused,restoring;
         volatile bool environmentChanged;
         internal bool Stay {get{return engine.Stay;}}
         internal bool Paused {get{return paused;}}
         internal bool Testing {get{return Volatile.Read(ref tests)>0;}}
         internal IEnumerable<TouchDeviceEvidence> Devices {get{return source==null?new TouchDeviceEvidence[0]:source.Devices;}}
-        internal string Status {get{return fault.Length>0?"Blocked: "+fault:Testing?"Detection test only — no automatic return":paused?"Paused":engine.Status;}}
-        internal string Report {get{return Status+Environment.NewLine+(source==null?"Input observer stopped":source.Status)+Environment.NewLine+
-            "Snapshot policy: requires a matching pre-delivery touch/pen mouse-promotion anchor. No anchor = no automatic return."+Environment.NewLine+
-            string.Join(Environment.NewLine,Devices.Select(d=>d+"; frames="+d.Frames+"; max contacts="+d.MaxContacts+"; hold="+d.HeldMilliseconds+" ms; release="+d.SawUp+"; hover="+d.HoverKnown))+
-            Environment.NewLine+string.Join(Environment.NewLine,history);}}
+        internal string BlockingReason {get{return fault;}}
+        internal bool HoverRequired {get{return options.TouchWaitForHover;}}
+        internal string Status {get{return Testing?"DETECTION TEST ONLY - no focus or cursor return while this test is open":
+            fault.Length>0?"Blocked: "+fault:!options.TouchSupportEnabled?"Disabled - enable Touch Return in main Settings after setup":paused?"Paused":engine.Status;}}
+        internal string ProbeStatus(string device)
+        {
+            string screen,note;
+            if(probeAnchors.TryGetValue(device,out screen))
+            {
+                var monitor=monitors.FirstOrDefault(m=>m.Key==screen);
+                return "observed for "+(monitor==null?"a disconnected display":monitor.Label)+(fault.Length>0?"; invalid while blocked":"");
+            }
+            return probeNotes.TryGetValue(device,out note)?note:"not observed; activate another screen's app before touching";
+        }
+        internal string Report {get{return Status+Environment.NewLine+
+            "Saved master switch: "+(options.TouchSupportEnabled?"ON":"OFF")+"; saved enabled screens: "+rules.Count(r=>r.Enabled)+
+            "; saved enabled/associated input paths: "+rules.Count(r=>r.Enabled&&((r.Touch&&r.TouchVerified)||(r.Pen&&r.PenVerified)))+Environment.NewLine+
+            "Current blocking condition: "+(fault.Length==0?"none":fault)+Environment.NewLine+
+            (source==null?"Input observer stopped":source.Status)+Environment.NewLine+
+            "Snapshot policy: matching pre-touch window/cursor evidence is required. Format support alone does not enable return."+Environment.NewLine+
+            string.Join(Environment.NewLine,Devices.Select(d=>d+"; frames="+d.Frames+"; max contacts="+d.MaxContacts+
+                "; completed hold="+d.HeldMilliseconds+" ms; release="+d.SawUp+"; hover capability="+d.HoverKnown+
+                "; hovering now="+d.CurrentHover+"; hover exit observed="+d.SawHoverExit+"; pre-touch="+ProbeStatus(d.Key)))+
+            Environment.NewLine+"Recent history (not the current condition):"+Environment.NewLine+string.Join(Environment.NewLine,history);}}
         internal TouchReturnService(Control control,Options settings)
         {
             owner=control; Current=this; Configure(settings);
@@ -191,7 +211,7 @@ namespace TaskbarTiles
             try { source=new RawTouchSource(OnFrame,Block); }
             catch { observer.Dispose();observer=null;throw; }
             mouseVersion=observer.PhysicalVersion; keyVersion=observer.TypingVersion; navigationVersion=observer.NavigationVersion;rawMouseVersion=source.PhysicalVersion;rawKeyVersion=source.TypingVersion;
-            lastPump=Environment.TickCount & int.MaxValue;
+            lastPump=unchecked((uint)Environment.TickCount);
         }
         void Stop()
         {
@@ -206,7 +226,19 @@ namespace TaskbarTiles
         sealed class TouchTestLease:IDisposable {Action end;internal TouchTestLease(Action action){end=action;}public void Dispose(){var e=end;end=null;if(e!=null)e();}}
         internal void ResetDetection()
         {
-            Stop(); fault=""; environmentChanged=false; probeAnchors.Clear(); Start(); engine.Cancel("test restarted; no automatic return during test");
+            Stop(); fault=""; environmentChanged=false; probeAnchors.Clear(); probeNotes.Clear(); Start(); engine.Cancel("test restarted; no automatic return during test");
+        }
+        internal void HandleProcessingPause()
+        {
+            if(!Testing) { Block("input processing paused; run detection again before automatic return"); return; }
+            // A passive test cannot return. A paused Settings UI invalidates its
+            // measurements, not the provider permanently. Never count a pause as a hold.
+            manualReturn=false;engine.ClearInput("test paused; evidence reset");delayed.Clear();probeAnchors.Clear();probeNotes.Clear();
+            if(observer!=null) { observer.Drain(); foreach(var a in observer.Recent)a.Rejected=true; }
+            if(source!=null)source.ResetTestEvidence();
+            history.Add("Test UI paused: old measurements discarded. Repeat the hold/release and multi-contact test; return stays disabled.");
+            while(history.Count>12)history.RemoveAt(0);
+            // Preserve any independent real device/report fault; only Restart test clears it.
         }
         void OnFrame(TouchFrame frame)
         {
@@ -241,8 +273,8 @@ namespace TaskbarTiles
             if(environmentChanged){Cancel("display/session environment changed");return;}
             try
             {
-                long pump=Environment.TickCount & int.MaxValue;
-                if(lastPump!=0 && pump-lastPump>1500)Block("input processing paused; run detection again before automatic return");
+                uint pump=unchecked((uint)Environment.TickCount);
+                if(TouchSetupPolicy.PumpGap(lastPump,pump))HandleProcessingPause();
                 lastPump=pump;observer.Drain();
                 bool moved=mouseVersion!=observer.PhysicalVersion || rawMouseVersion!=source.PhysicalVersion;
                 bool typed=keyVersion!=observer.TypingVersion || rawKeyVersion!=source.TypingVersion;
@@ -261,6 +293,9 @@ namespace TaskbarTiles
                 {
                     var f=delayed[0];delayed.RemoveAt(0);
                     var pre=observer.Recent.LastOrDefault(s=>s.Pen==f.Pen && Math.Abs(unchecked((int)(f.Tick-s.Tick)))<=150);
+                    if(f.Valid && f.Complete && f.Down>0)
+                        probeNotes[f.Device]=pre==null?"no matching pre-touch mouse-promotion snapshot":pre.Rejected?
+                            "snapshot cancelled by mouse/keyboard input or test reset":"snapshot timing found; coordinates or previous foreground not yet verified";
                     if(pre!=null && !pre.Rejected && f.Valid && f.Complete && f.Down>0)
                     {
                         var observedMonitor=monitors.FirstOrDefault(m=>TouchAnchorPolicy.Matches(f,pre.Contact,m.Bounds));

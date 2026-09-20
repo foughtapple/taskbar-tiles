@@ -127,20 +127,29 @@ namespace TaskbarTiles
     sealed class TouchDeviceEvidence
     {
         internal string Key, Name, Kind, Problem = "Waiting for input";
-        internal bool Supported, HoverKnown, SawHoverExit, SawUp;
+        internal bool Supported, HoverKnown, SawHoverExit, SawUp, CurrentHover, Complete = true;
         internal int Frames, MaxContacts, HeldMilliseconds, Contacts;
         internal long DownSince;
         internal uint LastTick;
         internal void Observe(TouchFrame frame, long now)
         {
             Frames++; Contacts = frame.Down; LastTick = frame.Tick;
+            Complete = frame.Complete && frame.Valid;
+            CurrentHover = frame.Pen && frame.HoverKnown && frame.Hover;
+            if (!Complete) { DownSince = 0; Problem = "Incomplete/invalid report; release not verified"; return; }
             if (frame.Down > 0 && DownSince == 0) DownSince = now;
             if (frame.Down == 0 && DownSince != 0) { SawUp = true; HeldMilliseconds = Math.Max(HeldMilliseconds, (int)(now - DownSince)); DownSince = 0; }
             MaxContacts = Math.Max(MaxContacts, frame.Down); HoverKnown |= frame.HoverKnown;
             if (frame.Pen && frame.HoverKnown && !frame.Hover && frame.Down == 0) SawHoverExit = true;
             Problem = !frame.Valid ? "Invalid report; automatic return blocked" : !frame.Complete ? "Waiting for complete contact frame" : frame.Down > 0 ? "Contact down" : frame.Hover ? "Pen hovering" : "All observed contacts released";
         }
-        internal bool Ready { get { return Supported && SawUp && HeldMilliseconds >= 2500 && (Kind == "Pen" || MaxContacts >= 2); } }
+        internal void ResetTest()
+        {
+            Frames = MaxContacts = HeldMilliseconds = Contacts = 0; DownSince = 0; LastTick = 0;
+            SawUp = SawHoverExit = CurrentHover = false; Complete = true;
+            Problem = "Evidence reset; repeat hold/release and multitouch or pen test";
+        }
+        internal bool Ready { get { return Supported && Complete && Contacts == 0 && SawUp && HeldMilliseconds >= 2500 && (Kind == "Pen" || MaxContacts >= 2); } }
         public override string ToString() { return Kind + " " + Name + " | " + (Supported ? "supported report format" : "detection only") + " | " + Problem; }
     }
 }

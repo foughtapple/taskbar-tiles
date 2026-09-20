@@ -65,6 +65,8 @@
     <Compile Include="OutsideClickDismissal.cs" />
     <Compile Include="OutsideClickTests.cs" />
     <Compile Include="ShortcutReliability.cs" />
+    <Compile Include="TouchSetupDiagnostics.cs" />
+    <Compile Include="TouchSetupTests.cs" />
     <Compile Include="TouchSupport.cs" />
     <Compile Include="TouchRawInput.cs" />
     <Compile Include="TouchReturnRuntime.cs" />

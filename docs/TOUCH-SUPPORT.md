@@ -29,3 +29,7 @@ Do not enable automatic return merely because touching the display moves the mou
 Automatic return is unavailable for incomplete/unknown contact formats, ambiguous device associations, virtual mouse-only paths, unavailable required pen hover, or pre-touch snapshots that cannot be verified. The first provider intentionally excludes an origin on the same input monitor. If the target was already active, it does not search older focus history for an unrelated destination.
 
 Spacedesk and Apollo/Moonlight must be tested separately; one succeeding does not prove the other. No automatic fallback converts drawing into mouse input. Missing reports stop return rather than guessing that fingers have lifted. Diagnostics are local and do not record screenshots, keystrokes, search queries or click coordinates.
+
+## 0.8.1 setup diagnostics
+
+The selected-device checklist distinguishes report-format recognition from received input, hold/release, multitouch, pen hover exit and pre-touch snapshot evidence. The test never returns focus or cursor. Select the touchscreen as the input screen, not the main display as a destination. Keep non-touch screens disabled. After association use the screen trigger, Use draft, then master Enable and Apply. Copy diagnostics includes these draft and saved states. A test-UI pause resets measurements instead of permanently blocking the test; a genuine device/report fault still requires Restart test after the connection settles. Runtime processing gaps remain fail-closed.

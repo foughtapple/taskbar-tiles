@@ -1,4 +1,4 @@
-// Taskbar Tiles 0.8.0 - Windows utility. C# 5 / .NET Framework.
+// Taskbar Tiles 0.8.1 - Windows utility. C# 5 / .NET Framework.
 // No telemetry, keyboard logging, taskbar registry edits or process injection.
 // Network access is limited to explicit, user-initiated GitHub update checks/downloads.
 using System;
@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.8.0";
+        internal const string Version = "0.8.1";
         static bool SignalToggle()
         {
             try

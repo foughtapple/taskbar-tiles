@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1
+
+- Fix false digitizer blocks from known input-device arrival/keyboard/mouse notifications. Genuine digitizer or unknown topology changes remain fail-closed.
+- Reset stale passive-test evidence after UI pauses rather than latching a new fault; runtime gaps still require retesting.
+- Add a selected-device setup checklist and useful copied diagnostics; distinguish capabilities from actual contact/hover evidence and input screens from return destinations.
+- Preserve all saved settings and the complete 0.8.0 switcher, launch, rendering, shortcut and updater behaviour.
+
 ## 0.8.0
 
 - Recover Alt+Tab interception after transient UI errors without changing the saved preference. Keep callbacks off the low-level pump, periodically renew between gestures, rearm after wake/unlock and repair on explicit reopen. Add Shortcut health and diagnostics.

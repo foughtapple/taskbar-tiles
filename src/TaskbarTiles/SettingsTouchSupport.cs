@@ -16,7 +16,8 @@ namespace TaskbarTiles
             var setup=Theme.Button("Monitors & input detection test...",340);
             setup.Click+=delegate
             {
-                using(var dialog=new TouchMonitorDialog(edit.TouchMonitorRules))
+                ReadDraft();
+                using(var dialog=new TouchMonitorDialog(edit.TouchMonitorRules,edit.TouchSupportEnabled,edit.TouchWaitForHover))
                     if(dialog.ShowDialog(this)==DialogResult.OK) { edit.TouchMonitorRules=dialog.Result; QueuePreview(); }
             };
             p.Controls.Add(setup);
@@ -79,7 +80,7 @@ namespace TaskbarTiles
         readonly TouchMonitorMap map=new TouchMonitorMap {Dock=DockStyle.Top};
         readonly ComboBox monitorList=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList,Width=470};
         readonly TextBox nickname=new TextBox {Width=240};
-        readonly CheckBox enabled=new CheckBox {Text="Automatic return on this screen",AutoSize=true};
+        readonly CheckBox enabled=new CheckBox {Text="Trigger return after using this screen",AutoSize=true};
         readonly CheckBox touch=new CheckBox {Text="Touch",AutoSize=true},pen=new CheckBox {Text="Pen",AutoSize=true};
         readonly NumericUpDown touchDelay=new NumericUpDown {Minimum=-1,Maximum=60000,Increment=250,Width=115},penDelay=new NumericUpDown {Minimum=-1,Maximum=60000,Increment=250,Width=115};
         readonly ComboBox devices=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList,Width=690};
@@ -92,18 +93,19 @@ namespace TaskbarTiles
         bool loading;
 
         internal string Result;
-        internal TouchMonitorDialog(string json)
+        readonly bool draftMaster, requireHover;
+        internal TouchMonitorDialog(string json,bool master=false,bool hover=true)
         {
-            rules=TouchRules.Parse(json);monitors=DisplayNative.Monitors();
+            draftMaster=master;requireHover=hover;rules=TouchRules.Parse(json);monitors=DisplayNative.Monitors();
             foreach(var m in monitors)if(!rules.Any(r=>r.Key==m.Key))rules.Add(new TouchMonitorRule {Key=m.Key,Nickname=m.Label});
             Text="Touch screen monitor support — monitors & passive test";ShowInTaskbar=false;StartPosition=FormStartPosition.CenterParent;
             ClientSize=new Size(940,760);MinimumSize=new Size(760,580);BackColor=Theme.Background;ForeColor=Theme.Text;Font=new Font("Segoe UI",10);
             var top=new FlowLayoutPanel {Dock=DockStyle.Top,Height=330,FlowDirection=FlowDirection.TopDown,WrapContents=false,Padding=new Padding(10),AutoScroll=true};
-            top.Controls.Add(new Label {Text="Passive test stays open while you use another app. No returns occur. Close this test to restore normal click-away.",AutoSize=true});
+            top.Controls.Add(new Label {Text="TEST MODE: no focus/cursor return here. Select the screen you TOUCH, not the screen you return to.",AutoSize=true});
             foreach(var r in rules)monitorList.Items.Add(r);monitorList.SelectedIndexChanged+=delegate{Store();SelectRule(monitorList.SelectedItem as TouchMonitorRule);};top.Controls.Add(monitorList);
             var row=new FlowLayoutPanel {Width=870,Height=35,WrapContents=false};row.Controls.Add(new Label {Text="Nickname",AutoSize=true,Margin=new Padding(3,7,3,3)});row.Controls.Add(nickname);row.Controls.Add(enabled);row.Controls.Add(touch);row.Controls.Add(pen);top.Controls.Add(row);
             var timing=new FlowLayoutPanel {Width=870,Height=36,WrapContents=false};timing.Controls.Add(new Label {Text="Touch ms (-1 = global)",AutoSize=true});timing.Controls.Add(touchDelay);timing.Controls.Add(new Label {Text="Pen ms (-1 = global)",AutoSize=true});timing.Controls.Add(penDelay);top.Controls.Add(timing);
-            top.Controls.Add(new Label {Text="Input devices — associate only after testing on the correct monitor",AutoSize=true});top.Controls.Add(devices);
+            top.Controls.Add(new Label {Text="Select Touch for fingers or Pen for a pen. Checklist below shows what is still missing.",AutoSize=true});top.Controls.Add(devices);
             top.Controls.Add(confirmation);
             var actions=new FlowLayoutPanel {Width=880,Height=44};
             Add(actions,"Associate tested device",220,Associate);Add(actions,"Restart test",135,delegate{if(TouchReturnService.Current!=null)TouchReturnService.Current.ResetDetection();confirmation.Checked=false;});
@@ -111,7 +113,7 @@ namespace TaskbarTiles
             top.Controls.Add(new Label {Text="Hold a contact still for at least 3 seconds, release it, and test two fingers together (touch). Test pen hover entry/exit separately.",AutoSize=true});
             var footer=new FlowLayoutPanel {Dock=DockStyle.Bottom,Height=52,FlowDirection=FlowDirection.RightToLeft};
             Add(footer,"Use draft",130,delegate{Store();Result=TouchRules.Save(rules);DialogResult=DialogResult.OK;Close();});Add(footer,"Cancel",100,delegate{DialogResult=DialogResult.Cancel;Close();});
-            Add(footer,"Copy diagnostics",155,delegate{var service=TouchReturnService.Current;if(service!=null)Clipboard.SetText("Taskbar Tiles "+Program.Version+Environment.NewLine+service.Report);});
+            Add(footer,"Copy diagnostics",155,delegate{var service=TouchReturnService.Current;if(service!=null)Clipboard.SetText("Taskbar Tiles "+Program.Version+Environment.NewLine+DiagnosticText());});
             Controls.Add(status);Controls.Add(top);Controls.Add(map);Controls.Add(footer);
             map.Monitors=monitors;map.Choose=key=>{for(int i=0;i<rules.Count;i++)if(rules[i].Key==key)monitorList.SelectedIndex=i;};
             hints.SetToolTip(enabled,"Disconnected/ambiguous identities and unverified devices never trigger return. This is a draft until Apply in main Settings.");
@@ -136,18 +138,34 @@ namespace TaskbarTiles
             var service=TouchReturnService.Current;var old=devices.SelectedItem as TouchDeviceEvidence;
             var available=service==null?new TouchDeviceEvidence[0]:service.Devices.ToArray();
             if(devices.Items.Count!=available.Length || available.Any(d=>!devices.Items.Contains(d)))
-            {devices.Items.Clear();foreach(var d in available)devices.Items.Add(d);if(old!=null)devices.SelectedItem=available.FirstOrDefault(d=>d.Key==old.Key);if(devices.SelectedIndex<0&&devices.Items.Count>0)devices.SelectedIndex=0;}
-            string monitor=selected==null?"Select a monitor":monitors.Any(m=>m.Key==selected.Key)?"Selected display connected":"Selected display DISCONNECTED — mapping retained, automatic return inactive";
-            status.Text=monitor+Environment.NewLine+(selected==null?"":"Touch association: "+(selected.TouchVerified?"tested "+selected.TouchDevice.Substring(0,Math.Min(8,selected.TouchDevice.Length)):"not verified")+"; pen association: "+(selected.PenVerified?"tested":"not verified"))+Environment.NewLine+
-                (service==null?"Service not available":service.Report)+Environment.NewLine+"No HID touch/pen traffic? This input path may expose only mouse events. Do not enable automatic return; keep using touch normally.";
+            {devices.Items.Clear();foreach(var d in available)devices.Items.Add(d);if(old!=null)devices.SelectedItem=available.FirstOrDefault(d=>d.Key==old.Key);if(devices.SelectedIndex<0&&devices.Items.Count>0)devices.SelectedItem=available.OrderByDescending(d=>d.Frames).ThenBy(d=>d.Kind=="Touch"?0:1).First();}
+            var text=DiagnosticText();
+            if(status.Text!=text)status.Text=text;
+        }
+        string DiagnosticText()
+        {
+            var service=TouchReturnService.Current;
+            var device=devices.SelectedItem as TouchDeviceEvidence;
+            var screen=selected==null?null:monitors.FirstOrDefault(m=>m.Key==selected.Key);
+            bool anchor=device!=null&&screen!=null&&service!=null&&service.HasProbeAnchor(device.Key,screen.Key);
+            var lines=TouchSetupChecklist.Lines(device,screen!=null,screen!=null&&!string.IsNullOrEmpty(screen.Instance),
+                anchor,requireHover,service==null?"Input service unavailable":service.BlockingReason);
+            return "TEST MODE - automatic return is disabled until this window is closed."+Environment.NewLine+
+                "Selected INPUT screen: "+(screen==null?"not connected":screen.Label)+" (not the return destination)"+Environment.NewLine+
+                "Main Settings draft master: "+(draftMaster?"ON":"OFF; enable it after Use draft")+Environment.NewLine+
+                "Selected screen draft: trigger="+enabled.Checked+"; touch="+touch.Checked+"; pen="+pen.Checked+Environment.NewLine+
+                (selected==null?"":"Associations: touch="+selected.TouchVerified+"; pen="+selected.PenVerified)+Environment.NewLine+
+                "SELECTED DEVICE CHECKLIST"+Environment.NewLine+string.Join(Environment.NewLine,lines)+Environment.NewLine+
+                "After PASS: confirm unchanged input, Associate tested device, enable this screen's trigger, Use draft, then Apply in main Settings. Keep other screens off."+Environment.NewLine+
+                "----- Listener diagnostics -----"+Environment.NewLine+(service==null?"Service not available":service.Report);
         }
         void Associate()
         {
             var d=devices.SelectedItem as TouchDeviceEvidence;var screen=selected==null?null:monitors.FirstOrDefault(m=>m.Key==selected.Key);
-            if(d==null||screen==null||string.IsNullOrEmpty(screen.Instance)||!d.Ready||!confirmation.Checked)
-            {MessageBox.Show(this,"Select a connected monitor with a stable identity and a supported device. Hold/release for 3 seconds, test two contacts for touch, and confirm unchanged input. No association was saved.","Detection not yet verified");return;}
-            if(TouchReturnService.Current==null||!TouchReturnService.Current.HasProbeAnchor(d.Key,screen.Key))
-            {MessageBox.Show(this,"A matching pre-touch foreground/cursor snapshot from a different screen has not been observed on that display. Test with a different app active first. This input path may not support safe background return; no association was saved.","Pre-touch capture not verified");return;}
+            var service=TouchReturnService.Current;
+            if(!confirmation.Checked||service==null||!TouchSetupChecklist.Ready(d,screen!=null,screen!=null&&!string.IsNullOrEmpty(screen.Instance),
+                d!=null&&screen!=null&&service.HasProbeAnchor(d.Key,screen.Key),requireHover,service==null?"Input service unavailable":service.BlockingReason))
+            {MessageBox.Show(this,"The selected device is not ready. See each WAIT/BLOCKED item in the checklist below. Format support alone is not a passed test. No association was saved.","Finish the selected device test");return;}
             if(d.Kind=="Pen"){selected.PenDevice=d.Key;selected.PenVerified=true;pen.Checked=true;}
             else{selected.TouchDevice=d.Key;selected.TouchVerified=true;touch.Checked=true;}
             RefreshStatus();
