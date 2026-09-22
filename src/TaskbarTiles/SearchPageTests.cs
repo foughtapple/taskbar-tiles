@@ -19,7 +19,7 @@ namespace TaskbarTiles
             Require(parsed.WindowTitleFontSize == 20 && parsed.AppLabelFontSize == 18, "independent text sizes parsed");
             Require(!parsed.WindowsSearchButton && !parsed.SearchIndexedFiles, "search preferences retained");
             var limits = Options.Parse(new[] { "WindowColumns=999", "WindowRows=999", "SearchPanelWidth=9999", "SearchVisibleRows=0", "WindowTitleFontSize=0", "AppLabelFontSize=999" });
-            Require(limits.WindowColumns == 12 && limits.WindowRows == 3 && limits.SearchPanelWidth == 1100 && limits.SearchVisibleRows == 3 && limits.WindowTitleFontSize == 9 && limits.AppLabelFontSize == 32, "settings limits enforced");
+            Require(limits.WindowColumns == 12 && limits.WindowRows == 3 && limits.SearchPanelWidth == 1400 && limits.SearchVisibleRows == 3 && limits.WindowTitleFontSize == 9 && limits.AppLabelFontSize == 32, "settings limits enforced");
             var catalog = new[] {
                 SearchLogic.FromEntry(new FavouriteEntry { Name = "Bambu Studio", Target = "bambu.exe" }, "Apps", "Installed app"),
                 SearchLogic.FromEntry(new FavouriteEntry { Name = "Work browser", Target = "chrome.exe", Arguments = "--profile work" }, "Favourites", "Work"),

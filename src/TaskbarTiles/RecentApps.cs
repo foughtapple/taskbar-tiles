@@ -129,6 +129,9 @@ namespace TaskbarTiles
                 var entry = LauncherDescriptor.FromApp(copy);
                 if (entry == null) return; // Documents, folders and URLs are not app-history entries.
                 var key = LauncherKey.FromEntry(entry, true);
+                // A document shortcut can also end in .lnk. It is not an app launcher.
+                if (entry.ExpandedTarget.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) &&
+                    !key.Exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && !LaunchResolution.ExplicitId(key.AppId)) return;
                 if (key.Exe.Length == 0) key.Exe = resolved.Exe ?? "";
                 if (!LaunchIdentity.ConflictingIds(key.AppId, resolved.AppId) && !string.IsNullOrWhiteSpace(resolved.AppId)) key.AppId = resolved.AppId;
                 entry.AppId = key.AppId;

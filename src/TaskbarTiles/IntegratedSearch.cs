@@ -15,7 +15,7 @@ namespace TaskbarTiles
 {
     sealed class SearchItem
     {
-        internal string Name, Kind, Detail;
+        internal string Name, Kind, Detail, Keywords;
         internal FavouriteEntry Entry;
         internal AppButton Taskbar;
         internal WindowItem Window;
@@ -37,15 +37,7 @@ namespace TaskbarTiles
         internal static string[] Words(string query)
         { return (query ?? "").Trim().Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Take(12).ToArray(); }
         internal static int Score(SearchItem item, string query)
-        {
-            string[] words = Words(query); if (words.Length == 0) return item.Kind == "Favourites" ? 80 : item.Kind == "Windows" ? 70 : 20;
-            string name = item.Name ?? "", all = name + " " + item.Kind + " " + item.Detail;
-            if (!words.All(w => all.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0)) return -1;
-            string q = string.Join(" ", words);
-            int score = name.Equals(q, StringComparison.OrdinalIgnoreCase) ? 1200 : name.StartsWith(q, StringComparison.OrdinalIgnoreCase) ? 900 : name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0 ? 700 : 400;
-            if (item.Kind == "Favourites") score += 40; else if (item.Kind == "Apps") score += 30; else if (item.Kind == "Windows") score += 20;
-            return score;
-        }
+        { return SearchMatch.Score(item, query); }
         internal static List<SearchItem> Filter(IEnumerable<SearchItem> source, string query, string kind)
         {
             return source.Where(x => kind == "All" || kind == "Files" && x.Kind == "Folders" || x.Kind == kind)
@@ -70,18 +62,7 @@ namespace TaskbarTiles
         { return new SearchItem { Name = entry.Name, Kind = kind, Detail = detail ?? entry.Detail, Entry = entry.Clone() }; }
         internal static List<SearchItem> SettingsAndPlaces()
         {
-            var result = new List<SearchItem>();
-            string[,] settings = {
-                { "Windows Settings", "ms-settings:" }, { "Display settings", "ms-settings:display" },
-                { "Sound settings", "ms-settings:sound" }, { "Bluetooth settings", "ms-settings:bluetooth" },
-                { "Network settings", "ms-settings:network-status" }, { "Installed apps", "ms-settings:appsfeatures" },
-                { "Default apps", "ms-settings:defaultapps" }, { "Personalisation", "ms-settings:personalization" },
-                { "Storage settings", "ms-settings:storagesense" }, { "Windows Update", "ms-settings:windowsupdate" },
-                { "Notifications", "ms-settings:notifications" }, { "Clipboard settings", "ms-settings:clipboard" },
-                { "Search settings", "ms-settings:search" }
-            };
-            for (int i = 0; i < settings.GetLength(0); i++)
-                result.Add(FromEntry(new FavouriteEntry { Name = settings[i, 0], Target = settings[i, 1], Group = "Settings", IconPath = "%WINDIR%\\ImmersiveControlPanel\\SystemSettings.exe" }, "Settings", "Windows settings page"));
+            var result = WindowsSettingsCatalog.Read();
             foreach (var folder in new[] { Tuple.Create("Downloads", "shell:Downloads"), Tuple.Create("Documents", "shell:Personal"), Tuple.Create("Desktop", "shell:Desktop"), Tuple.Create("Pictures", "shell:My Pictures") })
                 result.Add(FromEntry(new FavouriteEntry { Name = folder.Item1, Target = folder.Item2, Group = "Places" }, "Folders", "Quick folder"));
             return result;
@@ -244,7 +225,7 @@ namespace TaskbarTiles
             session++; options = current.Clone(); scale = dpi; local = entries.ToList(); installed.Clear(); files.Clear();
             initialising = true; input.Text = ""; kind.SelectedIndex = 0; initialising = false;
             Arrange(owner, anchor); Visible = true; BringToFront(); FocusInput();
-            if (!previewOnly) WindowNative.SendMessage(input.Handle, 0x1501, IntPtr.Zero, "Search apps, windows, files…");
+            if (!previewOnly) WindowNative.SendMessage(input.Handle, 0x1501, IntPtr.Zero, "Search apps, settings, windows and files…");
             if (icons == null && !previewOnly) icons = new FavouriteIcons(this);
             appStatus = options.SearchInstalledApps ? "Loading installed apps…" : "";
             StartQuery(true); RefreshInstalled(false);
@@ -378,7 +359,7 @@ namespace TaskbarTiles
             options = o.Clone(); scale = 1;
             local = SearchLogic.SettingsAndPlaces(); results = local.Take(5).ToList(); selection = 0;
             Arrange(new Size(o.SearchPanelWidth + 48, 850), new Rectangle(16, 790, 164, 40));
-            initialising = true; input.Text = "Search apps, windows, files…"; initialising = false; fileStatus = "Illustrative results — no index queries run in this preview.";
+            initialising = true; input.Text = "Search apps, settings, windows and files…"; initialising = false; fileStatus = "Illustrative results — no index queries run in this preview.";
             var b = new Bitmap(Width, Height); Visible = true; DrawToBitmap(b, new Rectangle(0, 0, Width, Height)); Visible = false; return b;
         }
         protected override void Dispose(bool disposing)

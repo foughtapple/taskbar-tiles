@@ -32,7 +32,12 @@ namespace TaskbarTiles
         public bool SearchFavourites = true;
         public bool SearchSettings = true;
         public bool SearchIndexedFiles = true;
-        public int SearchPanelWidth = 660;
+        public int SearchPanelWidth = 860;
+        public int SearchButtonWidth = 420;
+        public bool RecentAppsButton = true;
+        public bool RememberRecentApps = true;
+        public bool RecentObserveExternal = true;
+        public int RecentAppsLimit = 10;
         public int SearchVisibleRows = 7;
         public int SearchRowHeight = 54;
         public int AppRows = 2;
@@ -90,7 +95,8 @@ namespace TaskbarTiles
             { "WindowColumns", new[] { 1, 12 } },
             { "WindowTitleFontSize", new[] { 9, 32 } }, { "AppLabelFontSize", new[] { 9, 32 } },
             { "WindowTitleIconSize", new[] { 12, 64 } },
-            { "SearchPanelWidth", new[] { 420, 1100 } }, { "SearchVisibleRows", new[] { 3, 12 } },
+            { "SearchButtonWidth", new[] { 200, 900 } }, { "RecentAppsLimit", new[] { 1, 10 } },
+            { "SearchPanelWidth", new[] { 420, 1400 } }, { "SearchVisibleRows", new[] { 3, 12 } },
             { "SearchRowHeight", new[] { 40, 84 } }, { "AppRows", new[] { 1, 3 } }, { "BasicLayout", new[] { 0, 2 } },
             { "PickerWidth", new[] { 640, 2200 } }, { "PickerHeight", new[] { 420, 1200 } },
             { "FullScreenButtonHeight", new[] { 36, 100 } }, { "FullScreenButtonMinWidth", new[] { 150, 400 } },
@@ -355,6 +361,7 @@ namespace TaskbarTiles
             AddQuickAccessPage();
             AddFavouritesPage();
             AddSearchSettingsPage();
+            AddRecentAppsPage();
             AddTouchSupportPage(); AddShortcutRecoveryPage();
             LoadControls(); HookLiveChanges(); InstallSettingHints();
             if (!string.IsNullOrEmpty(initialTab))

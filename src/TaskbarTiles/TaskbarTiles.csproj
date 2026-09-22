@@ -51,6 +51,10 @@
     <Compile Include="MenuGeometry.cs" />
     <Compile Include="Navigation.cs" />
     <Compile Include="QuickAccess.cs" />
+    <Compile Include="LauncherInventory.cs" />
+    <Compile Include="RecentApps.cs" />
+    <Compile Include="WindowsSettingsCatalog.cs" />
+    <Compile Include="LauncherExperienceTests.cs" />
     <Compile Include="SearchPageTests.cs" />
     <Compile Include="Settings.cs" />
     <Compile Include="SettingsDismissal.cs" />

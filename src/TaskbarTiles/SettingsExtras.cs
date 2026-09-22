@@ -83,7 +83,7 @@ namespace TaskbarTiles
             var p = Page("Quick access");
             // Keep startup tools last; the new favourites collection has its own tab.
             var tab = p.Parent as TabPage; tabs.TabPages.Remove(tab); tabs.TabPages.Insert(2, tab);
-            Section(p, "Bottom action bar", "Search opens an integrated launcher in this window. It does not open Windows Search. Favourites remain at the bottom-right.");
+            Section(p, "Bottom action bar", "Search opens an integrated launcher in this window. It does not open Windows Search. Recent apps and Favourites remain at the bottom-right.");
             Check(p, "WindowsSearchButton", "Show integrated Search on the bottom-left");
             Check(p, "FavouritesButton", "Show the Favourites launcher on the bottom-right");
             Check(p, "DesktopButton", "Show the desktop shortcut (Win+D)");

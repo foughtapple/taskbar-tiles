@@ -1,4 +1,4 @@
-// Taskbar Tiles 0.8.1 - Windows utility. C# 5 / .NET Framework.
+// Taskbar Tiles 0.9.0 - Windows utility. C# 5 / .NET Framework.
 // No telemetry, keyboard logging, taskbar registry edits or process injection.
 // Network access is limited to explicit, user-initiated GitHub update checks/downloads.
 using System;
@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.8.1";
+        internal const string Version = "0.9.0";
         static bool SignalToggle()
         {
             try
@@ -69,6 +69,7 @@ namespace TaskbarTiles
             if (args.Contains("--test-launch-fixture")) { Environment.Exit(LaunchOutcomeTests.Fixture(args)); return; }
             if (args.Contains("--test-launch-outcome")) { Environment.Exit(LaunchOutcomeTests.RunNative()); return; }
             if (args.Contains("--test-rendering")) { Environment.Exit(Switcher.RunRenderingRegressionTests()); return; }
+            if (args.Contains("--test-launcher-experience")) { Environment.Exit(LauncherExperienceTests.RunNative()); return; }
             if (args.Contains("--self-test")) { Environment.Exit(SelfTests.Run()); return; }
             if (args.Contains("--exit"))
             {
@@ -135,6 +136,7 @@ namespace TaskbarTiles
         public string Id, Name, ClassName;
         public string DisplayName, ImageSource, LaunchExe, ShortcutPath;
         public FavouriteEntry Favourite;
+        internal LauncherKey LauncherIdentity;
         public bool VerifiedShortcut; // Launch metadata must not be inferred from an icon match alone.
         public string AppId { get { return (Id ?? "").StartsWith("Appid:", StringComparison.OrdinalIgnoreCase) ? Id.Substring(6).Trim() : ""; } }
         public IntPtr Taskbar;
@@ -148,6 +150,8 @@ namespace TaskbarTiles
     {
         readonly BlockingCollection<Action> jobs = new BlockingCollection<Action>();
         readonly IconWorker icons = new IconWorker();
+        readonly object inventoryGate = new object();
+        List<AppButton> lastInventory = new List<AppButton>();
         public TaskbarReader()
         {
             var t = new Thread(delegate()
@@ -163,13 +167,26 @@ namespace TaskbarTiles
             if (jobs.IsAddingCompleted) return;
             jobs.Add(delegate()
             {
-                try
+                var list = new List<AppButton>(); string status = "";
+                try { list = Scan(monitorPoint, true); }
+                catch (Exception ex) { Program.Log("Taskbar inventory: " + ex.GetType().Name); }
+                if (list.Count == 0)
                 {
-                    var list = Scan(monitorPoint, true);
-                    string status = list.Count == 0 ? "No visible taskbar apps found. Show the real taskbar, then refresh from the tray." : "";
-                    icons.Resolve(list, delegate { completed(list, status); });
+                    try
+                    {
+                        List<AppButton> previous;
+                        lock (inventoryGate) previous = lastInventory.Select(LauncherDescriptor.Copy).ToList();
+                        list = TaskbarFallback.Read(previous);
+                        status = list.Count > 0 ? "Fallback: pinned shortcuts + running apps; exact taskbar order temporarily unavailable" :
+                            "Explorer has not exposed app entries yet. Refresh taskbar apps from the tray; Favourites and Search remain available.";
+                    }
+                    catch (Exception ex) { Program.Log("Taskbar fallback: " + ex.GetType().Name); status = "Taskbar inventory unavailable; Search and Favourites remain available."; }
                 }
-                catch (Exception ex) { Program.Log(ex.ToString()); completed(new List<AppButton>(), "Taskbar scan failed: " + ex.Message); }
+                icons.Resolve(list, delegate
+                {
+                    lock (inventoryGate) lastInventory = list.Select(LauncherDescriptor.Copy).ToList();
+                    completed(list, status);
+                });
             });
         }
         public void Launch(AppButton original, LaunchOperation operation, Action<string> completed)
@@ -244,12 +261,10 @@ namespace TaskbarTiles
         }
         static List<AppButton> Scan(Point prefer, bool images)
         {
-            Rectangle screen = Screen.FromPoint(prefer).Bounds;
-            var roots = Roots().OrderByDescending(h =>
-            {
-                Native.RECT r; Native.GetWindowRect(h, out r);
-                return screen.IntersectsWith(r.Rectangle) ? 1 : 0;
-            }).ToList();
+            // images=true denotes inventory. This path never uses screen positions
+            // to click and must accept offscreen/virtualised auto-hidden app buttons.
+            string preferredScreen = Screen.FromPoint(prefer).DeviceName;
+            var roots = Roots().OrderByDescending(h => Screen.FromHandle(h).DeviceName == preferredScreen).ToList();
             foreach (IntPtr root in roots)
             {
                 var result = new List<AppButton>();
@@ -258,7 +273,6 @@ namespace TaskbarTiles
                     IntPtr legacy = IntPtr.Zero;
                     Native.EnumChildWindows(root, delegate(IntPtr h, IntPtr p)
                     { if (Native.Class(h) == "MSTaskListWClass") legacy = h; return true; }, IntPtr.Zero);
-                    // Windows 10 legacy list first, then the Windows 11 taskbar subtree.
                     var scopes = new List<IntPtr>();
                     if (legacy != IntPtr.Zero) scopes.Add(legacy);
                     if (legacy != root) scopes.Add(root);
@@ -273,31 +287,29 @@ namespace TaskbarTiles
                         {
                             try
                             {
-                                var a = elements[i].Current;
+                                var element = elements[i]; var a = element.Current;
                                 string id = a.AutomationId ?? "", cls = a.ClassName ?? "", name = a.Name ?? "";
-                                bool app = scope == legacy || id.StartsWith("Appid:", StringComparison.OrdinalIgnoreCase)
-                                    || cls.IndexOf("TaskListButton", StringComparison.OrdinalIgnoreCase) >= 0;
-                                if (!app || a.IsOffscreen || !a.IsEnabled || string.IsNullOrWhiteSpace(name)) continue;
-                                var r = a.BoundingRectangle;
-                                if (r.IsEmpty || r.Width < 12 || r.Height < 12 || r.Width > 2000 || r.Height > 500) continue;
-                                var bounds = new Rectangle((int)Math.Round(r.Left), (int)Math.Round(r.Top), (int)Math.Round(r.Width), (int)Math.Round(r.Height));
-                                if (!SystemInformation.VirtualScreen.IntersectsWith(bounds)) continue;
-                                // Deduplicate only identical bounding boxes, not different ungrouped app buttons.
-                                if (!seen.Add(bounds.ToString())) continue;
-                                var item = new AppButton { Id = id, Name = name, ClassName = cls, Bounds = bounds, Taskbar = root };
-                                item.DisplayName = TextTools.CleanAppName(name);
-                                // Never take screenshots of taskbar buttons. Their UIA bounds
-                                // are not necessarily the icon bounds (and can move/scale).
-                                result.Add(item);
+                                if (!TaskbarScanPolicy.KnownApp(id, cls, scope == legacy, name)) continue;
+                                Rectangle bounds = TaskbarScanPolicy.Bounds(a.BoundingRectangle);
+                                if (!TaskbarScanPolicy.Accept(images, a.IsOffscreen, a.IsEnabled, bounds, SystemInformation.VirtualScreen)) continue;
+                                string runtime;
+                                try { runtime = string.Join(".", element.GetRuntimeId().Select(n => n.ToString())); }
+                                catch { runtime = id + "|" + name + "|" + i; }
+                                // Different ungrouped buttons can have identical/empty
+                                // rectangles while hidden. Deduplicate the UIA object only.
+                                if (!seen.Add(runtime)) continue;
+                                result.Add(new AppButton { Id = id, Name = name, ClassName = cls, Bounds = bounds,
+                                    Taskbar = root, DisplayName = TextTools.CleanAppName(name) });
                             }
                             catch (ElementNotAvailableException) { }
-                            catch (Exception ex) { Program.Log("Skipped taskbar element: " + ex.Message); }
+                            catch (Exception ex) { Program.Log("Skipped taskbar inventory item: " + ex.GetType().Name); }
                         }
                         if (result.Count != 0) break;
                     }
                 }
-                catch (Exception ex) { Program.Log("Taskbar root: " + ex.Message); }
-                if (result.Count > 0) return result.OrderBy(a => a.Bounds.Top).ThenBy(a => a.Bounds.Left).ToList();
+                catch (Exception ex) { Program.Log("Taskbar root: " + ex.GetType().Name); }
+                if (result.Count > 0)
+                    return result.All(a => !a.Bounds.IsEmpty) ? result.OrderBy(a => a.Bounds.Top).ThenBy(a => a.Bounds.Left).ToList() : result;
             }
             return new List<AppButton>();
         }
@@ -365,7 +377,7 @@ namespace TaskbarTiles
                         foreach (var app in apps)
                         {
                             if (stopping) break;
-                            try { ResolveOne(app, running); }
+                            try { ResolveOne(app, running); app.LauncherIdentity = LauncherKey.FromApp(app, true); }
                             catch (Exception ex) { Program.Log("Icon: " + app.DisplayName + ": " + ex.Message); }
                         }
                     }
@@ -829,7 +841,7 @@ namespace TaskbarTiles
             SetupFeatures(); SetupQuickAccess(); SetupFullscreen(); SetupActivation();
             switcherLayer = new SwitcherLayer(this, delegate
             { return !closing && transient == null && activation == null && !fullscreenOpening; });
-            SetupOutsideDismissal(); SetupShortcutRecovery(); SetupTouchSupport();
+            SetupOutsideDismissal(); SetupShortcutRecovery(); SetupTouchSupport(); SetupRecentApps();
             RefreshApps();
         }
         protected override CreateParams CreateParams
@@ -871,6 +883,7 @@ namespace TaskbarTiles
                 configStamp = stamp; options = Options.Load();
                 hook.Enabled = options.InterceptAltTab; interceptItem.Checked = hook.Enabled;
                 if (touchService != null) touchService.Configure(options);
+                if (recentApps != null) recentApps.Configure(options);
                 ApplyFilter(false);
             }
             catch (Exception ex) { Program.Log("Settings: " + ex.Message); }
@@ -1168,7 +1181,7 @@ namespace TaskbarTiles
             using (var divider = new Pen(Color.FromArgb(45, 56, 73)))
                 g.DrawLine(divider, S(22), appTop - S(10), Width - S(22), appTop - S(10));
             Label(g, "Taskbar apps", new Rectangle(S(22), appTop, S(138), S(24)), true, light, false);
-            Label(g, "Open another window", new Rectangle(S(164), appTop + S(1), Width - S(300), S(24)), false, muted, false);
+            Label(g, string.IsNullOrEmpty(taskbarStatus) ? "Open app (new or existing window as the app decides)" : taskbarStatus, new Rectangle(S(164), appTop + S(1), Width - S(300), S(24)), false, muted, false);
             if (apps.Count > perAppPage)
             {
                 Label(g, (appPage + 1) + " / " + PageCount(apps.Count, perAppPage), new Rectangle(appPrev.Left - S(70), appPrev.Top, S(65), appPrev.Height), false, muted, true);
@@ -1246,7 +1259,7 @@ namespace TaskbarTiles
             else if (hit == -9) text = "Smaller open-window previews";
             else if (hit == -10) text = "Larger open-window previews";
             else if (hit == -11) text = "Undo last window move";
-            if (hit <= -12 && hit >= -16) text = QuickAccessTip(hit);
+            if ((hit <= -12 && hit >= -16) || hit == -18) text = QuickAccessTip(hit);
             tip.SetToolTip(this, text); Invalidate();
         }
         protected override void OnMouseDown(MouseEventArgs e)
@@ -1271,7 +1284,7 @@ namespace TaskbarTiles
                 return;
             }
             if (e.Button != MouseButtons.Left) return;
-            if (hit <= -12 && hit >= -16) ExecuteQuickAccess(hit);
+            if ((hit <= -12 && hit >= -16) || hit == -18) ExecuteQuickAccess(hit);
             else if (hit == -1) Dismiss();
             else if (hit >= 2000) CloseWindowCard(hit - 2000);
             else if (hit == -8) ShowSettings();
@@ -1377,6 +1390,7 @@ namespace TaskbarTiles
                         if (error != null) Notify(error);
                         else if (window != IntPtr.Zero && resolved != null)
                         {
+                            if (recentApps != null) recentApps.Launched(app, resolved);
                             if (destination != null) MoveTo(window, destination, false);
                             else ActivateWindow(new WindowItem { Handle = window, ProcessId = resolved.ProcessId, Title = resolved.Title });
                         }
@@ -1433,6 +1447,7 @@ namespace TaskbarTiles
         public void Shutdown()
         {
             if (closing) return; closing = true;
+            if (recentApps != null) recentApps.Dispose();
             DisposeShortcutRecovery();
             if (touchService != null) touchService.Dispose();
             DisposeOutsideDismissal();
@@ -1561,6 +1576,7 @@ namespace TaskbarTiles
                 log.AppendLine("PASS: native INPUT, keyboard and DWM thumbnail structure sizes.");
                 FeatureTests.Run(log);
                 LauncherTests.Run(log);
+                LauncherExperienceTests.Run(log);
                 SearchPageTests.Run(log);
                 LayoutRegressionTests.Run(log);
                 LaunchReliabilityTests.Run(log);

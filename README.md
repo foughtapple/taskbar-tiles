@@ -67,6 +67,14 @@ Start in **Settings → Touch screen monitor support → Monitors & input detect
 
 **Hardware compatibility is not assumed.** The initial provider accepts a strict subset of HID digitizer formats and requires a pre-touch snapshot from a different display. Virtual mouse-only paths, incomplete contacts, ambiguous device mappings, unsupported coordinate transforms or missing required hover data remain detection-only. Surface/spacedesk and Apollo/Moonlight must be tested separately on the real setup. [Touchscreen setup and limitations](docs/TOUCH-SUPPORT.md).
 
+## Auto-hide, broader search and Recent apps
+
+Taskbar inventory includes known app buttons even while the real taskbar is auto-hidden. If Explorer temporarily exposes no buttons, a clearly labelled fallback combines current pinned shortcuts with safely relaunchable running apps; exact pin coverage/order is not guaranteed in that fallback. No taskbar setting is changed and no hidden coordinate is clicked.
+
+The wider bottom-left **Search apps, settings and files** box searches inside Taskbar Tiles. Try **display settings**, **screen resolution**, **refresh rate**, **mouse speed**, **auto hide taskbar**, **default browser** or **microphone permissions**. This uses documented Settings deep links and aliases, not a private Windows Search embedding or web search. Configure box/results widths and source switches in **Settings > Search**. The narrow top field still filters only windows/taskbar apps.
+
+**Recent apps**, beside Favourites, offers up to ten recently opened applications after excluding all Taskbar apps, across pages. Collection starts when this version runs; verified launcher results and optionally newly observed outside-app windows are included, not old Windows usage records or simple focus switches. **Settings > Recent apps** controls local collection and offers **Clear recent history**. Up to 64 local launch descriptors are retained; explicit shortcut paths/arguments can be stored, but window/document titles, queries, browser history and process command lines are not. Nothing is uploaded. Use Ctrl+Shift+R while the menu has focus or right-click an entry for placement.
+
 ## Privacy and control
 
 No telemetry, account login or usage analytics in the app. Icons/previews, taskbar accessibility, saved layouts and launch detection are processed locally. Search uses your existing local filename index; it does not crawl document contents. Logs are local; general launch/layout logs may include paths or titles, so review before sharing. Touch diagnostics are local and copied only on request; no reports or input recordings are uploaded automatically.
