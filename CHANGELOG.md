@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+- Discover taskbar apps while auto-hidden; separate inventory from visible click targets and label the pinned/running fallback.
+- Widen integrated Search; add documented Windows Settings deep links, query aliases and limited typo tolerance.
+- Add a local Recent apps palette beside Favourites, capped at ten after profile-aware taskbar exclusion; collection controls and immediate Clear history.
+- Preserve previous launcher/activation/rendering/touch/updater safeguards and add regression coverage.
+
 ## 0.8.1
 
 - Fix false digitizer blocks from known input-device arrival/keyboard/mouse notifications. Genuine digitizer or unknown topology changes remain fail-closed.

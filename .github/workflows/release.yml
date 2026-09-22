@@ -38,7 +38,12 @@ jobs:
           if (-not (Test-Path "docs/releases/v$version.md")) { throw 'Missing release notes.' }
       - name: Compile, test and package installer
         shell: powershell
-        run: ./tools/Package.ps1
+        run: |
+          try { ./tools/Package.ps1 }
+          finally { if (Test-Path build/app/self-test.log) { Get-Content build/app/self-test.log } }
+      - name: Test auto-hide inventory search and recent apps
+        shell: powershell
+        run: ./tools/Test-LauncherExperience.ps1
       - name: Test real menu rendering and recovery
         shell: powershell
         run: ./tools/Test-Rendering.ps1
@@ -71,6 +76,7 @@ jobs:
             built_utc = (Get-Date).ToUniversalTime().ToString('o')
             runner = 'windows-2022'
             helper_tests = 'passed'
+            launcher_experience_tests = 'passed: offscreen inventory policy, search ranking, footer geometry, local recent-history persistence/exclusion/clear and real Forms painting; personalised taskbar not tested'
             native_clickaway_tests = 'passed on disposable nonactivating windows'
             touch_shortcut_tests = 'passed: policy, native listener lifecycle and hook recovery; no hardware compatibility claim'
             native_rendering_tests = 'passed: real-menu/preview rendering, disposed-font reproduction, icon isolation and bounded recovery'

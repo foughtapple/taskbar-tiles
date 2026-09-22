@@ -83,7 +83,7 @@ namespace TaskbarTiles
                     foreach (int height in new[] { 32, 40, 64 })
                         for (int flags = 0; flags < 16; flags++)
                         {
-                            var o = new Options { FooterButtonHeight=height, WindowsSearchButton=(flags&1)!=0, FavouritesButton=(flags&2)!=0, DesktopButton=(flags&4)!=0, ClipboardButton=(flags&8)!=0 };
+                            var o = new Options { RecentAppsButton=false, FooterButtonHeight=height, WindowsSearchButton=(flags&1)!=0, FavouritesButton=(flags&2)!=0, DesktopButton=(flags&4)!=0, ClipboardButton=(flags&8)!=0 };
                             int width = (int)Math.Round(logicalWidth * scale), panelHeight = (int)Math.Round(600 * scale);
                             var layout = QuickAccessLayout.Build(width, panelHeight, scale, o);
                             var buttons = layout.Buttons().ToList(); var bounds = new Rectangle(0, 0, width, panelHeight);

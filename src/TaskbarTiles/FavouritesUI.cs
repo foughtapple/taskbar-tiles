@@ -78,12 +78,19 @@ namespace TaskbarTiles
         int selected, page, perPage = 1, hover = -1;
         string pressed;
         bool ready, layingOut;
+        readonly string paletteTitle, emptyHint;
+        readonly Func<List<FavouriteEntry>> liveEntries;
+        readonly System.Windows.Forms.Timer liveTimer = new System.Windows.Forms.Timer { Interval = 600 };
         internal FavouriteEntry Chosen;
         internal bool PlaceInZone, SettingsRequested, ReturnToMenu;
-        internal FavouritesWindow(Options current, List<FavouriteEntry> favourites, Rectangle anchor)
+        internal FavouritesWindow(Options current, List<FavouriteEntry> favourites, Rectangle anchor, string caption = "Favourites", string emptyMessage = null, Func<List<FavouriteEntry>> refreshEntries = null)
         {
+            paletteTitle = caption; emptyHint = emptyMessage; liveEntries = refreshEntries;
             options = current.Clone(); entries = favourites.Select(e => e.Clone()).ToList();
-            Text = "Taskbar Tiles - Favourites"; ShowInTaskbar = false; TopMost = true;
+            liveTimer.Tick += delegate { RefreshLiveEntries(); };
+            Shown += delegate { if (liveEntries != null) liveTimer.Start(); };
+            FormClosed += delegate { liveTimer.Stop(); };
+            Text = "Taskbar Tiles - " + paletteTitle; ShowInTaskbar = false; TopMost = true;
             FormBorderStyle = FormBorderStyle.None; StartPosition = FormStartPosition.Manual;
             BackColor = Theme.Background; ForeColor = Theme.Text; DoubleBuffered = true; KeyPreview = true;
             AutoScaleMode = AutoScaleMode.None;
@@ -99,16 +106,26 @@ namespace TaskbarTiles
             groups.Items.Add("All groups");
             foreach (string group in entries.Where(e => e.Enabled).Select(e => e.Group).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x)) groups.Items.Add(group);
             groups.SelectedIndex = 0; groups.SelectedIndexChanged += delegate { ApplyFilter(); };
-            manage = Theme.Button("Manage", 92); back = Theme.Button("Back", 70); previous = Theme.Button("<", 36); next = Theme.Button(">", 36);
+            manage = Theme.Button(paletteTitle == "Favourites" ? "Manage" : "Settings", 92); back = Theme.Button("Back", 70); previous = Theme.Button("<", 36); next = Theme.Button(">", 36);
             foreach (var b in new[] { manage, back, previous, next }) { b.Font = Font; b.FlatAppearance.BorderColor = Theme.Border; }
             manage.Click += delegate { SettingsRequested = true; Close(); }; back.Click += delegate { ReturnToMenu = true; Close(); };
             previous.Click += delegate { Page(-1); }; next.Click += delegate { Page(1); };
             Controls.AddRange(new Control[] { filter, groups, manage, back, previous, next });
             var handle = Handle; icons = new FavouriteIcons(this);
-            WindowNative.SendMessage(filter.Handle, 0x1501, IntPtr.Zero, "Find a favourite...");
+            WindowNative.SendMessage(filter.Handle, 0x1501, IntPtr.Zero, paletteTitle == "Favourites" ? "Find a favourite..." : "Find a recent app...");
             Resize += delegate { Arrange(); };
             Shown += delegate { Arrange(); ApplyFilter(); filter.Focus(); ready = true; try { int c = 2; Native.DwmSetWindowAttribute(Handle, 33, ref c, 4); } catch { } };
             Arrange(); ApplyFilter();
+        }
+        void RefreshLiveEntries()
+        {
+            if (liveEntries == null || IsDisposed) return;
+            var next = liveEntries();
+            Func<FavouriteEntry, string> signature = e => e.Id + "|" + e.Target + "|" + e.Arguments + "|" + e.Name;
+            if (entries.Select(signature).SequenceEqual(next.Select(signature))) return;
+            string keep = selected >= 0 && selected < visible.Count ? visible[selected].Id : "";
+            entries.Clear(); entries.AddRange(next.Select(e => e.Clone())); ApplyFilter();
+            int retained = visible.FindIndex(e => e.Id == keep); if (retained >= 0) selected = retained; Arrange();
         }
         int S(int n) { return Math.Max(1, (int)Math.Round(n * scale)); }
         void ApplyFilter()
@@ -157,14 +174,14 @@ namespace TaskbarTiles
             base.OnPaint(e); var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
             DrawingUtil.Round(g, new Rectangle(0, 0, Width - 1, Height - 1), S(14), BackColor, Theme.Border, 1);
             using (var font = new Font("Segoe UI", 16 * scale, FontStyle.Bold, GraphicsUnit.Pixel))
-                TextRenderer.DrawText(g, "Favourites", font, new Rectangle(S(17), S(14), Math.Max(1, manage.Left - S(27)), S(28)), Theme.Text, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                TextRenderer.DrawText(g, paletteTitle, font, new Rectangle(S(17), S(14), Math.Max(1, manage.Left - S(27)), S(28)), Theme.Text, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             for (int i = 0; i < rows.Count; i++)
             {
                 var entry = visible[page * perPage + i];
                 FavouriteDrawing.Row(g, rows[i], entry, icons.Get(entry), options, hover == i || selected == page * perPage + i, i + 1, scale);
             }
             if (rows.Count == 0)
-                TextRenderer.DrawText(g, entries.Any(x => x.Enabled) ? "No matching favourites." : "Add your apps with Manage.\nYou can include folders and websites too.", Font,
+                TextRenderer.DrawText(g, entries.Any(x => x.Enabled) ? "No matching entries." : emptyHint ?? "Add your apps with Manage.\nYou can include folders and websites too.", Font,
                     new Rectangle(S(20), S(113), Width - S(40), Math.Max(30, Height - S(180))), Theme.Muted, TextFormatFlags.WordBreak | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             string text = options.RightClickZones ? "Right-click: choose a zone" : "Enter: open selected";
             if (visible.Count > perPage) text = (page + 1) + "/" + ((visible.Count + perPage - 1) / perPage) + "  ·  " + text;
@@ -197,6 +214,7 @@ namespace TaskbarTiles
             if (key == Keys.Enter) { Accept(selected, (keyData & Keys.Shift) != 0); return true; }
             if (key == Keys.Down) { Select(1); return true; } if (key == Keys.Up) { Select(-1); return true; }
             if (key == Keys.PageDown) { Page(1); return true; } if (key == Keys.PageUp) { Page(-1); return true; }
+            if (key == Keys.F5 && liveEntries != null) { RefreshLiveEntries(); return true; }
             if (keyData == (Keys.Control | Keys.F)) { filter.Focus(); filter.SelectAll(); return true; }
             if (options.FavouriteNumberKeys && (keyData & Keys.Alt) != 0 && key >= Keys.D1 && key <= Keys.D9)
             { int row = (int)key - (int)Keys.D1; if (row < rows.Count) Accept(page * perPage + row, false); return true; }
@@ -205,7 +223,7 @@ namespace TaskbarTiles
         protected override void OnDeactivate(EventArgs e)
         { base.OnDeactivate(e); if (ready && options.HideOnFocusLoss && !IsDisposed) Close(); }
         protected override void Dispose(bool disposing)
-        { if (disposing) { if (icons != null) icons.Dispose(); tips.Dispose(); } base.Dispose(disposing); }
+        { if (disposing) { liveTimer.Stop(); liveTimer.Dispose(); if (icons != null) icons.Dispose(); tips.Dispose(); } base.Dispose(disposing); }
     }
     sealed class FavouriteEditor : Form
     {

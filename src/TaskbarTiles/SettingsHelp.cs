@@ -43,6 +43,11 @@ namespace TaskbarTiles
             { "RespectZoneSpacing", "Use the saved FancyZones spacing when calculating each destination rectangle. Extra zone inset, if set, is then applied in addition." },
             { "ShowBasicFallback", "Offer clearly labelled Basic zones when no usable FancyZones layout is found. Disable to offer full-screen placement only in that case." },
             { "WindowsSearchButton", "Show Search in the bottom-left of Taskbar Tiles. Clicking expands a local icon-and-name search panel inside this window. It never sends Win+S or opens the Windows Search interface. Choose its sources on the Search tab." },
+            { "SearchButtonWidth", "Preferred width of the bottom-left Search box in logical pixels. Default 420. It becomes narrower only when needed to keep Recent apps, Favourites and other controls inside the menu." },
+            { "RecentAppsButton", "Show the local Recent apps launcher beside Favourites. The full Taskbar apps section, including other pages, is excluded before selecting up to ten entries." },
+            { "RememberRecentApps", "Remember actual app openings locally from now on, not just window switches or unverified launch attempts. Turning this off stops new history; Clear recent history deletes saved entries." },
+            { "RecentObserveExternal", "Also notice new eligible app windows outside Taskbar Tiles while it runs. Existing windows at startup are not backfilled. Document titles, process command lines and browser history are not recorded." },
+            { "RecentAppsLimit", "Show one to ten recent applications after excluding taskbar duplicates. Up to 64 local app entries are retained so the list can still offer ten useful alternatives." },
             { "FavouritesButton", "Show your custom launcher in the bottom-right. Populate it on the Favourites tab; it is separate from the installed app catalogue and the taskbar strip." },
             { "DesktopButton", "Show a button that sends Windows+D to show/hide the desktop. This uses the standard Windows desktop action, not a search function." },
             { "ClipboardButton", "Show a button that sends Windows+V. Windows may ask you to enable clipboard history. Taskbar Tiles does not read or retain clipboard contents." },
@@ -56,7 +61,7 @@ namespace TaskbarTiles
             { "SearchInstalledApps", "Search Start-menu shortcuts, the Windows installed-app catalogue and the visible taskbar apps. The catalogue is read locally and cached for five minutes. Refresh updates it sooner. Portable apps without shortcuts may need adding to Favourites." },
             { "SearchOpenWindows", "Include currently open windows across monitors. Clicking one switches to that existing window; it does not launch another instance." },
             { "SearchFavourites", "Include enabled favourites, plus quick entries for Documents, Downloads, Desktop and Pictures. Disabled favourites stay hidden." },
-            { "SearchSettings", "Include a curated set of common Windows Settings pages, such as Display, Sound, Bluetooth and Windows Update. This is not the complete Windows Settings search catalogue." },
+            { "SearchSettings", "Find Windows Settings pages by title or common phrases such as display settings, screen resolution, refresh rate, mouse speed and auto hide taskbar. Uses a documented deep-link catalogue with limited typo tolerance, not Windows Search private ranking, Bing or every Settings subpage." },
             { "SearchIndexedFiles", "Search local filenames already present in the Windows Search index after two or more characters. No folder crawl, content search, web search or index rebuild is performed. Results depend on Windows indexing and permissions. If unavailable, apps and other search sources still work." }
         };
         internal static string For(string key)
@@ -108,6 +113,7 @@ namespace TaskbarTiles
             foreach (TabPage page in tabs.TabPages)
                 page.ToolTipText = page.Text == "Appearance" ? "Independent tile and text sizes, maximum columns/rows, automatic page capacity and balanced rows." :
                     page.Text == "Search" ? "Sources and size for Search inside Taskbar Tiles. No Windows Search popup." :
+                    page.Text == "Recent apps" ? "Local recent-app collection, exclusions, list size and Clear history." :
                     page.Text == "Favourites" ? "Build, organise and preview your custom app-and-folder launcher." :
                     page.Text == "Navigation" ? "Window switching, closing, filtering and placement behaviour." :
                     page.Text == "Screens & zones" ? "Monitor picker size, full-screen buttons and zone geometry." :
@@ -140,10 +146,11 @@ namespace TaskbarTiles
             Check(p, "SearchInstalledApps", "Search installed apps and taskbar apps");
             Check(p, "SearchOpenWindows", "Search existing open windows");
             Check(p, "SearchFavourites", "Search enabled favourites and common folders");
-            Check(p, "SearchSettings", "Search common Windows Settings pages");
+            Check(p, "SearchSettings", "Search Windows Settings pages and common setting names");
             Check(p, "SearchIndexedFiles", "Search indexed local filenames (Windows indexing required)");
             Section(p, "Search panel appearance", "The panel expands upwards from the bottom-left box and stays inside the main window. Extra results use pages; the monitor picker is unchanged.");
-            Number(p, "SearchPanelWidth", "Search panel width", "Preferred logical pixels. Limited by the main menu's current width.", 420, 1100, 20);
+            Number(p, "SearchButtonWidth", "Bottom-left search box width", "Preferred logical pixels; default 420. Fits alongside Recent apps and Favourites, shrinking only on narrow menus.", 200, 900, 20);
+            Number(p, "SearchPanelWidth", "Search panel width", "Preferred logical pixels. Limited by the main menu's current width.", 420, 1400, 20);
             Number(p, "SearchVisibleRows", "Preferred visible result rows", "The number of icon-and-name rows to show. Reduces only when the main window cannot fit them.", 3, 12, 1);
             Number(p, "SearchRowHeight", "Search result row height", "Increase for larger mouse targets and icons. More height leaves fewer rows on small screens.", 40, 84, 4);
             Section(p, "Scope and privacy", "Filename matches use the existing local Windows index. Unindexed files, file contents, cloud search and the complete Windows Settings catalogue are not included. Queries are not saved or sent online. App launches only happen when you select a result.");
