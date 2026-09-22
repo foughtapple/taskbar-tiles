@@ -2,7 +2,7 @@ name: Validate auto-hide search and recent apps
 on:
   push:
     branches: ['feature/autohide-search-recents-0.9.0']
-    paths: ['.maintenance/apply090.py', 'src/TaskbarTiles/LauncherInventory.cs', 'src/TaskbarTiles/RecentApps.cs', 'src/TaskbarTiles/WindowsSettingsCatalog.cs', 'src/TaskbarTiles/LauncherExperienceTests.cs', '.github/workflows/prepare-launcher090.yml']
+    paths: ['.maintenance/**', 'src/TaskbarTiles/LauncherInventory.cs', 'src/TaskbarTiles/RecentApps.cs', 'src/TaskbarTiles/WindowsSettingsCatalog.cs', 'src/TaskbarTiles/LauncherExperienceTests.cs', '.github/workflows/prepare-launcher090.yml']
 permissions:
   contents: read
 jobs:
@@ -23,6 +23,8 @@ jobs:
           if ($env:GITHUB_REF -cne 'refs/heads/feature/autohide-search-recents-0.9.0') { throw 'Unexpected branch.' }
           & python .maintenance/apply090.py
           if ($LASTEXITCODE -ne 0) { throw 'Source assertions failed. No changes are pushed.' }
+          & python .maintenance/review090.py
+          if ($LASTEXITCODE -ne 0) { throw 'Review assertions failed. No changes are pushed.' }
           & git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed.' }
       - name: Compile and run helper regressions
@@ -60,8 +62,8 @@ jobs:
           & git config user.name 'github-actions[bot]'
           & git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           & git add -- src/TaskbarTiles tools/Test-LauncherExperience.ps1 config/settings.ini docs/releases/v0.9.0.md README.md CHANGELOG.md version.txt
-          & git rm -- .maintenance/apply090.py
-          if ($LASTEXITCODE -ne 0) { throw 'Could not remove preparation helper.' }
+          & git rm -- .maintenance/apply090.py .maintenance/review090.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not remove preparation helpers.' }
           & git commit -m 'Support auto-hidden taskbars, expand integrated settings search and add recent apps (0.9.0)'
           if ($LASTEXITCODE -ne 0) { throw 'Could not commit tested source.' }
           & gh auth setup-git
