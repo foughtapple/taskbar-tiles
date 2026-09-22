@@ -27,7 +27,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed.' }
       - name: Compile and run helper regressions
         shell: powershell
-        run: ./tools/Build.ps1
+        run: |
+          try { ./tools/Build.ps1 }
+          finally { if (Test-Path build/app/self-test.log) { Get-Content build/app/self-test.log } }
       - name: Test launcher inventory search recent history and UI
         shell: powershell
         run: ./tools/Test-LauncherExperience.ps1
