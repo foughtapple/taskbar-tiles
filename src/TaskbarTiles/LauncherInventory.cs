@@ -53,7 +53,6 @@ namespace TaskbarTiles
             if (LaunchIdentity.ConflictingIds(ai, bi)) return false;
             if (!string.IsNullOrWhiteSpace(a.Target) && LaunchIdentity.SamePath(a.Target, b.Target) &&
                 string.Equals(a.Arguments ?? "", b.Arguments ?? "", StringComparison.Ordinal)) return true;
-            // Never flatten browser-profile IDs into the common executable.
             if (LaunchResolution.ProfileScoped(ai) || LaunchResolution.ProfileScoped(bi)) return false;
             return LaunchIdentity.SamePath(a.Exe, b.Exe) && string.Equals(a.Arguments ?? "", b.Arguments ?? "", StringComparison.Ordinal);
         }
@@ -65,7 +64,7 @@ namespace TaskbarTiles
             return new AppButton { Id = app.Id, Name = app.Name, DisplayName = app.DisplayName, ClassName = app.ClassName,
                 Taskbar = app.Taskbar, Bounds = app.Bounds, LaunchExe = app.LaunchExe, ShortcutPath = app.ShortcutPath,
                 VerifiedShortcut = app.VerifiedShortcut, Favourite = app.Favourite == null ? null : app.Favourite.Clone(),
-                LauncherIdentity = app.LauncherIdentity }; // No bitmap ownership is shared.
+                LauncherIdentity = app.LauncherIdentity };
         }
         internal static bool ApplicationTarget(string target)
         {
@@ -83,7 +82,13 @@ namespace TaskbarTiles
                 else if (LaunchResolution.ExplicitId(app.AppId) && ShellIcons.CanResolve(@"shell:AppsFolder\" + app.AppId)) target = @"shell:AppsFolder\" + app.AppId;
             }
             if (!ApplicationTarget(target)) return null;
-            return new FavouriteEntry { Name = app.DisplayName ?? app.Name ?? "App", Target = target, AppId = app.AppId, Group = "Recent app" };
+            return new FavouriteEntry { Id = StableId(target, app.AppId), Name = app.DisplayName ?? app.Name ?? "App", Target = target, AppId = app.AppId, Group = "Recent app" };
+        }
+        internal static string StableId(string target, string appId)
+        {
+            // An inventory refresh must not manufacture new GUIDs and invalidate a
+            // click-in-progress on an otherwise unchanged fallback row.
+            return "inventory:" + (target ?? "").Replace('/', '\\').ToUpperInvariant() + "|" + (appId ?? "").ToUpperInvariant();
         }
         internal static FavouriteEntry FromWindow(WindowRecord window)
         {
@@ -97,12 +102,11 @@ namespace TaskbarTiles
             else if (!LaunchResolution.ProfileScoped(id) && LaunchIdentity.FullPath(exe) &&
                 exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && !LaunchIdentity.GenericHost(exe) && File.Exists(exe)) target = exe;
             if (target.Length == 0) return null;
-            // App names only, never document/window titles or process command lines.
             if (string.IsNullOrWhiteSpace(name) && File.Exists(exe))
                 try { name = FileVersionInfo.GetVersionInfo(exe).FileDescription; } catch { }
             if (string.IsNullOrWhiteSpace(name)) name = Path.GetFileNameWithoutExtension(exe);
             if (string.IsNullOrWhiteSpace(name)) return null;
-            return new FavouriteEntry { Name = name, Target = target, AppId = id, IconPath = target, Group = "Recent app" };
+            return new FavouriteEntry { Id = StableId(target, id), Name = name, Target = target, AppId = id, IconPath = target, Group = "Recent app" };
         }
     }
     static class TaskbarScanPolicy
@@ -132,7 +136,7 @@ namespace TaskbarTiles
                 foreach (string path in Directory.GetFiles(folder, "*.lnk").OrderBy(p => p, StringComparer.CurrentCultureIgnoreCase).Take(256))
                 {
                     var entry = new FavouriteEntry { Name = Path.GetFileNameWithoutExtension(path), Target = path, Group = "Taskbar" };
-                    var key = LauncherKey.FromEntry(entry, true); entry.AppId = key.AppId;
+                    var key = LauncherKey.FromEntry(entry, true); entry.AppId = key.AppId; entry.Id = LauncherDescriptor.StableId(path, key.AppId);
                     var app = FavouriteLaunch.AsApp(entry); app.VerifiedShortcut = true; app.LaunchExe = key.Exe; app.LauncherIdentity = key; pins.Add(app);
                 }
             var running = new List<AppButton>();
