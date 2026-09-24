@@ -157,7 +157,8 @@ namespace TaskbarTiles
                 if (!pending.TryGetValue(key, out since) || now - since < TimeSpan.TicksPerSecond) continue;
                 pending.Remove(key);
                 var entry = LauncherDescriptor.FromWindow(w); if (entry == null) continue;
-                var identity = LauncherKey.FromEntry(entry, true); identity.Exe = w.Exe ?? identity.Exe;
+                var identity = LauncherKey.FromEntry(entry, true);
+                if (string.IsNullOrWhiteSpace(identity.Exe)) identity.Exe = w.Exe ?? "";
                 Store.Remember(new RecentAppRecord { Launcher = entry, Identity = identity, OpenedUtc = now }, epoch);
             }
             previous = current;

@@ -93,6 +93,10 @@ namespace TaskbarTiles
         internal static FavouriteEntry FromWindow(WindowRecord window)
         {
             if (window == null || window.IdentityAmbiguous) return null;
+            var declared = WindowRelaunch.Read(window);
+            if (declared != null) return declared;
+            var client = SteamReopen.FromWindow(window);
+            if (client != null) return client;
             string exe = window.Exe ?? "", id = LaunchIdentity.CleanId(window.AppId), target = "", name = "";
             if (LaunchResolution.ExplicitId(id) && ShellIcons.CanResolve(@"shell:AppsFolder\" + id))
             {
@@ -137,14 +141,15 @@ namespace TaskbarTiles
                 {
                     var entry = new FavouriteEntry { Name = Path.GetFileNameWithoutExtension(path), Target = path, Group = "Taskbar" };
                     var key = LauncherKey.FromEntry(entry, true); entry.AppId = key.AppId; entry.Id = LauncherDescriptor.StableId(path, key.AppId);
-                    var app = FavouriteLaunch.AsApp(entry); app.VerifiedShortcut = true; app.LaunchExe = key.Exe; app.LauncherIdentity = key; pins.Add(app);
+                    var app = FavouriteLaunch.AsApp(entry); app.ClassName = "TaskbarPinnedShortcut"; app.VerifiedShortcut = true; app.LaunchExe = key.Exe; app.LauncherIdentity = key; pins.Add(app);
                 }
             var running = new List<AppButton>();
             foreach (var window in WindowInventory.Read())
             {
                 var entry = LauncherDescriptor.FromWindow(window); if (entry == null) continue;
-                var app = FavouriteLaunch.AsApp(entry); app.LaunchExe = window.Exe;
-                app.LauncherIdentity = new LauncherKey { AppId = window.AppId, Exe = window.Exe, Target = entry.ExpandedTarget };
+                var app = FavouriteLaunch.AsApp(entry);
+                app.LauncherIdentity = LauncherKey.FromEntry(entry, true);
+                app.LaunchExe = app.LauncherIdentity.Exe; // Keep the app relauncher, not its UI helper.
                 running.Add(app);
             }
             return Merge(previous, pins, running);

@@ -18,6 +18,7 @@ namespace TaskbarTiles
         internal uint ProcessId;
         internal long ProcessStartTicks;
         internal bool RequireNewWindow;
+        internal string ReopenClient = ""; // Captured, verified installation for explicit UI reopening.
     }
 
     sealed class LaunchOperation
@@ -96,6 +97,7 @@ namespace TaskbarTiles
             // Browser/profile-scoped IDs may temporarily be missing while starting.
             // Do not collapse two profiles into a shared executable or PID.
             if (LaunchResolution.ProfileScoped(requested)) return false;
+            if (SteamReopen.MatchesWindow(receipt, w)) return true;
             uint appPid = w.AppProcessId != 0 ? w.AppProcessId : w.ProcessId;
             long appStart = w.AppProcessId != 0 ? w.AppProcessStartTicks : w.ProcessStartTicks;
             if (receipt != null && receipt.ProcessId != 0 && receipt.ProcessId == appPid &&
@@ -221,7 +223,7 @@ namespace TaskbarTiles
                         SetShortcutIdentity(app, target, receipt);
                     }
                     if (settings.TerminalNewWindow && TryTerminal(app, target, "", receipt, ref start)) receipt.Method = "Terminal new window";
-                    else receipt.Method = "shell target";
+                    else if (!SteamReopen.TryPrepare(app, target, "", receipt, ref start)) receipt.Method = "shell target";
                     if (start == null) { Fallback(app, reader, operation, completed); return; }
                     // Pass the actual .lnk to the shell. Never discard its profile arguments.
                     Dispatch(start, receipt, operation, completed);
@@ -254,6 +256,7 @@ namespace TaskbarTiles
             if (entry.ExpandedTarget.StartsWith(@"shell:AppsFolder\", StringComparison.OrdinalIgnoreCase))
             { start.FileName = entry.ExpandedTarget; start.Arguments = Environment.ExpandEnvironmentVariables(entry.Arguments); }
             if (settings.TerminalNewWindow && TryTerminal(app, entry.ExpandedTarget, entry.Arguments, receipt, ref start)) receipt.Method = "Terminal new window";
+            else SteamReopen.TryPrepare(app, entry.ExpandedTarget, entry.Arguments, receipt, ref start);
             Dispatch(start, receipt, operation, completed);
         }
         static bool TryTerminal(AppButton app, string target, string arguments, LaunchReceipt receipt, ref ProcessStartInfo start)
@@ -312,7 +315,7 @@ namespace TaskbarTiles
             LaunchLog.Write(operation.Id, "using revalidated taskbar action (no verified launch target)");
             reader.Launch(app, operation, delegate(string error)
             {
-                var receipt = new LaunchReceipt { Method = "taskbar Shift+click", ExpectedAppId = app.AppId, ExpectedExe = app.LaunchExe };
+                var receipt = new LaunchReceipt { Method = "taskbar default action", ExpectedAppId = app.AppId, ExpectedExe = app.LaunchExe };
                 completed(receipt, error);
             });
         }
