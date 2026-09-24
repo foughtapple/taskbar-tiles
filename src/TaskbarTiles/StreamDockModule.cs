@@ -101,7 +101,7 @@ namespace TaskbarTiles
                 for (int i = 0; i < p.LegacyFolders.Length; i++)
                 {
                     string legacy = p.LegacyFolders[i], oldId = p.LegacyPackageIds[i];
-                    if (string.IsNullOrEmpty(legacy) || !legacy.StartsWith("com.foughtapple.", StringComparison.Ordinal) || !legacy.EndsWith(".sdPlugin", StringComparison.Ordinal) || legacy == p.Folder || legacy.Contains("/") || legacy.Contains("\") || !IsId(oldId)) throw new IOException("Invalid legacy package identity.");
+                    if (string.IsNullOrEmpty(legacy) || !legacy.StartsWith("com.foughtapple.", StringComparison.Ordinal) || !legacy.EndsWith(".sdPlugin", StringComparison.Ordinal) || legacy == p.Folder || legacy.Contains("/") || legacy.Contains("\\") || !IsId(oldId)) throw new IOException("Invalid legacy package identity.");
                     Child(Path.GetTempPath(), legacy);
                 }
                 if (p.Actions == null || p.Actions.Length == 0 || p.Actions.Length > 100) throw new IOException("Missing actions.");
