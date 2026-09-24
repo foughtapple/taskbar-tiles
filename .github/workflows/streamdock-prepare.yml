@@ -6,35 +6,30 @@ on:
 permissions:
   contents: write
 jobs:
-  recover:
+  dependencies:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: feature/stream-dock-module
-      - name: Recover complete records and publish source
+      - name: Vendor audited fixed source revisions
         run: |
-          python3 - <<'PY'
-          import base64,lzma,pathlib,tarfile,io,shutil
-          for group in ['streamdock-import','complete']:
-            parts=sorted(pathlib.Path('preparation',group).glob('*.txt'))
-            if not parts: continue
-            raw=lzma.LZMADecompressor().decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts)))
-            try:
-              with tarfile.open(fileobj=io.BytesIO(raw),mode='r:') as t:
-                for m in t:
-                  p=pathlib.Path(m.name)
-                  if not m.isfile() or p.is_absolute() or '..' in p.parts: raise ValueError('Unsafe member')
-                  b=t.extractfile(m).read()
-                  if len(b)!=m.size: break
-                  if m.name.startswith('.github/'): continue
-                  p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b)
-            except (tarfile.ReadError,EOFError): pass
-          shutil.rmtree('preparation')
-          PY
+          git clone --quiet https://github.com/websockets/ws.git "$RUNNER_TEMP/ws"
+          git -C "$RUNNER_TEMP/ws" checkout --quiet dabbdec92f4c1f1777689733d477344e3c6c2e67
+          test "$(git -C "$RUNNER_TEMP/ws" rev-parse HEAD)" = dabbdec92f4c1f1777689733d477344e3c6c2e67
+          git clone --quiet https://github.com/p0358/vdf-parser.git "$RUNNER_TEMP/vdf"
+          git -C "$RUNNER_TEMP/vdf" checkout --quiet 37fc47ee4ce1e20b74a8d88341bc1471233c1dce
+          test "$(git -C "$RUNNER_TEMP/vdf" rev-parse HEAD)" = 37fc47ee4ce1e20b74a8d88341bc1471233c1dce
+          dest=streamdock/modules/steam/package/plugin/dependencies
+          mkdir -p "$dest/ws" "$dest/vdf-parser"
+          cp -R "$RUNNER_TEMP/ws/lib" "$dest/ws/"
+          cp "$RUNNER_TEMP/ws/index.js" "$RUNNER_TEMP/ws/package.json" "$RUNNER_TEMP/ws/LICENSE" "$dest/ws/"
+          cp "$RUNNER_TEMP/vdf/main.js" "$RUNNER_TEMP/vdf/package.json" "$RUNNER_TEMP/vdf/LICENSE" "$dest/vdf-parser/"
+          printf '%s\n' 'ws 8.18.3: dabbdec92f4c1f1777689733d477344e3c6c2e67' 'vdf-parser 1.2.1: 37fc47ee4ce1e20b74a8d88341bc1471233c1dce' 'MIT sources copied only; no install scripts or original bundled credentials.' > "$dest/SOURCES.txt"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'Restore Stream Dock module manager and existing sources; retire encoded staging'
+          git add "$dest"
+          git diff --staged --quiet || git commit -m 'Vendor pinned ws and VDF parser sources with MIT notices'
+          git pull --rebase origin feature/stream-dock-module
           git push origin HEAD:feature/stream-dock-module
