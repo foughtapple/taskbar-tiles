@@ -1,24 +1,37 @@
 name: Build and test
 on:
   push:
-    branches: [main]
+    branches: [main, feature/stream-dock-module]
   pull_request:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   windows:
     runs-on: windows-2022
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Compile and run helper tests
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - name: Compile application and modules, run helper tests and package installer
         shell: powershell
         run: |
-          try { ./tools/Build.ps1 }
-          finally { if (Test-Path build/app/self-test.log) { Get-Content build/app/self-test.log } }
+          try { ./tools/Package.ps1 }
+          finally {
+            if (Test-Path build/app/self-test.log) { Get-Content build/app/self-test.log }
+            if (Test-Path build/app/streamdock-test.log) { Get-Content build/app/streamdock-test.log }
+          }
+      - name: Test native default action and hidden app reopening
+        shell: powershell
+        run: ./tools/Test-AppReopen.ps1
       - name: Test auto-hide inventory search and recent apps
         shell: powershell
         run: ./tools/Test-LauncherExperience.ps1
@@ -40,11 +53,16 @@ jobs:
       - name: Test actual updater HTTPS and verified download
         shell: powershell
         run: ./tools/Test-UpdateHttps.ps1
-      - name: Upload build and test records
+      - name: Test actual installer, upgrades, Stream Dock choices and settings preservation
+        shell: powershell
+        run: ./tools/Test-Installer.ps1
+      - name: Upload build, installer and test records
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-build-and-tests
-          path: build/
+          path: |
+            build/
+            dist/
           if-no-files-found: warn
           retention-days: 14
