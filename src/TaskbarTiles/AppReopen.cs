@@ -99,10 +99,12 @@ namespace TaskbarTiles
                     using (var root = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, view))
                     using (var key = root.OpenSubKey(@"Software\Valve\Steam", false))
                     {
-                        if (key == null) continue;
-                        paths.Add(Convert.ToString(key.GetValue("SteamExe", "")));
-                        string dir = Convert.ToString(key.GetValue("SteamPath", ""));
-                        if (!string.IsNullOrWhiteSpace(dir)) paths.Add(Path.Combine(dir, "steam.exe"));
+                        if (key != null)
+                        {
+                            paths.Add(Convert.ToString(key.GetValue("SteamExe", "")));
+                            string dir = Convert.ToString(key.GetValue("SteamPath", ""));
+                            if (!string.IsNullOrWhiteSpace(dir)) paths.Add(Path.Combine(dir, "steam.exe"));
+                        }
                     }
                 }
                 catch { }

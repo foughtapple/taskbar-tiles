@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1
+
+- Reopen ordinary Steam entries through the registered client and its open-main request, including helper-hosted and tray-hidden UI; preserve explicit game/account/custom commands.
+- Prefer paired app-authored taskbar relaunch metadata to a bare UI-process executable. Keep the relauncher identity in taskbar fallback and recent apps.
+- Use Explorer default Invoke actions in the compatibility fallback, with a normal visible click only when Invoke is unavailable before dispatch. No forced Shift/new-instance action or repeat after an ambiguous dispatch.
+- Add policy and native hidden-window/default-action regressions; retain the Stream Dock work on its separate branch and all existing settings.
+
 ## 0.9.0
 
 - Discover taskbar apps while auto-hidden; separate inventory from visible click targets and label the pinned/running fallback.

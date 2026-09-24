@@ -1,4 +1,4 @@
-// Taskbar Tiles 0.9.0 - Windows utility. C# 5 / .NET Framework.
+// Taskbar Tiles 0.9.1 - Windows utility. C# 5 / .NET Framework.
 // No telemetry, keyboard logging, taskbar registry edits or process injection.
 // Network access is limited to explicit, user-initiated GitHub update checks/downloads.
 using System;
@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.9.0";
+        internal const string Version = "0.9.1";
         static bool SignalToggle()
         {
             try
@@ -70,6 +70,8 @@ namespace TaskbarTiles
             if (args.Contains("--test-launch-outcome")) { Environment.Exit(LaunchOutcomeTests.RunNative()); return; }
             if (args.Contains("--test-rendering")) { Environment.Exit(Switcher.RunRenderingRegressionTests()); return; }
             if (args.Contains("--test-launcher-experience")) { Environment.Exit(LauncherExperienceTests.RunNative()); return; }
+            if (args.Contains("--test-reopen-target")) { Environment.Exit(AppReopenTests.Fixture(args)); return; }
+            if (args.Contains("--test-app-reopen")) { Environment.Exit(AppReopenTests.RunNative()); return; }
             if (args.Contains("--self-test")) { Environment.Exit(SelfTests.Run()); return; }
             if (args.Contains("--exit"))
             {
@@ -197,6 +199,9 @@ namespace TaskbarTiles
                 try
                 {
                     if (operation.Cancelled) return;
+                    string defaultError;
+                    if (TaskbarDefaultAction.TryInvoke(original, operation, out defaultError)) { completed(defaultError); return; }
+                    // Only an unavailable pre-dispatch action reaches the visible click fallback.
                     // Re-resolve the button before clicking: never trust old coordinates.
                     Point point = new Point(original.Bounds.Left + original.Bounds.Width / 2, original.Bounds.Top + original.Bounds.Height / 2);
                     var fresh = Scan(point, false);
@@ -210,7 +215,7 @@ namespace TaskbarTiles
                     if (Native.LaunchModifiersDown() || Native.Down(0x10) || Native.Down(1) || Native.Down(2))
                     { completed("Release your mouse buttons and keyboard modifiers, then try again. No click was sent."); return; }
                     if (!operation.TryDispatch()) return;
-                    Native.ShiftClick(target, item.Taskbar);
+                    Native.ShiftClick(target, item.Taskbar, false); // Native default click, not force-new Shift+click.
                     completed(null);
                 }
                 catch (Exception ex) { LaunchLog.Write(operation.Id, "taskbar action failed: " + ex.GetType().Name); completed("Could not launch the taskbar app: " + ex.Message); }
@@ -610,14 +615,15 @@ namespace TaskbarTiles
             }
             finally { PropVariantClear(ref value); }
         }
-        public static string WindowAppId(IntPtr h)
+        public static string WindowAppId(IntPtr h) { return WindowProperty(h, "System.AppUserModel.ID"); }
+        public static string WindowProperty(IntPtr h, string name)
         {
             IPropertyStore store = null;
             try
             {
                 Guid id = typeof(IPropertyStore).GUID;
                 if (SHGetPropertyStoreForWindow(h, ref id, out store) < 0 || store == null) return "";
-                return ReadProperty(store, "System.AppUserModel.ID");
+                return ReadProperty(store, name);
             }
             catch { return ""; }
             finally { if (store != null) Marshal.ReleaseComObject(store); }
@@ -1579,6 +1585,7 @@ namespace TaskbarTiles
                 LauncherExperienceTests.Run(log);
                 SearchPageTests.Run(log);
                 LayoutRegressionTests.Run(log);
+                AppReopenTests.Run(log);
                 LaunchReliabilityTests.Run(log);
                 LaunchOutcomeTests.Run(log);
                 LaunchResolutionTests.Run(log);
@@ -1697,7 +1704,7 @@ namespace TaskbarTiles
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows rejected the shortcut. You can still use the Windows key shortcut directly.");
             }
         }
-        public static void ShiftClick(POINT target, IntPtr expectedTaskbar)
+        public static void ShiftClick(POINT target, IntPtr expectedTaskbar, bool newInstance = true)
         {
             POINT restore; if (!GetCursorPos(out restore)) throw new Win32Exception();
             if (LaunchModifiersDown() || Down(0x10) || Down(1) || Down(2))
@@ -1706,8 +1713,8 @@ namespace TaskbarTiles
             int inputSize = Marshal.SizeOf(typeof(INPUT));
             try
             {
-                shiftAttempted = true;
-                var prepare = new[] { Key(0xA0, false), Mouse(0, target, true) };
+                shiftAttempted = newInstance;
+                var prepare = newInstance ? new[] { Key(0xA0, false), Mouse(0, target, true) } : new[] { Mouse(0, target, true) };
                 if (SendInput((uint)prepare.Length, prepare, inputSize) != prepare.Length)
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows rejected the launch input. No app click was sent.");
                 // Keep Shift down while Explorer handles the click, rather than
