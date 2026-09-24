@@ -8,7 +8,7 @@ function args(argv){const out={};for(let i=0;i<argv.length;i++){if(/^--?[A-Za-z]
 function start(argv=process.argv.slice(2),overrides={}){
  const options=args(argv),manifest=JSON.parse(fs.readFileSync(path.join(ROOT,'manifest.json'),'utf8'));
  const allowed=manifest.Actions.map(a=>a.UUID);if(!allowed.length||allowed.some(a=>![ACTION,PLAY].includes(a)))throw new Error('Unsupported Steam action manifest.');
- if(options.validate!==undefined||argv.includes('--validate')){if(!fs.existsSync(path.join(ROOT,'images','steam.png')))throw new Error('Missing Steam image');console.log(JSON.stringify({plugin:ACTION,version:VERSION}));return;}
+ if(options.validate!==undefined||argv.includes('--validate')){if(!fs.existsSync(path.join(ROOT,'images','steam.svg')))throw new Error('Missing Steam image');console.log(JSON.stringify({plugin:ACTION,version:VERSION}));return;}
  const port=Number(options.port),uuid=options.pluginuuid,event=options.registerevent;
  if(!Number.isInteger(port)||port<1||port>65535||typeof uuid!=='string'||!event)throw new Error('Add Steam Smart Switch from Stream Dock Key, not Toolbox Open.');
  const dataDir=path.join(process.env.LOCALAPPDATA||ROOT,'FoughtApple','SteamSmartSwitch');fs.mkdirSync(dataDir,{recursive:true});

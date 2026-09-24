@@ -42,6 +42,9 @@
     <Compile Include="Fullscreen.cs" />
     <Compile Include="IntegratedSearch.cs" />
     <Compile Include="InterfacePolishTests.cs" />
+    <Compile Include="AppReopen.cs" />
+    <Compile Include="AppReopenTests.cs" />
+    <Compile Include="TaskbarDefaultAction.cs" />
     <Compile Include="LaunchReliability.cs" />
     <Compile Include="LaunchOutcome.cs" />
     <Compile Include="LaunchOutcomeTests.cs" />

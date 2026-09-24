@@ -87,6 +87,12 @@ The app is C# 5 / .NET Framework 4.8 / WinForms, without third-party runtime pac
 
 GitHub Actions compiles/tests pull requests and builds a normal installer for a version update on main or matching version tags. Release gates cover real-menu rendering, native outside clicks, topmost ordering, launch fixtures, Touch Return policy/listener lifecycle, shortcut repair, updater HTTPS/checksums and installer lifecycle. Published releases include `SHA256SUMS.txt` and `build-info.json`; the latter records the exact commit/run and what CI tested. CI does not certify touchscreen hardware or the user's interactive desktop. [Testing](docs/TESTING.md) · [Architecture](docs/ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
+## Tray-hidden application reopening
+
+Ordinary Steam launcher entries ask the registered Steam client to show its main UI, including when it is already running in the notification area. The renderer/helper process is not launched in isolation. Explicit favourite arguments, game shortcuts and account-related commands are retained; no Steam setting or running game is changed.
+
+Taskbar fallback discovery prefers an application's own paired relaunch metadata. When a verified launch target is unavailable, the compatibility path tries Explorer's exact app-button default action rather than assuming Shift+click/new-instance. A physical fallback still requires a freshly visible, unobstructed taskbar button. Unsupported or uncertain actions are not automatically repeated. Apps with a normal verified shortcut keep their own single/multiple-instance policy. This is not a universal tray-protocol emulation: applications can implement their own activation behaviour.
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE) and [third-party notices](THIRD-PARTY-NOTICES.txt) for the adapted FancyZones compatibility algorithms. Taskbar Tiles is independent of Microsoft, PowerToys and X-Mouse Button Control.

@@ -20,7 +20,7 @@ namespace TaskbarTiles
             var page = tabs.TabPages.Cast<TabPage>().Single(p => p.Text == "Stream Dock");
             tabs.SelectedTab = page;
             Show(); Application.DoEvents(); PerformLayout();
-            if (dockGrid.Rows.Count != 11 || !dockApply.Enabled || !dockAuto.Visible) throw new InvalidOperationException("Stream Dock settings did not load the complete catalogue.");
+            if (dockGrid.Rows.Count != DockManager.Open().Catalog.Packages.Sum(p => p.Actions.Length) || !dockApply.Enabled || !dockAuto.Visible) throw new InvalidOperationException("Stream Dock settings did not load the complete catalogue.");
             using (var image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save(output, System.Drawing.Imaging.ImageFormat.Png); }
             Close();
         }

@@ -69,7 +69,7 @@ foreach ($entry in $catalog.Packages) {
       'desk' {
         $exe=Join-Path $package 'plugin\DeskStatus.exe'
         Build-Go (Join-Path $module 'src') $exe
-        Run-Checked $exe '--validate' (Split-Path $exe)
+        Run-Checked $exe '--validate-assets' (Split-Path $exe)
       }
       'orders' {
         $exe=Join-Path $package 'plugin\NickNacksOrders.exe'

@@ -10,7 +10,7 @@ Taskbar Tiles 0.10 adds an optional **Settings > Stream Dock** tab. It is a loca
 4. Choose **Apply Stream Dock choices**. The manager validates packages, backs up matching existing folders, and adopts the selected actions. It preserves external account/printer/store credentials and local settings files inside existing plugin folders. It refuses newer/unrecognised plugin versions rather than downgrading them.
 5. Reopen Stream Dock. Add available actions from **FoughtApple** under **Key** or **Info board**. Do not use Toolbox > Open for native plugin actions.
 
-Existing Steam Smart Switch, P1S, CPU/RAM, NickNacks Orders and Steam-status action UUIDs are retained, so existing placements can remain. **Desktop Controls is new:** replace the old Toolbox/Open entries once with the corresponding native actions. Keep the old Buttons-Plain directory until you have tested game settings and all replacements. Other vendors' plugins, the working audio switch, and the removed Codex Monitor are not managed or reinstated.
+Existing Steam Smart Switch, P1S, CPU/RAM, NickNacks Orders action UUIDs are retained, so existing placements can remain. **Desktop Controls is new:** replace the old Toolbox/Open entries once with the corresponding native actions. Keep the old Buttons-Plain directory until you have tested game settings and all replacements. Other vendors' plugins, the working audio switch, and the removed Codex Monitor are not managed or reinstated.
 
 ## Included actions
 
@@ -26,7 +26,6 @@ Existing Steam Smart Switch, P1S, CPU/RAM, NickNacks Orders and Steam-status act
 | P1S Print Status | Info board / Key | Version 1.2 reconnect fixes, lightweight visible-only printer monitoring |
 | PC CPU + RAM | Info board / Key | Five-second default monitoring, no monitoring while absent |
 | NickNacks Orders | Info board / Key | Five-minute visible-only Processing count over the configured read-only MCP tool |
-| Steam Account Status | Info board / Key | Optional independent read-only account display; normally unnecessary with Smart Switch |
 
 Some shared packages support both buttons and views; the tab's Type column indicates the intended placement. The exact action selection is written to the installed manifest and enforced at runtime. Turning off P1S does not turn off CPU/RAM, even though they share an executable. Existing placements for disabled actions may show missing/unavailable until re-enabled; no profiles are edited to remove them.
 
@@ -70,3 +69,5 @@ All runtime binaries are rebuilt by CI from the repository. Module packages are 
 CI exercises synthetic account switches, fake MQTT/MCP/Stream Dock connections, Windows controls startup (without game launch/input), package installation into temporary directories, opt-outs, per-action disabling, upgrades, private-settings preservation, traversal/integrity rejection, busy-process refusal and rollback. This does not reproduce the owner's actual Steam accounts, P1S, store endpoint, display layout or physical 293S. Test those on the PC after the first integration.
 
 Official SDK references: [manifest/controllers](https://sdk.key123.vip/en/guide/manifest.html), [plugin discovery](https://sdk.key123.vip/en/guide/get-started.html), [visibility events](https://sdk.key123.vip/en/guide/events-received.html).
+
+The obsolete standalone Steam account indicator is intentionally not reinstated; use Steam Smart Switch. Any independently installed copy stays untouched. The count display retains its black/red design as a scalable 256px vector, rather than raster glyph files.

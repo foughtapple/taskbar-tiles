@@ -2,11 +2,17 @@
 
 ## 0.10.0
 
-- Added isolated Stream Dock catalogue tab, reversible per-action availability and reviewed source-built packages.
-- Ordinary Taskbar Tiles upgrades synchronise enabled modules without re-enabling disabled actions or erasing private settings.
-- Added Windows package-manager integrity/lifecycle tests, runtime action gates, final screenshot/printer fixes and Smart Switch + Rocket League action.
-- Existing taskbar/window-switching behaviours unchanged. See docs/STREAM-DOCK.md.
+- Add optional Settings > Stream Dock package/action management, bundled updates, opt-outs and recoverable backups.
+- Preserve 0.9.1 app reopening and existing taskbar behaviour.
+- Include final Steam, desktop, printer/CPU and order-count actions; leave the obsolete standalone Steam indicator and third-party plugins alone.
 
+
+## 0.9.1
+
+- Reopen ordinary Steam entries through the registered client and its open-main request, including helper-hosted and tray-hidden UI; preserve explicit game/account/custom commands.
+- Prefer paired app-authored taskbar relaunch metadata to a bare UI-process executable. Keep the relauncher identity in taskbar fallback and recent apps.
+- Use Explorer default Invoke actions in the compatibility fallback, with a normal visible click only when Invoke is unavailable before dispatch. No forced Shift/new-instance action or repeat after an ambiguous dispatch.
+- Add policy and native hidden-window/default-action regressions; retain the Stream Dock work on its separate branch and all existing settings.
 
 ## 0.9.0
 

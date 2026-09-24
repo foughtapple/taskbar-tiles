@@ -86,20 +86,6 @@
           "Type": "View"
         }
       ]
-    },
-    {
-      "Id": "steam-display",
-      "Folder": "com.foughtapple.steamstatus.sdPlugin",
-      "Version": "2.1.1",
-      "Name": "Steam Account Status",
-      "Source": "steam-display",
-      "Actions": [
-        {
-          "Id": "com.foughtapple.steamstatus.display",
-          "Name": "Steam Account Status",
-          "Type": "View"
-        }
-      ]
     }
   ]
 }

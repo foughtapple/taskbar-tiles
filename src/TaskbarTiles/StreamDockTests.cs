@@ -100,8 +100,8 @@ namespace TaskbarTiles
                 var realBundle = Path.Combine(Program.Home,"streamdock");
                 if (File.Exists(Path.Combine(realBundle,"catalog.json"))) {
                     var real = new DockManager(realBundle,Path.Combine(tmp,"real-plugins"),Path.Combine(tmp,"real-state"),()=>"");
-                    Check(real.Catalog.Packages.Length == 5, "five final module packages included");
-                    Check(real.Catalog.Packages.Sum(x=>x.Actions.Length) == 11, "eleven independent actions included");
+                    Check(real.Catalog.Packages.Length == 4, "four final module packages included");
+                    Check(real.Catalog.Packages.Sum(x=>x.Actions.Length) == 10, "ten independent actions included");
                     foreach (var pack in real.Catalog.Packages) {
                         string stage = Path.Combine(tmp,"validate-"+pack.Id); Directory.CreateDirectory(stage); real.Unpack(pack,stage);
                         Check(DockManager.ManifestActions(stage).Count == pack.Actions.Length, "real package manifest " + pack.Id);
@@ -112,7 +112,7 @@ namespace TaskbarTiles
                     using (var form = new SettingsWindow(new Options(), delegate(Options o) {}, delegate(Options o) { return new Bitmap(300,160); }, new AppButton[0], "Stream Dock")) {
                         form.ValidateStreamDockView(Path.Combine(Program.Home,"streamdock-settings.png"));
                     }
-                    Check(true,"actual Settings Stream Dock page paints with eleven actions");
+                    Check(true,"actual Settings Stream Dock page paints with ten actions");
                 }
                 messages.Add("PASS " + passed + " isolated package-manager checks.");
                 messages.Add("No real Stream Dock install, private credentials or user folders were used.");

@@ -41,7 +41,7 @@ class Steam {
   const promise=this.loadAvatar(account,s,settings).catch(()=>this.fallback(account));this.avatars.set(key,{at:this.now(),promise});
   if(this.avatars.size>12)this.avatars.delete(this.avatars.keys().next().value);return promise;
  }
- staticImage(name){if(!this.static)this.static={};if(!this.static[name]){let p=path.join(this.root,'images',name+'.png');if(!fss.existsSync(p))p=path.join(this.root,'images','steam.png');this.static[name]='data:image/png;base64,'+fss.readFileSync(p).toString('base64');}return this.static[name];}
+ staticImage(name){if(!this.static)this.static={};if(!this.static[name]){let p=path.join(this.root,'images',name+'.png'),mime='image/png';if(!fss.existsSync(p)){p=path.join(this.root,'images','steam.svg');mime='image/svg+xml';}this.static[name]='data:'+mime+';base64,'+fss.readFileSync(p).toString('base64');}return this.static[name];}
  fallback(account){const name=account.login.toLowerCase();return this.staticImage(name==='foughtapple'?'apple':name==='foughtbanana'?'banana':'steam');}
  async loadAvatar(account,s,settings){
   const cache=path.join(this.dataDir,'avatars',account.id+'.img');

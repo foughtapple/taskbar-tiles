@@ -13,8 +13,8 @@ $version = (Get-Content (Join-Path $root 'version.txt') -Raw).Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid version.txt' }
 $core = Get-Content (Join-Path $source 'TaskbarTiles.cs') -Raw
 if (-not $core.Contains('internal const string Version = "' + $version + '";')) { throw 'Version constants do not match version.txt.' }
-foreach ($name in @('System.Windows.Forms','System.Drawing','WindowsBase','UIAutomationClient','UIAutomationTypes','Microsoft.CSharp','System.Web.Extensions','System.Data')) { Add-Type -AssemblyName $name }
-$refs = @('System.dll','System.Core.dll', [System.Data.OleDb.OleDbConnection].Assembly.Location,
+foreach ($name in @('System.Windows.Forms','System.Drawing','WindowsBase','UIAutomationClient','UIAutomationTypes','Microsoft.CSharp','System.Web.Extensions','System.Data','System.IO.Compression','System.IO.Compression.FileSystem')) { Add-Type -AssemblyName $name }
+$refs = @('System.dll','System.Core.dll', [IO.Compression.ZipArchive].Assembly.Location, [IO.Compression.ZipFile].Assembly.Location, [System.Data.OleDb.OleDbConnection].Assembly.Location,
     [System.Windows.Forms.Form].Assembly.Location, [System.Drawing.Bitmap].Assembly.Location,
     [System.Windows.Rect].Assembly.Location, [System.Windows.Automation.AutomationElement].Assembly.Location,
     [System.Windows.Automation.ControlType].Assembly.Location, [Microsoft.CSharp.RuntimeBinder.Binder].Assembly.Location,
@@ -49,3 +49,6 @@ try {
 } finally { $test.Dispose() }
 Get-Content (Join-Path $output 'self-test.log')
 Write-Host "Build and helper tests passed: $output" -ForegroundColor Green
+
+& (Join-Path $PSScriptRoot 'Build-StreamDock.ps1')
+& (Join-Path $PSScriptRoot 'Test-StreamDock.ps1')
