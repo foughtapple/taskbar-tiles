@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.0
+
+- Add optional Settings > Stream Dock package/action management, bundled updates, opt-outs and recoverable backups.
+- Preserve 0.9.1 app reopening and existing taskbar behaviour.
+- Include final Steam, desktop, printer/CPU and order-count actions; leave the obsolete standalone Steam indicator and third-party plugins alone.
+
+
 ## 0.9.1
 
 - Reopen ordinary Steam entries through the registered client and its open-main request, including helper-hosted and tray-hidden UI; preserve explicit game/account/custom commands.

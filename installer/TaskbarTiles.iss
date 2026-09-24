@@ -46,6 +46,7 @@ Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\docs\XMOUSE-SETUP.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\app\streamdock\*"; DestDir: "{app}\streamdock"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]
 Name: "{group}\Taskbar Tiles"; Filename: "{app}\TaskbarTiles.exe"; Parameters: "--show"; WorkingDir: "{app}"
 Name: "{group}\Uninstall Taskbar Tiles"; Filename: "{uninstallexe}"
@@ -89,7 +90,7 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Folder, Backup, Name: String;
-  I: Integer;
+  I, Code: Integer;
   Names: TArrayOfString;
 begin
   Result := '';
@@ -97,6 +98,13 @@ begin
   if not StopResident(Folder) then begin
     Result := 'Taskbar Tiles is still running. Exit it from its tray icon, then choose Next. No other apps have been closed.';
     exit;
+  end;
+  if FileExists(Folder + '\StreamDockData\state.json') and FileExists(Folder + '\TaskbarTiles.exe') then begin
+    Code := 0;
+    if not Exec(Folder + '\TaskbarTiles.exe', '--streamdock-ready', Folder, SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then begin
+      Result := 'Stream Dock plugin updates are enabled. Fully exit Stream Dock from its tray icon, then choose Next. Plugins and settings have not been replaced.';
+      exit;
+    end;
   end;
   if BackupDone or not FileExists(Folder + '\TaskbarTiles.exe') then exit;
   Backup := Folder + '\Backups\' + GetDateTimeString('yyyymmdd-hhnnss', '-', ':');
@@ -114,10 +122,17 @@ begin
   BackupDone := True;
 end;
 procedure CurStepChanged(CurStep: TSetupStep);
+var Code: Integer;
 begin
   if CurStep = ssPostInstall then begin
     if not WizardIsTaskSelected('startup') then DeleteFile(ExpandConstant('{userstartup}\Taskbar Tiles.lnk'));
     if not WizardIsTaskSelected('desktopicon') then DeleteFile(ExpandConstant('{userdesktop}\Taskbar Tiles.lnk'));
+    { Apply only previously selected plugins; no setup or monitoring on first install. }
+    Code := 0;
+    if not Exec(ExpandConstant('{app}\TaskbarTiles.exe'), '--sync-streamdock', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then begin
+      Log('Taskbar Tiles installed; Stream Dock changes remain pending. See StreamDockData\last-result.txt.');
+      if not WizardSilent then MsgBox('Taskbar Tiles was updated. Some Stream Dock updates remain pending. Close Stream Dock, open Taskbar Tiles Settings > Stream Dock and choose Apply. Existing settings were retained.', mbInformation, MB_OK);
+    end;
     { Supersede only our own optional local-build registration, never other apps. }
     RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\TaskbarTiles-LocalBuild');
   end;

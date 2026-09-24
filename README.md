@@ -96,3 +96,7 @@ Taskbar fallback discovery prefers an application's own paired relaunch metadata
 ## Licence
 
 MIT. See [LICENSE](LICENSE) and [third-party notices](THIRD-PARTY-NOTICES.txt) for the adapted FancyZones compatibility algorithms. Taskbar Tiles is independent of Microsoft, PowerToys and X-Mouse Button Control.
+
+## Optional Stream Dock modules (0.10+)
+
+**Settings > Stream Dock** manages the custom game/Steam/clipboard/screenshot/voice controls and printer/PC/order displays independently of the taskbar. Enable only the actions you use, Apply while Stream Dock is closed, then add them from FoughtApple in Stream Dock. The normal Taskbar Tiles release installer carries future module updates; disabled/new actions stay off and private settings remain local. [Full integration and update guide](docs/STREAM-DOCK.md).

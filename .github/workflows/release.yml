@@ -14,14 +14,18 @@ jobs:
   publish:
     if: github.repository == 'foughtapple/taskbar-tiles' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: windows-2022
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417
+        with:
+          go-version: '1.27.1'
+          cache: false
       - name: Verify tag and repository
         shell: powershell
         run: |
@@ -36,12 +40,15 @@ jobs:
           }
           if ($env:GITHUB_REPOSITORY -cne 'foughtapple/taskbar-tiles') { throw 'Forks must change their updater repository and release workflow before publishing.' }
           if (-not (Test-Path "docs/releases/v$version.md")) { throw 'Missing release notes.' }
-      - name: Compile, test and package installer
+      - name: Compile application and module payloads, test and package installer
         shell: powershell
         run: |
           try { ./tools/Package.ps1 }
-          finally { if (Test-Path build/app/self-test.log) { Get-Content build/app/self-test.log } }
-      - name: Test native default action and hidden app reopening
+          finally {
+            if (Test-Path build/app/self-test.log) { Get-Content build/app/self-test.log }
+            if (Test-Path build/app/streamdock-test.log) { Get-Content build/app/streamdock-test.log }
+          }
+      - name: Test native default actions and hidden app reopening
         shell: powershell
         run: ./tools/Test-AppReopen.ps1
       - name: Test auto-hide inventory search and recent apps
@@ -65,32 +72,37 @@ jobs:
       - name: Test actual updater HTTPS and verified download
         shell: powershell
         run: ./tools/Test-UpdateHttps.ps1
-      - name: Test install, upgrade and uninstall on this disposable runner
+      - name: Test installer upgrades, module choices and preserved settings
         shell: powershell
         run: ./tools/Test-Installer.ps1
       - name: Record build provenance
         shell: powershell
         run: |
           $version = (Get-Content version.txt -Raw).Trim()
+          $catalog = Get-Content build/app/streamdock/catalog.json -Raw | ConvertFrom-Json
           @{
             version = $version
             commit = $env:GITHUB_SHA
             run = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
             built_utc = (Get-Date).ToUniversalTime().ToString('o')
             runner = 'windows-2022'
+            go_version = (& go version)
             helper_tests = 'passed'
-            native_app_reopen_tests = 'passed: cross-process UIA default action, hidden-window fixture and production launch tracker; actual Steam and personalised taskbar not tested'
-            launcher_experience_tests = 'passed: offscreen inventory policy, search ranking, footer geometry, local recent-history persistence/exclusion/clear and real Forms painting; personalised taskbar not tested'
+            streamdock_packages = @($catalog.Packages | Select-Object Id,Version,SHA256)
+            streamdock_manager_tests = 'passed: checksums, archive paths, action choices, opt-out, busy host refusal, rollback, private settings and real settings-page painting'
+            streamdock_installer_tests = 'passed: actual Setup upgrade synchronises enabled modules, preserves private settings, keeps disabled actions off and leaves unrelated plugins untouched'
+            app_reopen_tests = 'passed: native default actions and out-of-process hidden-window fixture; actual Steam client not exercised'
+            launcher_experience_tests = 'passed: offscreen policy, search, geometry, recent-history persistence and real Forms painting'
             native_clickaway_tests = 'passed on disposable nonactivating windows'
-            touch_shortcut_tests = 'passed: policy, native listener lifecycle and hook recovery; no hardware compatibility claim'
-            native_rendering_tests = 'passed: real-menu/preview rendering, disposed-font reproduction, icon isolation and bounded recovery'
-            native_switcher_layer_tests = 'passed on disposable test Forms; not the user desktop'
-            native_app_managed_launch_tests = 'passed on disposable out-of-process fixtures; actual Steam/Bambu not tested'
-            updater_https_download_checksum_test = 'passed; installer downloaded but not executed by network test'
+            touch_shortcut_tests = 'passed: policy, listener lifecycle and recovery; no hardware compatibility claim'
+            native_rendering_tests = 'passed: real-menu/preview rendering, icon isolation and bounded recovery'
+            native_switcher_layer_tests = 'passed on disposable Forms'
+            native_app_managed_launch_tests = 'passed on disposable out-of-process fixtures'
+            updater_https_download_checksum_test = 'passed; downloaded installer not executed by network test'
             installer_smoke_tests = 'passed'
-            interactive_desktop_tests = 'full application interaction not tested by this workflow'
+            interactive_desktop_tests = 'physical Stream Dock 293S, real Steam accounts, printer and MCP store endpoint not tested'
             authenticode_signed = $false
-          } | ConvertTo-Json | Set-Content dist/build-info.json -Encoding UTF8
+          } | ConvertTo-Json -Depth 8 | Set-Content dist/build-info.json -Encoding UTF8
       - name: Publish only after all tests pass
         shell: powershell
         env:
@@ -103,7 +115,7 @@ jobs:
           $known = & git tag --list $tag
           if (-not $known) {
             & gh api "repos/$repo/git/refs" --method POST -f "ref=refs/tags/$tag" -f "sha=$env:GITHUB_SHA"
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create the immutable version tag. No existing tag was changed.' }
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the immutable version tag. No existing tag changed.' }
           }
           $savedPreference = $ErrorActionPreference
           $ErrorActionPreference = 'Continue'
@@ -112,7 +124,7 @@ jobs:
           $ErrorActionPreference = $savedPreference
           if ($exists) {
             $data = $existing | ConvertFrom-Json
-            if (-not $data.isDraft) { throw 'Published release exists. Never overwrite published installer assets; issue a new version.' }
+            if (-not $data.isDraft) { throw 'Published release exists. Never overwrite published assets; issue a new version.' }
           } else {
             & gh release create $tag --repo $repo --verify-tag --draft --title "Taskbar Tiles $version" --notes-file "docs/releases/$tag.md"
             if ($LASTEXITCODE -ne 0) { throw 'Could not create draft release.' }
@@ -123,7 +135,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Release assets uploaded but publication failed.' }
       - name: Keep installer and test diagnostics
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-diagnostics-${{ github.ref_name }}
           path: |

@@ -358,6 +358,7 @@ namespace TaskbarTiles
             system.Controls.AddRange(new Control[] { xmouse, display, diag, launchLog, switching, updates, appFolder });
             Section(system, "About this integration", "Zone placement reads saved layout geometry and uses normal Windows move/resize requests. It does not register a window in FancyZones' internal zone history. Apps can enforce minimum sizes; elevated, fullscreen or non-resizable windows may not accept placement.");
             AddUpdatesPage();
+            AddStreamDockPage();
             AddQuickAccessPage();
             AddFavouritesPage();
             AddSearchSettingsPage();

@@ -33,6 +33,7 @@ Run-Setup
 if ((Get-FileHash $settings -Algorithm SHA256).Hash -ne $before) { throw 'Upgrade modified existing settings.' }
 if ((Get-Content $favourites -Raw) -ne '{"smoke_test":"preserve"}') { throw 'Upgrade modified favourites.' }
 if (-not @(Get-ChildItem (Join-Path $dest 'Backups') -Filter TaskbarTiles.exe -Recurse).Count) { throw 'Upgrade did not back up the old executable.' }
+& (Join-Path $PSScriptRoot 'Test-StreamDockInstaller.ps1') -InstallRoot $dest -Setup $setup
 $uninstall = Join-Path $dest 'unins000.exe'
 $p = Start-Process $uninstall -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -PassThru
 try {

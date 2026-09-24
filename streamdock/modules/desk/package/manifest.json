@@ -1,0 +1,71 @@
+{
+  "Actions": [
+    {
+      "UUID": "com.foughtapple.deskstatus.p1s",
+      "Icon": "images/p1s.png",
+      "Name": "P1S Print Status",
+      "Tooltip": "Local, read-only P1S print progress, remaining time and printer attention states.",
+      "Controllers": [
+        "Information",
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "images/p1s.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": false,
+      "Settings": {
+        "interval": 5
+      },
+      "PropertyInspectorPath": "inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.deskstatus.pc",
+      "Icon": "images/pc.png",
+      "Name": "PC CPU + RAM",
+      "Tooltip": "Lightweight Windows CPU busy time and physical RAM usage.",
+      "Controllers": [
+        "Information",
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "images/pc.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": false,
+      "Settings": {
+        "interval": 5
+      },
+      "PropertyInspectorPath": "inspector/index.html"
+    }
+  ],
+  "SDKVersion": 1,
+  "Author": "FoughtApple",
+  "Name": "Desk Status Displays",
+  "Description": "Two independent read-only displays: P1S print status and Windows CPU + RAM. Does not change Steam or existing button actions.",
+  "Category": "FoughtApple",
+  "CategoryIcon": "images/category.png",
+  "Icon": "images/plugin.png",
+  "Version": "1.2.1",
+  "CodePath": "plugin/DeskStatus.exe",
+  "CodePathWin": "plugin/DeskStatus.exe",
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "2.10.179.426"
+  }
+}

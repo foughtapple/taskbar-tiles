@@ -25,3 +25,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 No PowerToys executable, Microsoft font file or third-party binary is bundled.
+
+Stream Dock module bundle
+-------------------------
+Each module preserves its source/package notices. Go-built executables include the Go standard library (BSD-style license in module packages). Steam Smart Switch uses ws and vdf-parser (MIT; full notices in its package). The Steam fallback symbol is a vector trace of the supplied Steam icon. Application logos and user-supplied artwork identify their respective applications/accounts and are not an assertion of endorsement. Controls' FancyZones geometry references are documented in its source NOTICE.txt. No font files, access codes, tokens or account/customer data are distributed.

@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.9.1";
+        internal const string Version = "0.10.0";
         static bool SignalToggle()
         {
             try
@@ -72,6 +72,9 @@ namespace TaskbarTiles
             if (args.Contains("--test-launcher-experience")) { Environment.Exit(LauncherExperienceTests.RunNative()); return; }
             if (args.Contains("--test-reopen-target")) { Environment.Exit(AppReopenTests.Fixture(args)); return; }
             if (args.Contains("--test-app-reopen")) { Environment.Exit(AppReopenTests.RunNative()); return; }
+            if (args.Contains("--sync-streamdock")) { Environment.Exit(DockManager.SyncInstalled(false)); return; }
+            if (args.Contains("--streamdock-ready")) { Environment.Exit(DockManager.SyncInstalled(true)); return; }
+            if (args.Contains("--test-streamdock")) { Environment.Exit(StreamDockTests.Run()); return; }
             if (args.Contains("--self-test")) { Environment.Exit(SelfTests.Run()); return; }
             if (args.Contains("--exit"))
             {
@@ -105,6 +108,7 @@ namespace TaskbarTiles
                     AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs e)
                     { Log(Convert.ToString(e.ExceptionObject)); ShortcutDiagnostics.Write("unhandled exception; terminating=" + e.IsTerminating); };
                     Options.Migrate();
+                    ThreadPool.QueueUserWorkItem(delegate { DockManager.SyncInstalled(false); });
                     using (var popup = new Switcher())
                     using (var quit = new EventWaitHandle(false, EventResetMode.AutoReset, EventName))
                     using (var toggle = new EventWaitHandle(false, EventResetMode.AutoReset, ToggleEventName))
