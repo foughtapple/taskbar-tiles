@@ -16,6 +16,8 @@ namespace TaskbarTiles
     sealed class DockPackage
     {
         public string Id, Name, Folder, Version, Payload, SHA256;
+        public string[] LegacyFolders = new string[0];
+        public string[] LegacyPackageIds = new string[0];
         public DockAction[] Actions;
     }
     sealed class DockCatalog { public int Schema; public string BundleVersion; public DockPackage[] Packages; }
@@ -26,10 +28,11 @@ namespace TaskbarTiles
         public string[] EnabledActions = new string[0];
         public string[] ManagedPackages = new string[0];
     }
-    sealed class DockJournal { public string Folder, Backup, Stage; }
+    sealed class DockLegacyJournal { public string Folder, Backup; }
+    sealed class DockJournal { public string Folder, Backup, Stage; public DockLegacyJournal[] Legacy = new DockLegacyJournal[0]; }
     sealed class DockReceipt { public string Package, Version, Hash; public string[] Actions; }
     sealed class DockRow { public DockPackage Package; public DockAction Action; public bool Selected; public string Status; }
-    sealed class DockManager
+    sealed partial class DockManager
     {
         internal readonly string Bundle, Root, Store;
         internal readonly DockCatalog Catalog;
@@ -93,26 +96,57 @@ namespace TaskbarTiles
                 if (p == null || !IsId(p.Id) || !ids.Add(p.Id) || string.IsNullOrEmpty(p.Folder) || !p.Folder.StartsWith("com.foughtapple.", StringComparison.Ordinal) || !p.Folder.EndsWith(".sdPlugin", StringComparison.Ordinal) || !folders.Add(p.Folder) || p.Folder.Contains("/") || p.Folder.Contains("\\")) throw new IOException("Invalid or duplicate package identity.");
                 Child(Path.GetTempPath(), p.Folder); Child(Path.GetTempPath(), p.Payload);
                 if (!p.Payload.StartsWith("packages/", StringComparison.Ordinal) || !p.Payload.EndsWith(".zip", StringComparison.Ordinal) || !Version.TryParse(p.Version, out version) || p.SHA256 == null || p.SHA256.Length != 64 || !p.SHA256.All(Uri.IsHexDigit)) throw new IOException("Invalid package version or checksum.");
+                p.LegacyFolders = p.LegacyFolders ?? new string[0]; p.LegacyPackageIds = p.LegacyPackageIds ?? new string[0];
+                if (p.LegacyFolders.Length != p.LegacyPackageIds.Length) throw new IOException("Legacy package mapping is incomplete.");
+                for (int i = 0; i < p.LegacyFolders.Length; i++)
+                {
+                    string legacy = p.LegacyFolders[i], oldId = p.LegacyPackageIds[i];
+                    if (string.IsNullOrEmpty(legacy) || !legacy.StartsWith("com.foughtapple.", StringComparison.Ordinal) || !legacy.EndsWith(".sdPlugin", StringComparison.Ordinal) || legacy == p.Folder || legacy.Contains("/") || legacy.Contains("\\") || !IsId(oldId)) throw new IOException("Invalid legacy package identity.");
+                    Child(Path.GetTempPath(), legacy);
+                }
                 if (p.Actions == null || p.Actions.Length == 0 || p.Actions.Length > 100) throw new IOException("Missing actions.");
                 foreach (var a in p.Actions) if (a == null || !IsId(a.Id) || !actions.Add(a.Id) || string.IsNullOrEmpty(a.Name) || (a.Type != "Button" && a.Type != "View")) throw new IOException("Invalid or duplicate action.");
             }
+        }
+        DockState NormalizeState(DockState s)
+        {
+            if (s == null || s.Schema != 1 || s.EnabledActions == null || s.ManagedPackages == null) throw new IOException("Stream Dock choices could not be read. No packages were changed.");
+            var mapped = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string id in s.ManagedPackages)
+            {
+                var current = Catalog.Packages.FirstOrDefault(p => p.Id == id || p.LegacyPackageIds.Contains(id));
+                if (current != null) mapped.Add(current.Id);
+            }
+            s.ManagedPackages = mapped.OrderBy(x => x).ToArray();
+            return s;
+        }
+        IEnumerable<string> InstalledFolders(DockPackage p)
+        {
+            yield return p.Folder;
+            foreach (string legacy in p.LegacyFolders ?? new string[0]) yield return legacy;
+        }
+        bool HasLegacy(DockPackage p)
+        {
+            return (p.LegacyFolders ?? new string[0]).Any(f => Directory.Exists(Child(Root, f)));
         }
         internal DockState State(bool discover)
         {
             if (HasState)
             {
                 var s = Decode<DockState>(ReadBounded(StatePath, 262144));
-                if (s == null || s.Schema != 1 || s.EnabledActions == null || s.ManagedPackages == null) throw new IOException("Stream Dock choices could not be read. No packages were changed.");
-                return s;
+                return NormalizeState(s);
             }
             var enabled = new List<string>(); var managed = new List<string>();
             if (discover)
                 foreach (var p in Catalog.Packages)
                 {
-                    string dest = Child(Root, p.Folder);
-                    if (!File.Exists(Path.Combine(dest, "manifest.json"))) continue;
-                    var present = ManifestActions(dest);
-                    enabled.AddRange(p.Actions.Where(a => present.Contains(a.Id)).Select(a => a.Id));
+                    foreach (string folder in InstalledFolders(p))
+                    {
+                        string dest = Child(Root, folder);
+                        if (!File.Exists(Path.Combine(dest, "manifest.json"))) continue;
+                        var present = ManifestActions(dest);
+                        enabled.AddRange(p.Actions.Where(a => present.Contains(a.Id)).Select(a => a.Id));
+                    }
                     // Discovery is not adoption: choices are committed only by Apply.
                 }
             return new DockState { EnabledActions = enabled.ToArray(), ManagedPackages = managed.ToArray() };
@@ -134,11 +168,19 @@ namespace TaskbarTiles
             var s = State(true);
             foreach (var p in Catalog.Packages)
             {
-                string installed = Child(Root, p.Folder); HashSet<string> active = new HashSet<string>(); string version = "";
+                string installed = Child(Root, p.Folder); HashSet<string> active = new HashSet<string>(); string version = ""; bool legacy = false;
                 if (File.Exists(Path.Combine(installed, "manifest.json")))
-                { try { active = ManifestActions(installed); version = Convert.ToString(Manifest(installed)["Version"]); } catch { version = "unreadable"; } }
+                { try { active.UnionWith(ManifestActions(installed)); version = Convert.ToString(Manifest(installed)["Version"]); } catch { version = "unreadable"; } }
+                foreach (string legacyFolder in p.LegacyFolders ?? new string[0])
+                {
+                    string old = Child(Root, legacyFolder); if (!File.Exists(Path.Combine(old, "manifest.json"))) continue;
+                    legacy = true; try { active.UnionWith(ManifestActions(old)); } catch { }
+                }
                 foreach (var a in p.Actions)
-                    yield return new DockRow { Package = p, Action = a, Selected = s.EnabledActions.Contains(a.Id), Status = active.Contains(a.Id) ? "Available / " + version + (s.ManagedPackages.Contains(p.Id) ? "" : " / not managed yet") : "Off" };
+                {
+                    string status = active.Contains(a.Id) ? (legacy ? "Available / consolidate on Apply" : "Available / " + version + (s.ManagedPackages.Contains(p.Id) ? "" : " / not managed yet")) : "Off";
+                    yield return new DockRow { Package = p, Action = a, Selected = s.EnabledActions.Contains(a.Id), Status = status };
+                }
             }
         }
         internal static void AtomicText(string path, string text)
@@ -189,6 +231,7 @@ namespace TaskbarTiles
         internal bool Current(DockPackage p, string[] enabled)
         {
             string dest = Child(Root, p.Folder);
+            if (HasLegacy(p)) return false;
             if (enabled.Length == 0) return !Directory.Exists(dest);
             try {
                 var receipt = Decode<DockReceipt>(ReadBounded(Path.Combine(dest, ".taskbar-tiles-package.json"), 65536));
@@ -200,13 +243,7 @@ namespace TaskbarTiles
             string file = Path.Combine(Store, "pending-package.json"); if (!File.Exists(file)) return;
             if (Busy() != "") throw new IOException("A package change was interrupted. Close Stream Dock before recovery.");
             var j = Decode<DockJournal>(ReadBounded(file, 65536));
-            if (j == null || !Catalog.Packages.Any(p => p.Folder == j.Folder) || !j.Backup.StartsWith("Backups/", StringComparison.Ordinal) || !j.Stage.StartsWith(".taskbar-stage-", StringComparison.Ordinal)) throw new IOException("Invalid package recovery record; no folders moved.");
-            string dest = Child(Root, j.Folder), backup = Child(Store, j.Backup), stage = Child(Root, j.Stage);
-            NoLinks(dest); NoLinks(backup); NoLinks(stage);
-            // Either the old directory or a fully staged replacement is present.
-            // If neither committed, restore the old package before retrying.
-            if (!Directory.Exists(dest) && Directory.Exists(backup)) Directory.Move(backup, dest);
-            if (Directory.Exists(stage)) Directory.Delete(stage, true);
+            RollbackJournal(j);
             File.Delete(file);
         }
         internal string Apply(DockState desired, bool automatic, bool repair)
@@ -223,10 +260,10 @@ namespace TaskbarTiles
                     if (desired.EnabledActions.Any(id => !known.Contains(id))) throw new IOException("A saved module is not in this catalogue. Refusing to drop it; use a newer Taskbar Tiles build.");
                     desired.EnabledActions = desired.EnabledActions.Distinct().OrderBy(x => x).ToArray();
                     RecoverInterruptedChange();
-                    var before = State(false); var managed = new HashSet<string>(before.ManagedPackages);
+                    var before = State(false); var managed = new HashSet<string>(before.ManagedPackages.Where(id => Catalog.Packages.Any(p => p.Id == id)));
                     foreach (var p in Catalog.Packages) if (p.Actions.Any(a => desired.EnabledActions.Contains(a.Id))) managed.Add(p.Id);
-                    // Explicitly disabling a discovered existing package is also an adoption.
-                    if (!automatic) foreach (var p in Catalog.Packages) if (Directory.Exists(Child(Root, p.Folder))) managed.Add(p.Id);
+                    // Explicitly disabling a discovered existing or legacy package is also an adoption.
+                    if (!automatic) foreach (var p in Catalog.Packages) if (Directory.Exists(Child(Root, p.Folder)) || HasLegacy(p)) managed.Add(p.Id);
                     desired.ManagedPackages = managed.OrderBy(x => x).ToArray();
                     var plans = Catalog.Packages.Where(p => managed.Contains(p.Id)).Select(p => new { Package = p, Enabled = p.Actions.Where(a => desired.EnabledActions.Contains(a.Id)).Select(a => a.Id).OrderBy(x => x).ToArray() }).Where(x => repair || !Current(x.Package, x.Enabled)).ToList();
                     if (plans.Count == 0) { if (!automatic) AtomicText(StatePath, Encode(desired)); return "Everything is current. No plugin files changed."; }
@@ -244,15 +281,24 @@ namespace TaskbarTiles
                         var p = plan.Package; string dest = Child(Root, p.Folder), disabled = Child(Path.Combine(Store, "Disabled"), p.Folder);
                         string backup = Child(batch, p.Folder), stage = Child(Root, ".taskbar-stage-" + Guid.NewGuid().ToString("N"));
                         string source = Directory.Exists(dest) ? dest : Directory.Exists(disabled) ? disabled : null;
-                        bool movedOld = false;
+                        var legacyMoves = (p.LegacyFolders ?? new string[0]).Where(f => Directory.Exists(Child(Root, f))).Select(f => new DockLegacyJournal { Folder = f, Backup = "Backups/" + Path.GetFileName(batch) + "/legacy-" + f }).ToArray();
+                        bool movedOld = false; var movedLegacy = new List<DockLegacyJournal>();
                         try {
                             if (source != null) {
                                 var prior = Manifest(source); Version priorVersion, incoming;
                                 if (Version.TryParse(Convert.ToString(prior["Version"]), out priorVersion) && Version.TryParse(p.Version, out incoming) && priorVersion > incoming) throw new IOException("A newer version of " + p.Name + " is installed. It was not downgraded.");
                                 if (ManifestActions(source).Except(p.Actions.Select(a => a.Id)).Any()) throw new IOException("Unrecognised actions in " + p.Folder + "; folder left unchanged.");
                             }
-                            if (plan.Enabled.Length != 0) {
+                            foreach (var legacy in legacyMoves)
+                            {
+                                string old = Child(Root, legacy.Folder);
+                                if (ManifestActions(old).Except(p.Actions.Select(a => a.Id)).Any()) throw new IOException("Unrecognised actions in legacy package " + legacy.Folder + "; folder left unchanged.");
+                            }
+                            if (plan.Enabled.Length != 0 || legacyMoves.Length != 0) {
                                 Directory.CreateDirectory(stage); if (source != null) CopySafe(source, stage);
+                                Unpack(p, stage);
+                                ImportLegacyWorkers(p, stage, source);
+                                // Private files survive; bundled executable/manifests always win.
                                 Unpack(p, stage);
                                 var manifest = Manifest(stage); var raw = (System.Collections.IEnumerable)manifest["Actions"]; var selected = new List<object>();
                                 foreach (var v in raw) { var a = (Dictionary<string, object>)v; if (plan.Enabled.Contains((string)a["UUID"])) selected.Add(a); }
@@ -261,22 +307,25 @@ namespace TaskbarTiles
                             }
                             running = Busy(); if (running != "") throw new IOException("Stream Dock reopened during the operation. Close it and Apply again.");
                             NoLinks(dest); NoLinks(disabled); NoLinks(stage);
-                            AtomicText(Path.Combine(Store, "pending-package.json"), Encode(new DockJournal { Folder = p.Folder, Backup = "Backups/" + Path.GetFileName(batch) + "/" + p.Folder, Stage = Path.GetFileName(stage) }));
+                            AtomicText(Path.Combine(Store, "pending-package.json"), Encode(new DockJournal { Folder = p.Folder, Backup = "Backups/" + Path.GetFileName(batch) + "/" + p.Folder, Stage = Path.GetFileName(stage), Legacy = legacyMoves }));
                             if (Directory.Exists(dest)) { Directory.Move(dest, backup); movedOld = true; if (AfterOldMoved != null) AfterOldMoved(); }
+                            foreach (var legacy in legacyMoves)
+                            {
+                                string old = Child(Root, legacy.Folder), oldBackup = Child(Store, legacy.Backup); Directory.CreateDirectory(Path.GetDirectoryName(oldBackup)); Directory.Move(old, oldBackup); movedLegacy.Add(legacy); if (AfterLegacyMoved != null) AfterLegacyMoved();
+                            }
                             if (plan.Enabled.Length != 0) Directory.Move(stage, dest);
-                            else if (movedOld) {
+                            else if (movedOld || Directory.Exists(stage)) {
                                 Directory.CreateDirectory(Path.GetDirectoryName(disabled));
                                 if (Directory.Exists(disabled)) Directory.Move(disabled, Child(batch, p.Id + "-previously-disabled"));
                                 // Keep the backup and an independently restorable disabled copy.
-                                CopySafe(backup, disabled);
+                                if (Directory.Exists(stage)) Directory.Move(stage, disabled); else CopySafe(backup, disabled);
                             }
                             File.Delete(Path.Combine(Store, "pending-package.json"));
                             done++;
                         }
                         catch {
-                            // Roll back this package. Earlier successfully applied packages stay valid.
-                            if (movedOld && !Directory.Exists(dest) && Directory.Exists(backup)) Directory.Move(backup, dest);
-                            if (Directory.Exists(dest) || !movedOld) File.Delete(Path.Combine(Store, "pending-package.json"));
+                            // Restore all old folders together, including a partly promoted replacement.
+                            if (File.Exists(Path.Combine(Store, "pending-package.json"))) RecoverInterruptedChange();
                             throw;
                         }
                         finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }

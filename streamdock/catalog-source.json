@@ -2,11 +2,23 @@
   "Schema": 1,
   "Packages": [
     {
-      "Id": "controls",
-      "Folder": "com.foughtapple.controls.sdPlugin",
+      "Id": "taskbartiles",
+      "Folder": "com.foughtapple.taskbartiles.sdPlugin",
       "Version": "1.0.0",
-      "Name": "Desktop Controls",
-      "Source": "controls",
+      "Name": "Taskbar Tiles",
+      "Source": "taskbartiles",
+      "LegacyFolders": [
+        "com.foughtapple.controls.sdPlugin",
+        "com.foughtapple.steamsmarttoggle.sdPlugin",
+        "com.foughtapple.deskstatus.sdPlugin",
+        "com.foughtapple.nicknacksorders.sdPlugin"
+      ],
+      "LegacyPackageIds": [
+        "controls",
+        "steam",
+        "desk",
+        "orders"
+      ],
       "Actions": [
         {
           "Id": "com.foughtapple.controls.rocket",
@@ -32,16 +44,7 @@
           "Id": "com.foughtapple.controls.voice",
           "Name": "GPT Voice - Ctrl+Alt+Shift+F",
           "Type": "Button"
-        }
-      ]
-    },
-    {
-      "Id": "steam",
-      "Folder": "com.foughtapple.steamsmarttoggle.sdPlugin",
-      "Version": "1.1.0",
-      "Name": "Steam Smart Switch - FoughtApple",
-      "Source": "steam",
-      "Actions": [
+        },
         {
           "Id": "com.foughtapple.steamsmarttoggle.toggle",
           "Name": "Steam Smart Switch",
@@ -51,16 +54,7 @@
           "Id": "com.foughtapple.steamsmarttoggle.play",
           "Name": "Steam Switch + Rocket League",
           "Type": "Button"
-        }
-      ]
-    },
-    {
-      "Id": "desk",
-      "Folder": "com.foughtapple.deskstatus.sdPlugin",
-      "Version": "1.2.1",
-      "Name": "Desk Status Displays",
-      "Source": "desk",
-      "Actions": [
+        },
         {
           "Id": "com.foughtapple.deskstatus.p1s",
           "Name": "P1S Print Status",
@@ -70,16 +64,7 @@
           "Id": "com.foughtapple.deskstatus.pc",
           "Name": "PC CPU + RAM",
           "Type": "View"
-        }
-      ]
-    },
-    {
-      "Id": "orders",
-      "Folder": "com.foughtapple.nicknacksorders.sdPlugin",
-      "Version": "1.0.1",
-      "Name": "NickNacks Orders",
-      "Source": "orders",
-      "Actions": [
+        },
         {
           "Id": "com.foughtapple.nicknacksorders.processing",
           "Name": "NickNacks Orders",
