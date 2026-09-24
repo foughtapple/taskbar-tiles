@@ -18,3 +18,8 @@
 *.pfx
 *.p12
 *.key
+
+# Stream Dock CI payloads and local/private runtime data
+streamdock/**/plugin/*.exe
+StreamDockData/
+*.dpapi

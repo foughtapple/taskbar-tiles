@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.9.0";
+        internal const string Version = "0.10.0";
         static bool SignalToggle()
         {
             try
@@ -61,6 +61,9 @@ namespace TaskbarTiles
         [STAThread]
         static void Main(string[] args)
         {
+            if (args.Contains("--sync-streamdock")) { Environment.Exit(DockManager.SyncInstalled(false)); return; }
+            if (args.Contains("--streamdock-ready")) { Environment.Exit(DockManager.SyncInstalled(true)); return; }
+            if (args.Contains("--test-streamdock")) { Environment.Exit(StreamDockTests.Run()); return; }
             if (args.Contains("--test-clickaway")) { Environment.Exit(OutsideClickTests.RunNative()); return; }
             if (args.Contains("--test-clickaway-target")) { Environment.Exit(OutsideClickTests.RunTarget(args)); return; }
             if (args.Contains("--test-touch-shortcuts")) { Environment.Exit(TouchSupportTests.RunNative()); return; }
@@ -103,6 +106,8 @@ namespace TaskbarTiles
                     AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs e)
                     { Log(Convert.ToString(e.ExceptionObject)); ShortcutDiagnostics.Write("unhandled exception; terminating=" + e.IsTerminating); };
                     Options.Migrate();
+                    // One local reconciliation on startup. Never polls or downloads.
+                    ThreadPool.QueueUserWorkItem(delegate { DockManager.SyncInstalled(false); });
                     using (var popup = new Switcher())
                     using (var quit = new EventWaitHandle(false, EventResetMode.AutoReset, EventName))
                     using (var toggle = new EventWaitHandle(false, EventResetMode.AutoReset, ToggleEventName))

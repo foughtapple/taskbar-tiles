@@ -1,0 +1,113 @@
+{
+  "Actions": [
+    {
+      "UUID": "com.foughtapple.controls.rocket",
+      "Name": "Rocket League - Open / Close",
+      "Icon": "images/rocket.png",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "images/rocket.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.controls.overwatch",
+      "Name": "Overwatch - Open / Close",
+      "Icon": "images/overwatch.png",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "images/overwatch.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.controls.screenshot",
+      "Name": "FancyZone Screenshot",
+      "Icon": "images/screenshot.png",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "images/screenshot.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.controls.clipboard",
+      "Name": "Clipboard History",
+      "Icon": "images/clipboard.png",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "images/clipboard.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.controls.voice",
+      "Name": "GPT Voice - Ctrl+Alt+Shift+F",
+      "Icon": "images/voice.png",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "images/voice.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "inspector/index.html"
+    }
+  ],
+  "SDKVersion": 1,
+  "Author": "FoughtApple",
+  "Name": "Desktop Controls",
+  "Description": "Final game toggles, zone-or-monitor screenshot, clipboard and GPT voice shortcuts.",
+  "Category": "FoughtApple",
+  "CategoryIcon": "images/plugin.png",
+  "Icon": "images/plugin.png",
+  "Version": "1.0.0",
+  "CodePath": "plugin/ControlsHost.exe",
+  "CodePathWin": "plugin/ControlsHost.exe",
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "2.10.179.426"
+  }
+}

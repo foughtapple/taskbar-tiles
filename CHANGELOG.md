@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0
+
+- Added isolated Stream Dock catalogue tab, reversible per-action availability and reviewed source-built packages.
+- Ordinary Taskbar Tiles upgrades synchronise enabled modules without re-enabling disabled actions or erasing private settings.
+- Added Windows package-manager integrity/lifecycle tests, runtime action gates, final screenshot/printer fixes and Smart Switch + Rocket League action.
+- Existing taskbar/window-switching behaviours unchanged. See docs/STREAM-DOCK.md.
+
+
 ## 0.9.0
 
 - Discover taskbar apps while auto-hidden; separate inventory from visible click targets and label the pinned/running fallback.
