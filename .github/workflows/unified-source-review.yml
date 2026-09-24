@@ -1,0 +1,21 @@
+name: Unified source review
+on:
+  push:
+    branches: [feature/unified-streamdock-category-0.10.1]
+    paths: [.github/workflows/unified-source-review.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: git archive --format=zip --output=source.zip HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unified-source-review
+          path: source.zip
+          retention-days: 1
