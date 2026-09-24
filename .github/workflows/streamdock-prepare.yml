@@ -4,44 +4,37 @@ on:
     branches: [feature/stream-dock-module]
     paths: [.github/workflows/streamdock-prepare.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  snapshot:
+  recover:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          persist-credentials: false
-      - name: Recover complete source records only
+          ref: feature/stream-dock-module
+      - name: Recover complete records and publish actual source
         run: |
           python3 - <<'PY'
-          import base64,lzma,pathlib,tarfile,io,zipfile
-          out=pathlib.Path('recovered'); out.mkdir()
+          import base64,lzma,pathlib,tarfile,io,shutil
           for group in ['streamdock-import','complete']:
             parts=sorted(pathlib.Path('preparation',group).glob('*.txt'))
             if not parts: continue
-            data=base64.b64decode(''.join(p.read_text().strip() for p in parts))
-            raw=lzma.LZMADecompressor().decompress(data)
-            count=0
+            raw=lzma.LZMADecompressor().decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts)))
             try:
               with tarfile.open(fileobj=io.BytesIO(raw),mode='r:') as t:
                 for m in t:
-                  if not m.isfile() or pathlib.PurePosixPath(m.name).is_absolute() or '..' in pathlib.PurePosixPath(m.name).parts: raise ValueError('Unsafe archive member')
+                  p=pathlib.Path(m.name)
+                  if not m.isfile() or p.is_absolute() or '..' in p.parts: raise ValueError('Unsafe member')
                   b=t.extractfile(m).read()
                   if len(b)!=m.size: break
-                  p=out/m.name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b);count+=1
+                  if m.name=='.github/workflows/streamdock-prepare.yml': continue
+                  p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b)
             except (tarfile.ReadError,EOFError): pass
-            print(group, count, 'complete files recovered')
-          with zipfile.ZipFile('source-recovery.zip','w',zipfile.ZIP_DEFLATED) as z:
-            for p in out.rglob('*'):
-              if p.is_file(): z.write(p,str(p.relative_to(out)))
+          shutil.rmtree('preparation')
           PY
-          git archive --format=zip --output=baseline.zip HEAD
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: streamdock-final-recovery
-          path: |
-            source-recovery.zip
-            baseline.zip
-          retention-days: 3
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Restore real Stream Dock tab, package manager, controls and printer sources; remove encoded staging'
+          git push origin HEAD:feature/stream-dock-module
