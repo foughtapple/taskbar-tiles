@@ -19,6 +19,9 @@ jobs:
         run: |
           try { ./tools/Build.ps1 }
           finally { if (Test-Path build/app/self-test.log) { Get-Content build/app/self-test.log } }
+      - name: Test native default action and hidden app reopening
+        shell: powershell
+        run: ./tools/Test-AppReopen.ps1
       - name: Test auto-hide inventory search and recent apps
         shell: powershell
         run: ./tools/Test-LauncherExperience.ps1
