@@ -1,0 +1,3 @@
+ws 8.18.3: dabbdec92f4c1f1777689733d477344e3c6c2e67
+vdf-parser 1.2.1: 37fc47ee4ce1e20b74a8d88341bc1471233c1dce
+MIT sources copied only; no install scripts or original bundled credentials.
