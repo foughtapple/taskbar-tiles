@@ -64,6 +64,8 @@
     <Compile Include="Settings.cs" />
     <Compile Include="SettingsStreamDock.cs" />
     <Compile Include="StreamDockModule.cs" />
+    <Compile Include="StreamDockMigration.cs" />
+    <Compile Include="StreamDockMigrationTests.cs" />
     <Compile Include="StreamDockTests.cs" />
     <Compile Include="SettingsDismissal.cs" />
     <Compile Include="SettingsExtras.cs" />

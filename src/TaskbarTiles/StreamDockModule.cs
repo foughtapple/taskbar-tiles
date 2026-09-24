@@ -32,7 +32,7 @@ namespace TaskbarTiles
     sealed class DockJournal { public string Folder, Backup, Stage; public DockLegacyJournal[] Legacy = new DockLegacyJournal[0]; }
     sealed class DockReceipt { public string Package, Version, Hash; public string[] Actions; }
     sealed class DockRow { public DockPackage Package; public DockAction Action; public bool Selected; public string Status; }
-    sealed class DockManager
+    sealed partial class DockManager
     {
         internal readonly string Bundle, Root, Store;
         internal readonly DockCatalog Catalog;
@@ -243,19 +243,7 @@ namespace TaskbarTiles
             string file = Path.Combine(Store, "pending-package.json"); if (!File.Exists(file)) return;
             if (Busy() != "") throw new IOException("A package change was interrupted. Close Stream Dock before recovery.");
             var j = Decode<DockJournal>(ReadBounded(file, 65536));
-            if (j == null || !Catalog.Packages.Any(p => p.Folder == j.Folder) || !j.Backup.StartsWith("Backups/", StringComparison.Ordinal) || !j.Stage.StartsWith(".taskbar-stage-", StringComparison.Ordinal)) throw new IOException("Invalid package recovery record; no folders moved.");
-            string dest = Child(Root, j.Folder), backup = Child(Store, j.Backup), stage = Child(Root, j.Stage);
-            NoLinks(dest); NoLinks(backup); NoLinks(stage);
-            // Either the old directory or a fully staged replacement is present.
-            // If neither committed, restore the old package before retrying.
-            if (!Directory.Exists(dest) && Directory.Exists(backup)) Directory.Move(backup, dest);
-            foreach (var legacy in j.Legacy ?? new DockLegacyJournal[0])
-            {
-                if (legacy == null || !Catalog.Packages.SelectMany(p => p.LegacyFolders ?? new string[0]).Contains(legacy.Folder) || !legacy.Backup.StartsWith("Backups/", StringComparison.Ordinal)) throw new IOException("Invalid legacy recovery record; no folders moved.");
-                string old = Child(Root, legacy.Folder), oldBackup = Child(Store, legacy.Backup);
-                if (!Directory.Exists(old) && Directory.Exists(oldBackup)) Directory.Move(oldBackup, old);
-            }
-            if (Directory.Exists(stage)) Directory.Delete(stage, true);
+            RollbackJournal(j);
             File.Delete(file);
         }
         internal string Apply(DockState desired, bool automatic, bool repair)
@@ -306,8 +294,11 @@ namespace TaskbarTiles
                                 string old = Child(Root, legacy.Folder);
                                 if (ManifestActions(old).Except(p.Actions.Select(a => a.Id)).Any()) throw new IOException("Unrecognised actions in legacy package " + legacy.Folder + "; folder left unchanged.");
                             }
-                            if (plan.Enabled.Length != 0) {
+                            if (plan.Enabled.Length != 0 || legacyMoves.Length != 0) {
                                 Directory.CreateDirectory(stage); if (source != null) CopySafe(source, stage);
+                                Unpack(p, stage);
+                                ImportLegacyWorkers(p, stage, source);
+                                // Private files survive; bundled executable/manifests always win.
                                 Unpack(p, stage);
                                 var manifest = Manifest(stage); var raw = (System.Collections.IEnumerable)manifest["Actions"]; var selected = new List<object>();
                                 foreach (var v in raw) { var a = (Dictionary<string, object>)v; if (plan.Enabled.Contains((string)a["UUID"])) selected.Add(a); }
@@ -320,26 +311,21 @@ namespace TaskbarTiles
                             if (Directory.Exists(dest)) { Directory.Move(dest, backup); movedOld = true; if (AfterOldMoved != null) AfterOldMoved(); }
                             foreach (var legacy in legacyMoves)
                             {
-                                string old = Child(Root, legacy.Folder), oldBackup = Child(Store, legacy.Backup); Directory.CreateDirectory(Path.GetDirectoryName(oldBackup)); Directory.Move(old, oldBackup); movedLegacy.Add(legacy);
+                                string old = Child(Root, legacy.Folder), oldBackup = Child(Store, legacy.Backup); Directory.CreateDirectory(Path.GetDirectoryName(oldBackup)); Directory.Move(old, oldBackup); movedLegacy.Add(legacy); if (AfterLegacyMoved != null) AfterLegacyMoved();
                             }
                             if (plan.Enabled.Length != 0) Directory.Move(stage, dest);
-                            else if (movedOld) {
+                            else if (movedOld || Directory.Exists(stage)) {
                                 Directory.CreateDirectory(Path.GetDirectoryName(disabled));
                                 if (Directory.Exists(disabled)) Directory.Move(disabled, Child(batch, p.Id + "-previously-disabled"));
                                 // Keep the backup and an independently restorable disabled copy.
-                                CopySafe(backup, disabled);
+                                if (Directory.Exists(stage)) Directory.Move(stage, disabled); else CopySafe(backup, disabled);
                             }
                             File.Delete(Path.Combine(Store, "pending-package.json"));
                             done++;
                         }
                         catch {
-                            // Roll back this package. Earlier successfully applied packages stay valid.
-                            if (movedOld && !Directory.Exists(dest) && Directory.Exists(backup)) Directory.Move(backup, dest);
-                            foreach (var legacy in movedLegacy.AsEnumerable().Reverse())
-                            {
-                                string old = Child(Root, legacy.Folder), oldBackup = Child(Store, legacy.Backup); if (!Directory.Exists(old) && Directory.Exists(oldBackup)) Directory.Move(oldBackup, old);
-                            }
-                            if ((Directory.Exists(dest) || !movedOld) && movedLegacy.All(x => Directory.Exists(Child(Root, x.Folder)))) File.Delete(Path.Combine(Store, "pending-package.json"));
+                            // Restore all old folders together, including a partly promoted replacement.
+                            if (File.Exists(Path.Combine(Store, "pending-package.json"))) RecoverInterruptedChange();
                             throw;
                         }
                         finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }

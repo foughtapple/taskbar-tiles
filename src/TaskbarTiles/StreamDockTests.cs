@@ -116,6 +116,7 @@ namespace TaskbarTiles
                 var realBundle = Path.Combine(Program.Home,"streamdock");
                 if (File.Exists(Path.Combine(realBundle,"catalog.json"))) {
                     var real = new DockManager(realBundle,Path.Combine(tmp,"real-plugins"),Path.Combine(tmp,"real-state"),()=>"");
+                    passed += StreamDockMigrationTests.Run(tmp);
                     Check(real.Catalog.Packages.Length == 1, "one unified Taskbar Tiles plugin package included");
                     Check(real.Catalog.Packages.Sum(x=>x.Actions.Length) == 10, "ten independent actions included");
                     foreach (var pack in real.Catalog.Packages) {
