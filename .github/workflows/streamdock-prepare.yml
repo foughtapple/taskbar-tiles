@@ -13,24 +13,35 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Recover staged source and snapshot
+      - name: Recover complete source records only
         run: |
           python3 - <<'PY'
           import base64,lzma,pathlib,tarfile,io,zipfile
-          parts=sorted(pathlib.Path('preparation/streamdock-import').glob('*.txt'))
-          data=base64.b64decode(''.join(p.read_text().strip() for p in parts))
-          d=lzma.LZMADecompressor(); raw=d.decompress(data)
-          print('Partial stream bytes',len(raw),raw[:100])
-          pathlib.Path('partial-import.tar').write_bytes(raw)
-          with zipfile.ZipFile('recovery.zip','w',zipfile.ZIP_DEFLATED) as z:
-            z.write('partial-import.tar')
-            for p in parts:z.write(p)
+          out=pathlib.Path('recovered'); out.mkdir()
+          for group in ['streamdock-import','complete']:
+            parts=sorted(pathlib.Path('preparation',group).glob('*.txt'))
+            if not parts: continue
+            data=base64.b64decode(''.join(p.read_text().strip() for p in parts))
+            raw=lzma.LZMADecompressor().decompress(data)
+            count=0
+            try:
+              with tarfile.open(fileobj=io.BytesIO(raw),mode='r:') as t:
+                for m in t:
+                  if not m.isfile() or pathlib.PurePosixPath(m.name).is_absolute() or '..' in pathlib.PurePosixPath(m.name).parts: raise ValueError('Unsafe archive member')
+                  b=t.extractfile(m).read()
+                  if len(b)!=m.size: break
+                  p=out/m.name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b);count+=1
+            except (tarfile.ReadError,EOFError): pass
+            print(group, count, 'complete files recovered')
+          with zipfile.ZipFile('source-recovery.zip','w',zipfile.ZIP_DEFLATED) as z:
+            for p in out.rglob('*'):
+              if p.is_file(): z.write(p,str(p.relative_to(out)))
           PY
-          git archive --format=zip --output=taskbar-source.zip HEAD
+          git archive --format=zip --output=baseline.zip HEAD
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: taskbar-integration-recovery
+          name: streamdock-final-recovery
           path: |
-            taskbar-source.zip
-            recovery.zip
-          retention-days: 1
+            source-recovery.zip
+            baseline.zip
+          retention-days: 3
