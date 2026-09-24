@@ -54,7 +54,9 @@ function start(argv=process.argv.slice(2),overrides={}){
  function sendBounded(socket,raw){
   if(!socket||socket.readyState!==WebSocket.OPEN)return false;
   if(socket.bufferedAmount>maxQueuedBytes){log('Socket backpressure exceeded safe bound.');shutdown();return false;}
-  socket.send(raw);return true;
+  // ws delivers received text as Buffer. Preserve TEXT framing in both directions;
+  // forwarding that Buffer with the default send options creates binary frames.
+  socket.send(raw,{binary:false});return true;
  }
  function realSendRaw(raw){return !closing&&registered&&sendBounded(real,raw);}
  function realSend(obj){return realSendRaw(JSON.stringify(obj));}
