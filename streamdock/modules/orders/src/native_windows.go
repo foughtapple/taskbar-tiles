@@ -1,0 +1,15 @@
+//go:build windows
+
+package main
+import("encoding/base64";"errors";"os";"os/exec";"runtime";"strings";"syscall";"unsafe")
+var kernel=syscall.NewLazyDLL("kernel32.dll")
+var crypt=syscall.NewLazyDLL("crypt32.dll")
+type blob struct{Size uint32;Data *byte}
+func cryptTransform(data []byte,decrypt bool)([]byte,error){if len(data)==0||len(data)>65536{return nil,errors.New("Invalid protected token length.")};entropy:=[]byte("FoughtApple.NickNacksOrders.v1");in:=blob{uint32(len(data)),&data[0]};ent:=blob{uint32(len(entropy)),&entropy[0]};var out blob;proc:=crypt.NewProc("CryptProtectData");if decrypt{proc=crypt.NewProc("CryptUnprotectData")};r,_,_:=proc.Call(uintptr(unsafe.Pointer(&in)),0,uintptr(unsafe.Pointer(&ent)),0,0,1,uintptr(unsafe.Pointer(&out)));runtime.KeepAlive(data);runtime.KeepAlive(entropy);if r==0{return nil,errors.New("Windows could not protect/read the token for this user. Enter it again in settings.")};defer kernel.NewProc("LocalFree").Call(uintptr(unsafe.Pointer(out.Data)));if out.Data==nil||out.Size>65536{return nil,errors.New("Invalid Windows protected-token result.")};return append([]byte{},unsafe.Slice(out.Data,int(out.Size))...),nil}
+func protectSecret(s string)(string,error){b,e:=cryptTransform([]byte(s),false);return base64.StdEncoding.EncodeToString(b),e}
+func revealSecret(s string)(string,error){b,e:=base64.StdEncoding.DecodeString(s);if e!=nil{return "",errors.New("Saved token is invalid. Enter it again.")};b,e=cryptTransform(b,true);return string(b),e}
+func replaceFile(src,dst string)error{a,e:=syscall.UTF16PtrFromString(src);if e!=nil{return e};b,e:=syscall.UTF16PtrFromString(dst);if e!=nil{return e};r,_,er:=kernel.NewProc("MoveFileExW").Call(uintptr(unsafe.Pointer(a)),uintptr(unsafe.Pointer(b)),0x1|0x8);if r==0{return er};return nil}
+func environmentToken()string{if s:=strings.TrimSpace(os.Getenv("NICKNACKSAU_MCP_TOKEN"));s!=""{return s};var k syscall.Handle;p,_:=syscall.UTF16PtrFromString("Environment");if syscall.RegOpenKeyEx(syscall.HKEY_CURRENT_USER,p,0,syscall.KEY_READ,&k)!=nil{return ""};defer syscall.RegCloseKey(k);n,_:=syscall.UTF16PtrFromString("NICKNACKSAU_MCP_TOKEN");var typ,size uint32;if syscall.RegQueryValueEx(k,n,nil,&typ,nil,&size)!=nil||size>32768||size<2||(typ!=syscall.REG_SZ&&typ!=syscall.REG_EXPAND_SZ){return ""};b:=make([]uint16,(size+1)/2);if syscall.RegQueryValueEx(k,n,nil,&typ,(*byte)(unsafe.Pointer(&b[0])),&size)!=nil{return ""};return strings.TrimSpace(syscall.UTF16ToString(b))}
+func acquireInstance()(func(),bool){p,_:=syscall.UTF16PtrFromString("Local\\FoughtApple.NickNacksOrders.v1");h,_,e:=kernel.NewProc("CreateMutexW").Call(0,0,uintptr(unsafe.Pointer(p)));if h==0{return func(){},false};if e==syscall.ERROR_ALREADY_EXISTS{syscall.CloseHandle(syscall.Handle(h));return func(){},false};return func(){syscall.CloseHandle(syscall.Handle(h))},true}
+func notify(s string){t,_:=syscall.UTF16PtrFromString("NickNacks Orders - Stream Dock");v,_:=syscall.UTF16PtrFromString(s);syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW").Call(0,uintptr(unsafe.Pointer(v)),uintptr(unsafe.Pointer(t)),0x40)}
+func openReport(p string)error{return exec.Command("notepad.exe",p).Start()}
