@@ -1,35 +1,27 @@
-name: Stream Dock integration preparation
+name: Stream Dock integration snapshot
 on:
   push:
     branches: [feature/stream-dock-module]
     paths: [.github/workflows/streamdock-prepare.yml]
 permissions:
-  contents: write
+  contents: read
 jobs:
-  dependencies:
+  snapshot:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: feature/stream-dock-module
-      - name: Vendor audited fixed source revisions
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Archive integration and main
         run: |
-          git clone --quiet https://github.com/websockets/ws.git "$RUNNER_TEMP/ws"
-          git -C "$RUNNER_TEMP/ws" checkout --quiet dabbdec92f4c1f1777689733d477344e3c6c2e67
-          test "$(git -C "$RUNNER_TEMP/ws" rev-parse HEAD)" = dabbdec92f4c1f1777689733d477344e3c6c2e67
-          git clone --quiet https://github.com/p0358/vdf-parser.git "$RUNNER_TEMP/vdf"
-          git -C "$RUNNER_TEMP/vdf" checkout --quiet 37fc47ee4ce1e20b74a8d88341bc1471233c1dce
-          test "$(git -C "$RUNNER_TEMP/vdf" rev-parse HEAD)" = 37fc47ee4ce1e20b74a8d88341bc1471233c1dce
-          dest=streamdock/modules/steam/package/plugin/dependencies
-          mkdir -p "$dest/ws" "$dest/vdf-parser"
-          cp -R "$RUNNER_TEMP/ws/lib" "$dest/ws/"
-          cp "$RUNNER_TEMP/ws/index.js" "$RUNNER_TEMP/ws/package.json" "$RUNNER_TEMP/ws/LICENSE" "$dest/ws/"
-          cp "$RUNNER_TEMP/vdf/main.js" "$RUNNER_TEMP/vdf/package.json" "$RUNNER_TEMP/vdf/LICENSE" "$dest/vdf-parser/"
-          printf '%s\n' 'ws 8.18.3: dabbdec92f4c1f1777689733d477344e3c6c2e67' 'vdf-parser 1.2.1: 37fc47ee4ce1e20b74a8d88341bc1471233c1dce' 'MIT sources copied only; no install scripts or original bundled credentials.' > "$dest/SOURCES.txt"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add "$dest"
-          git diff --staged --quiet || git commit -m 'Vendor pinned ws and VDF parser sources with MIT notices'
-          git pull --rebase origin feature/stream-dock-module
-          git push origin HEAD:feature/stream-dock-module
+          git archive --format=zip --output=integration.zip HEAD
+          git archive --format=zip --output=current-main.zip origin/main
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: streamdock-final-source
+          path: |
+            integration.zip
+            current-main.zip
+          retention-days: 3
