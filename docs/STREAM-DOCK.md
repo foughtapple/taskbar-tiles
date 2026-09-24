@@ -1,6 +1,6 @@
 # Stream Dock module
 
-Taskbar Tiles 0.10 adds an optional **Settings > Stream Dock** tab. It is a local package manager, separate from the taskbar switcher. It does not run the monitors, rewrite Stream Dock scenes, or change other installed plugins.
+Taskbar Tiles 0.10.1 uses an optional **Settings > Stream Dock** tab and one unified **Taskbar Tiles** plugin/category. It is a local package manager, separate from the taskbar switcher. It does not run the monitors, rewrite Stream Dock scenes, or change other installed plugins.
 
 ## First upgrade / bring the existing plugins under management
 
@@ -8,9 +8,9 @@ Taskbar Tiles 0.10 adds an optional **Settings > Stream Dock** tab. It is a loca
 2. Open **Taskbar Tiles Settings > Stream Dock**. Existing matching custom plugins are discovered and preselected; new actions start unchecked. Check the exact actions you want. Keep **Update enabled modules when Taskbar Tiles updates** checked.
 3. Fully exit Stream Dock using its Windows notification-area icon. Closing just its window is not enough. Leave Taskbar Tiles open.
 4. Choose **Apply Stream Dock choices**. The manager validates packages, backs up matching existing folders, and adopts the selected actions. It preserves external account/printer/store credentials and local settings files inside existing plugin folders. It refuses newer/unrecognised plugin versions rather than downgrading them.
-5. Reopen Stream Dock. Add available actions from **FoughtApple** under **Key** or **Info board**. Do not use Toolbox > Open for native plugin actions.
+5. Reopen Stream Dock. Add available actions from the single **Taskbar Tiles** section under **Key** or **Info board**. Do not use Toolbox > Open for native plugin actions.
 
-Existing Steam Smart Switch, P1S, CPU/RAM, NickNacks Orders action UUIDs are retained, so existing placements can remain. **Desktop Controls is new:** replace the old Toolbox/Open entries once with the corresponding native actions. Keep the old Buttons-Plain directory until you have tested game settings and all replacements. Other vendors' plugins, the working audio switch, and the removed Codex Monitor are not managed or reinstated.
+All ten managed actions now live in one `com.foughtapple.taskbartiles.sdPlugin` package. Their existing action UUIDs are retained. On the first 0.10.1 Apply/update, the four 0.10.0 managed plugin folders are archived to the Taskbar Tiles backup area so Stream Dock no longer shows repeated headings. Other vendors' plugins, the working audio switch, and the removed Codex Monitor are not managed or reinstated.
 
 ## Included actions
 
@@ -27,7 +27,7 @@ Existing Steam Smart Switch, P1S, CPU/RAM, NickNacks Orders action UUIDs are ret
 | PC CPU + RAM | Info board / Key | Five-second default monitoring, no monitoring while absent |
 | NickNacks Orders | Info board / Key | Five-minute visible-only Processing count over the configured read-only MCP tool |
 
-Some shared packages support both buttons and views; the tab's Type column indicates the intended placement. The exact action selection is written to the installed manifest and enforced at runtime. Turning off P1S does not turn off CPU/RAM, even though they share an executable. Existing placements for disabled actions may show missing/unavailable until re-enabled; no profiles are edited to remove them.
+The unified package supports both buttons and views; the tab's Type column indicates the intended placement. The exact action selection is written to the installed manifest and enforced at runtime. Turning off P1S does not turn off CPU/RAM, even though they share an executable. Existing placements for disabled actions may show missing/unavailable until re-enabled; no profiles are edited to remove them.
 
 ## Future updates: one updater for both applications
 
@@ -56,8 +56,8 @@ Turning off the auto-update checkbox (then Apply) opts out of automatic synchron
 
 ## Adding the next module in GitHub
 
-1. Add a reviewed package under `streamdock/modules/<id>/package`, with a stable `com.foughtapple.*.sdPlugin` identity and stable action UUIDs. Keep secrets/runtime files out of source. Add its source and tests beside the package.
-2. Add its package/action records to `streamdock/catalog-source.json`. Increment the module's version whenever its code changes. Never reuse a published version for different code. New UUIDs default to Off.
+1. Add the action/worker under `streamdock/modules/`, keep its stable action UUID, and expose it through the unified `taskbartiles` package/bridge. Keep secrets/runtime files out of source and add tests beside the worker or bridge.
+2. Add its action record to the single `taskbartiles` entry in `streamdock/catalog-source.json` and increment the unified package version whenever its shipped code changes. Never reuse a published version for different code. New UUIDs default to Off.
 3. Extend `tools/Build-StreamDock.ps1` for its build command if it uses a new language/backend. Continue enforcing manifest-based runtime allow-listing for individually disabled actions.
 4. Increment `version.txt`, `Program.Version`, `AssemblyInfo`, add a changelog entry and `docs/releases/vX.Y.Z.md`.
 5. Submit a PR and pass the Windows build, synthetic lifecycle tests, manager tests and existing taskbar regressions. Merge; the existing Release workflow creates the installer and checksums. Users receive the catalogue/modules through the next ordinary Taskbar Tiles update.

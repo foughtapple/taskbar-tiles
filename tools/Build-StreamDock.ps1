@@ -28,15 +28,13 @@ function Build-Go([string]$dir,[string]$out) {
     Push-Location $dir
     try { & go test -count=1 -timeout 120s ./...; if ($LASTEXITCODE -ne 0) { throw "Go tests failed: $dir" }; & go build -trimpath -ldflags '-s -w -H=windowsgui' -o $out .; if ($LASTEXITCODE -ne 0) { throw "Go build failed: $dir" } } finally { Pop-Location }
 }
-$catalog = Get-Content (Join-Path $root 'streamdock\catalog-source.json') -Raw | ConvertFrom-Json
-$packages = @()
-foreach ($entry in $catalog.Packages) {
-    $module = Join-Path $source $entry.Id
-    $package = Join-Path $work $entry.Id
+function Build-Worker([string]$id,[string]$package) {
+    $module = Join-Path $source $id
+    if (Test-Path $package) { Remove-Item $package -Recurse -Force }
     New-Item -ItemType Directory -Path $package -Force | Out-Null
     Copy-Item (Join-Path $module 'package\*') $package -Recurse -Force
     New-Item -ItemType Directory -Path (Join-Path $package 'plugin') -Force | Out-Null
-    switch ($entry.Id) {
+    switch ($id) {
       'controls' {
         $src = Join-Path $module 'src'
         $cs = [string[]]@(Get-ChildItem $src -Filter '*.cs' | Where-Object {$_.Name -ne 'ControlsHost.cs'} | ForEach-Object {$_.FullName})
@@ -76,8 +74,24 @@ foreach ($entry in $catalog.Packages) {
         Build-Go (Join-Path $module 'src') $exe
         Run-Checked $exe '--validate' (Split-Path $exe)
       }
-      default {throw "No reviewed build command for $($entry.Id)."}
+      default {throw "No reviewed worker build command for $id."}
     }
+}
+$catalog = Get-Content (Join-Path $root 'streamdock\catalog-source.json') -Raw | ConvertFrom-Json
+$packages = @()
+foreach ($entry in $catalog.Packages) {
+    $module = Join-Path $source $entry.Source
+    $package = Join-Path $work $entry.Id
+    New-Item -ItemType Directory -Path $package -Force | Out-Null
+    Copy-Item (Join-Path $module 'package\*') $package -Recurse -Force
+    if ($entry.Id -ne 'taskbartiles') { throw "Only the unified Taskbar Tiles package may be published." }
+    $workers = Join-Path $package 'workers'; New-Item -ItemType Directory -Path $workers -Force | Out-Null
+    foreach ($id in @('controls','steam','desk','orders')) { Build-Worker $id (Join-Path $workers $id) }
+    & node (Join-Path $package 'plugin\index.js') --validate
+    if ($LASTEXITCODE -ne 0) { throw 'Unified Taskbar Tiles bridge validation failed.' }
+    Push-Location (Join-Path $module 'tests')
+    $previousUnified=$env:UNIFIED_PACKAGE; $env:UNIFIED_PACKAGE=$package
+    try { & node --test; if ($LASTEXITCODE -ne 0) { throw 'Unified bridge tests failed.' } } finally { $env:UNIFIED_PACKAGE=$previousUnified; Pop-Location }
     $m=Get-Content (Join-Path $package 'manifest.json') -Raw | ConvertFrom-Json
     if ($m.Version -ne $entry.Version) {throw "Module version mismatch: $($entry.Id)"}
     $ids=@($m.Actions | ForEach-Object {$_.UUID})
@@ -89,10 +103,10 @@ foreach ($entry in $catalog.Packages) {
     foreach($r in $refs){if([string]::IsNullOrWhiteSpace($r)){continue};if($r -match '(^[\\/]|\.\.|:)'){throw 'Unsafe manifest resource'};if(-not(Test-Path -LiteralPath (Join-Path $package $r) -PathType Leaf)){throw "Missing resource: $($entry.Id)/$r"}}
     $zip=Join-Path $bundle ('packages\'+$entry.Id+'.zip')
     [IO.Compression.ZipFile]::CreateFromDirectory($package,$zip,[IO.Compression.CompressionLevel]::Optimal,$false)
-    $packages += [ordered]@{Id=$entry.Id;Name=$entry.Name;Folder=$entry.Folder;Version=$entry.Version;Payload=('packages/'+$entry.Id+'.zip');SHA256=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant();Actions=@($entry.Actions)}
+    $packages += [ordered]@{Id=$entry.Id;Name=$entry.Name;Folder=$entry.Folder;Version=$entry.Version;Payload=('packages/'+$entry.Id+'.zip');SHA256=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant();LegacyFolders=@($entry.LegacyFolders);LegacyPackageIds=@($entry.LegacyPackageIds);Actions=@($entry.Actions)}
 }
 $version=(Get-Content (Join-Path $root 'version.txt') -Raw).Trim()
 $result=[ordered]@{Schema=1;BundleVersion=$version;Packages=@($packages)}
 [IO.File]::WriteAllText((Join-Path $bundle 'catalog.json'),($result|ConvertTo-Json -Depth 12),$utf8)
 Copy-Item (Join-Path $root 'docs\STREAM-DOCK.md') (Join-Path $bundle 'README.md')
-Write-Host ('Stream Dock bundle ready: '+$packages.Count+' packages; '+(@($catalog.Packages.Actions).Count)+' actions.') -ForegroundColor Green
+Write-Host ('Stream Dock bundle ready: '+$packages.Count+' package; '+(@($catalog.Packages.Actions).Count)+' actions in one Taskbar Tiles category.') -ForegroundColor Green

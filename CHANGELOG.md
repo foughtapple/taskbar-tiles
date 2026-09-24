@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.1
+
+- Consolidate all ten managed Stream Dock actions into one visible **Taskbar Tiles** plugin/category instead of separate repeated FoughtApple sections.
+- Preserve the existing action UUIDs and worker implementations behind a local loopback bridge, so Steam switching, P1S/CPU views, NickNacks polling and desktop controls retain their tested behaviour.
+- Migrate the 0.10.0 managed package state and legacy plugin folders into the unified package on Apply/update; archive the old folders in Taskbar Tiles backups so Stream Dock discovers only one managed category.
+- Keep per-action On/Off choices, external Steam/P1S/NickNacks settings, closed-Stream-Dock update safety, rollback and future unified updates.
+
 ## 0.10.0
 
 - Add optional Settings > Stream Dock package/action management, bundled updates, opt-outs and recoverable backups.

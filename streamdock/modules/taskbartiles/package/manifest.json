@@ -1,0 +1,238 @@
+{
+  "Actions": [
+    {
+      "UUID": "com.foughtapple.controls.rocket",
+      "Name": "Rocket League - Open / Close",
+      "Icon": "workers/controls/images/rocket.png",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "workers/controls/images/rocket.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "workers/controls/inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.controls.overwatch",
+      "Name": "Overwatch - Open / Close",
+      "Icon": "workers/controls/images/overwatch.png",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "workers/controls/images/overwatch.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "workers/controls/inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.controls.screenshot",
+      "Name": "FancyZone Screenshot",
+      "Icon": "workers/controls/images/screenshot.png",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "workers/controls/images/screenshot.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "workers/controls/inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.controls.clipboard",
+      "Name": "Clipboard History",
+      "Icon": "workers/controls/images/clipboard.png",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "workers/controls/images/clipboard.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "workers/controls/inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.controls.voice",
+      "Name": "GPT Voice - Ctrl+Alt+Shift+F",
+      "Icon": "workers/controls/images/voice.png",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "workers/controls/images/voice.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "workers/controls/inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.steamsmarttoggle.toggle",
+      "Icon": "workers/steam/images/steam.svg",
+      "Name": "Steam Smart Switch",
+      "Tooltip": "Current account avatar. Press to switch to the other remembered account; Steam symbol opens Steam.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": false,
+      "UserTitleEnabled": false,
+      "States": [
+        {
+          "Image": "workers/steam/images/steam.svg",
+          "Title": "",
+          "TitleAlignment": "bottom",
+          "FontSize": "10"
+        }
+      ],
+      "Settings": {
+        "firstId": "",
+        "secondId": "",
+        "showName": true,
+        "webAvatars": true
+      },
+      "PropertyInspectorPath": "workers/steam/inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.steamsmarttoggle.play",
+      "Icon": "workers/steam/images/steam.svg",
+      "Name": "Steam Switch + Rocket League",
+      "Tooltip": "Close Rocket League normally, switch account, verify sign-in, launch Rocket League.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": false,
+      "UserTitleEnabled": false,
+      "States": [
+        {
+          "Image": "workers/steam/images/steam.svg",
+          "Title": "SWITCH + RL",
+          "TitleAlignment": "bottom",
+          "FontSize": "10"
+        }
+      ],
+      "Settings": {
+        "firstId": "",
+        "secondId": "",
+        "showName": true,
+        "webAvatars": true
+      },
+      "PropertyInspectorPath": "workers/steam/inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.deskstatus.p1s",
+      "Icon": "workers/desk/images/p1s.png",
+      "Name": "P1S Print Status",
+      "Tooltip": "Local, read-only P1S print progress, remaining time and printer attention states.",
+      "Controllers": [
+        "Information",
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "workers/desk/images/p1s.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": false,
+      "Settings": {
+        "interval": 5
+      },
+      "PropertyInspectorPath": "workers/desk/inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.deskstatus.pc",
+      "Icon": "workers/desk/images/pc.png",
+      "Name": "PC CPU + RAM",
+      "Tooltip": "Lightweight Windows CPU busy time and physical RAM usage.",
+      "Controllers": [
+        "Information",
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "workers/desk/images/pc.png",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "UserTitleEnabled": false,
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": false,
+      "Settings": {
+        "interval": 5
+      },
+      "PropertyInspectorPath": "workers/desk/inspector/index.html"
+    },
+    {
+      "UUID": "com.foughtapple.nicknacksorders.processing",
+      "Name": "NickNacks Orders",
+      "Icon": "workers/orders/images/action.svg",
+      "Controllers": [
+        "Information",
+        "Keypad"
+      ],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "workers/orders/images/action.svg",
+          "Title": "",
+          "ShowTitle": false
+        }
+      ],
+      "PropertyInspectorPath": "workers/orders/inspector/index.html",
+      "Tooltip": "Read-only Processing count. Checks every five minutes while visible."
+    }
+  ],
+  "SDKVersion": 1,
+  "Author": "Taskbar Tiles / FoughtApple",
+  "Name": "Taskbar Tiles",
+  "Description": "Unified Taskbar Tiles controls and status views.",
+  "Category": "Taskbar Tiles",
+  "CategoryIcon": "images/taskbar.svg",
+  "Icon": "images/taskbar.svg",
+  "Version": "1.0.0",
+  "CodePath": "plugin/index.js",
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "3.10.188.226"
+  },
+  "Nodejs": {
+    "Version": "20"
+  }
+}

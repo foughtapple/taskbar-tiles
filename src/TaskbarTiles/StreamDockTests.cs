@@ -96,11 +96,27 @@ namespace TaskbarTiles
                 Check(File.ReadAllText(Path.Combine(live, "local-settings.json")) == "synthetic user settings", "interrupted recovery retains private settings");
                 Check(Convert.ToString(DockManager.Manifest(live)["Version"]) == "1.3.0", "recovered package upgraded on retry");
                 Check(!File.Exists(Path.Combine(state,"pending-package.json")), "journal cleared after commit");
+                // Consolidating old package folders into one new plugin preserves choices and archives the legacy folder.
+                string migrateRoot = Path.Combine(tmp, "migration"), migrateBundle = Path.Combine(migrateRoot, "bundle"), migratePlugins = Path.Combine(migrateRoot, "plugins"), migrateState = Path.Combine(migrateRoot, "state");
+                var mc = Fixture(migrateBundle, "2.0.0", false);
+                mc.Packages[0].LegacyFolders = new[] { "com.foughtapple.oldtest.sdPlugin" }; mc.Packages[0].LegacyPackageIds = new[] { "oldtest" };
+                DockManager.AtomicText(Path.Combine(migrateBundle, "catalog.json"), DockManager.Encode(mc));
+                string legacy = Path.Combine(migratePlugins, "com.foughtapple.oldtest.sdPlugin"); Directory.CreateDirectory(legacy);
+                DockManager.AtomicText(Path.Combine(legacy, "manifest.json"), DockManager.Encode(new { Version = "1.0.0", Actions = new[] { new { UUID = a, Name = "A" } } }));
+                Directory.CreateDirectory(migrateState); DockManager.AtomicText(Path.Combine(migrateState, "state.json"), DockManager.Encode(new DockState { EnabledActions = new[] { a }, ManagedPackages = new[] { "oldtest" } }));
+                var mm = new DockManager(migrateBundle, migratePlugins, migrateState, () => "");
+                Check(mm.State(false).ManagedPackages.SequenceEqual(new[] { "demo" }), "legacy package ownership maps to unified package");
+                Check(mm.Rows().Single(x => x.Action.Id == a).Status.Contains("consolidate"), "legacy action is shown as ready to consolidate");
+                mm.Apply(mm.State(false), true, false);
+                Check(!Directory.Exists(legacy), "legacy plugin folder removed from Stream Dock discovery");
+                Check(Directory.Exists(Path.Combine(migratePlugins, mc.Packages[0].Folder)), "unified package installed during automatic update");
+                Check(DockManager.ManifestActions(Path.Combine(migratePlugins, mc.Packages[0].Folder)).SetEquals(new[] { a }), "legacy enabled action remains enabled after consolidation");
+                Check(Directory.GetDirectories(Path.Combine(migrateState, "Backups"), "legacy-*", SearchOption.AllDirectories).Length >= 1, "legacy package archived in backup");
                 // Validate every actual packaged resource without touching installed plugins.
                 var realBundle = Path.Combine(Program.Home,"streamdock");
                 if (File.Exists(Path.Combine(realBundle,"catalog.json"))) {
                     var real = new DockManager(realBundle,Path.Combine(tmp,"real-plugins"),Path.Combine(tmp,"real-state"),()=>"");
-                    Check(real.Catalog.Packages.Length == 4, "four final module packages included");
+                    Check(real.Catalog.Packages.Length == 1, "one unified Taskbar Tiles plugin package included");
                     Check(real.Catalog.Packages.Sum(x=>x.Actions.Length) == 10, "ten independent actions included");
                     foreach (var pack in real.Catalog.Packages) {
                         string stage = Path.Combine(tmp,"validate-"+pack.Id); Directory.CreateDirectory(stage); real.Unpack(pack,stage);

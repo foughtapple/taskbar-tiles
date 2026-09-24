@@ -1,0 +1,2 @@
+Taskbar Tiles unified Stream Dock plugin.
+The single visible plugin bridges Stream Dock to the existing tested controls, Steam, desk-status and NickNacks workers bundled beneath workers/. This keeps one Stream Dock category while retaining the original action UUIDs and worker behaviour.
