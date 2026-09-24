@@ -13,10 +13,24 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Snapshot exact integration baseline
-        run: git archive --format=zip --output=taskbar-source.zip HEAD
+      - name: Recover staged source and snapshot
+        run: |
+          python3 - <<'PY'
+          import base64,lzma,pathlib,tarfile,io,zipfile
+          parts=sorted(pathlib.Path('preparation/streamdock-import').glob('*.txt'))
+          data=base64.b64decode(''.join(p.read_text().strip() for p in parts))
+          d=lzma.LZMADecompressor(); raw=d.decompress(data)
+          print('Partial stream bytes',len(raw),raw[:100])
+          pathlib.Path('partial-import.tar').write_bytes(raw)
+          with zipfile.ZipFile('recovery.zip','w',zipfile.ZIP_DEFLATED) as z:
+            z.write('partial-import.tar')
+            for p in parts:z.write(p)
+          PY
+          git archive --format=zip --output=taskbar-source.zip HEAD
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: taskbar-integration-source
-          path: taskbar-source.zip
+          name: taskbar-integration-recovery
+          path: |
+            taskbar-source.zip
+            recovery.zip
           retention-days: 1
