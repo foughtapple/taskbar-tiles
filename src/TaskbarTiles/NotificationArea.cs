@@ -155,9 +155,7 @@ namespace TaskbarTiles
                 object pattern;
                 if(element.TryGetCurrentPattern(InvokePattern.Pattern,out pattern))
                 { ((InvokePattern)pattern).Invoke(); return null; }
-                if(element.TryGetCurrentPattern(LegacyIAccessiblePattern.Pattern,out pattern))
-                { ((LegacyIAccessiblePattern)pattern).DoDefaultAction(); return null; }
-                return "Windows does not expose a default action for this notification item.";
+                return "Windows does not expose an Invoke action for this notification item.";
             }
             catch(ElementNotAvailableException) { return "That notification item changed. Reopen Taskbar Tiles and try again."; }
             catch(Exception ex) { return "Could not run the notification item action: "+ex.Message; }
@@ -171,8 +169,8 @@ namespace TaskbarTiles
                 if(!focused)
                 {
                     object pattern;
-                    if(element.TryGetCurrentPattern(LegacyIAccessiblePattern.Pattern,out pattern))
-                    { ((LegacyIAccessiblePattern)pattern).Select(1); focused=true; }
+                    if(element.TryGetCurrentPattern(SelectionItemPattern.Pattern,out pattern))
+                    { ((SelectionItemPattern)pattern).Select(); focused=true; }
                 }
                 if(!focused) return "Windows does not expose keyboard focus for this notification item.";
                 Thread.Sleep(80);
@@ -192,12 +190,12 @@ namespace TaskbarTiles
         volatile bool disposed;
         internal NotificationIconWorker()
         {
-            var thread=new Thread(delegate
+            var thread=new Thread(new ThreadStart(delegate
             {
                 foreach(var job in jobs.GetConsumingEnumerable())
                     try { job(); } catch(Exception ex) { Program.Log("Notification icon worker: "+ex.GetType().Name); }
                 foreach(var image in cache.Values) if(image!=null) image.Dispose();
-            });
+            }));
             thread.IsBackground=true; thread.Name="Notification area icon reader"; thread.SetApartmentState(ApartmentState.STA); thread.Start();
         }
         internal void Resolve(List<NotificationItem> items,Action done)
@@ -248,11 +246,11 @@ namespace TaskbarTiles
         volatile bool disposed;
         internal NotificationAreaReader()
         {
-            var thread=new Thread(delegate
+            var thread=new Thread(new ThreadStart(delegate
             {
                 foreach(var job in jobs.GetConsumingEnumerable())
                     try { job(); } catch(Exception ex) { Program.Log("Notification area worker: "+ex); }
-            });
+            }));
             thread.IsBackground=true; thread.Name="Notification area accessibility reader"; thread.SetApartmentState(ApartmentState.MTA); thread.Start();
         }
         static List<IntPtr> Roots()
