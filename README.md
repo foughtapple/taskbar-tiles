@@ -91,7 +91,7 @@ GitHub Actions compiles/tests pull requests and builds a normal installer for a 
 
 Taskbar Tiles can mirror Windows notification-area (system-tray) items in a compact, single row between **Taskbar apps** and the footer. It is independent of Windows taskbar auto-hide. Icon size and spacing are adjustable under **Settings > Appearance**, and extra items page horizontally instead of creating another row.
 
-Left-click asks the real Explorer notification item to perform its normal/default action. Right-click opens a small Taskbar Tiles menu with **Open/default action**, **Open native tray menu**, **Copy name**, **Windows taskbar settings**, and **Refresh notification area**. Native tray menus are best-effort because Windows/app providers differ; Taskbar Tiles does not scrape Explorer memory, read notification contents, force the hidden taskbar open, or click hidden coordinates. Icons are resolved locally from strong installed-app name matches when possible; unresolved items use a neutral initials tile.
+Left-click asks the real Explorer notification item to perform its normal/default action. Right-click opens a small Taskbar Tiles menu with **Open/default action**, **Copy name**, **Windows taskbar settings**, and **Refresh notification area**. Taskbar Tiles does not scrape Explorer memory, read notification contents, force the hidden taskbar open, or click hidden coordinates. Icons are resolved locally from strong installed-app name matches when possible; unresolved items use a neutral initials tile.
 
 ## Tray-hidden application reopening
 

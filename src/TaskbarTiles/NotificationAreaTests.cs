@@ -1,5 +1,5 @@
 // Notification-area geometry/policy checks plus a disposable Windows accessibility fixture.
-// The fixture tests default Invoke and keyboard context-menu routing; it does not inspect
+// The fixture tests default Invoke routing; it does not inspect
 // or activate the runner's real notification area.
 using System;
 using System.Diagnostics;
@@ -52,26 +52,24 @@ namespace TaskbarTiles
 
         internal static int Fixture(string[] args)
         {
-            if(args.Length<4)return 2;
-            EventWaitHandle ready=null,invoked=null,context=null;
+            if(args.Length<3)return 2;
+            EventWaitHandle ready=null,invoked=null;
             try
             {
-                ready=EventWaitHandle.OpenExisting(args[1]); invoked=EventWaitHandle.OpenExisting(args[2]); context=EventWaitHandle.OpenExisting(args[3]);
+                ready=EventWaitHandle.OpenExisting(args[1]); invoked=EventWaitHandle.OpenExisting(args[2]);
                 Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
                 using(var form=new Form{Text="Taskbar Tiles notification action fixture",Width=420,Height=220,StartPosition=FormStartPosition.CenterScreen})
-                using(var menu=new ContextMenuStrip())
                 {
                     var button=new Button{Text="Fixture tray item",Name="FixtureTrayItem",Width=220,Height=60,Left=90,Top=60};
                     button.Click+=delegate{invoked.Set();};
-                    menu.Items.Add("Fixture action"); menu.Opened+=delegate{context.Set();};
-                    button.ContextMenuStrip=menu; form.Controls.Add(button);
+                    form.Controls.Add(button);
                     form.Shown+=delegate{button.Focus();ready.Set();};
                     Application.Run(form);
                 }
                 return 0;
             }
             catch{return 3;}
-            finally{if(ready!=null)ready.Dispose();if(invoked!=null)invoked.Dispose();if(context!=null)context.Dispose();}
+            finally{if(ready!=null)ready.Dispose();if(invoked!=null)invoked.Dispose();}
         }
 
         internal static int RunNative()
@@ -83,13 +81,11 @@ namespace TaskbarTiles
                 string token=Guid.NewGuid().ToString("N");
                 string readyName="Local\\TaskbarTiles.NotificationReady."+token;
                 string invokedName="Local\\TaskbarTiles.NotificationInvoke."+token;
-                string contextName="Local\\TaskbarTiles.NotificationContext."+token;
                 using(var ready=new EventWaitHandle(false,EventResetMode.ManualReset,readyName))
                 using(var invoked=new EventWaitHandle(false,EventResetMode.AutoReset,invokedName))
-                using(var context=new EventWaitHandle(false,EventResetMode.AutoReset,contextName))
                 using(var process=Process.Start(new ProcessStartInfo{
                     FileName=Application.ExecutablePath,
-                    Arguments="--test-notification-target "+readyName+" "+invokedName+" "+contextName,
+                    Arguments="--test-notification-target "+readyName+" "+invokedName,
                     UseShellExecute=false,WorkingDirectory=Program.Home}))
                 {
                     Require(process!=null&&ready.WaitOne(10000),"fixture became ready");
@@ -106,12 +102,10 @@ namespace TaskbarTiles
                     Require(button!=null,"fixture action element found through UI Automation");
                     string error=NotificationAreaAction.InvokeDefault(button);
                     Require(error==null&&invoked.WaitOne(5000),"default notification action invoked cross-process");
-                    error=NotificationAreaAction.OpenNativeMenu(button);
-                    Require(error==null&&context.WaitOne(5000),"keyboard native context-menu route opened fixture menu");
                     try{if(!process.HasExited)process.Kill();}catch{}
                     process.WaitForExit(5000);
                 }
-                log.AppendLine("PASS: disposable cross-process Invoke and context-menu routing. The real Windows tray was not touched.");
+                log.AppendLine("PASS: disposable cross-process Invoke routing. The real Windows tray was not touched.");
                 File.WriteAllText(Path.Combine(Program.Home,"notification-area-test.log"),log.ToString());
                 return 0;
             }

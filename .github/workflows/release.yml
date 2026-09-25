@@ -95,7 +95,7 @@ jobs:
             streamdock_manager_tests = 'passed: checksums, archive paths, action choices, opt-out, busy host refusal, rollback, private settings and real settings-page painting'
             streamdock_installer_tests = 'passed: actual Setup upgrade synchronises enabled modules, preserves private settings, keeps disabled actions off and leaves unrelated plugins untouched'
             app_reopen_tests = 'passed: native default actions and out-of-process hidden-window fixture; actual Steam client not exercised'
-            notification_area_tests = 'passed: compact row geometry/policy plus cross-process Invoke and context-menu-key fixture; personalised Windows notification area not tested'
+            notification_area_tests = 'passed: compact row geometry/policy plus cross-process Invoke fixture; personalised Windows notification area not tested'
             launcher_experience_tests = 'passed: offscreen policy, search, geometry, recent-history persistence and real Forms painting'
             native_clickaway_tests = 'passed on disposable nonactivating windows'
             touch_shortcut_tests = 'passed: policy, listener lifecycle and recovery; no hardware compatibility claim'

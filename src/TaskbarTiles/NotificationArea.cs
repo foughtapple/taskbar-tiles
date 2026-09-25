@@ -128,24 +128,6 @@ namespace TaskbarTiles
         }
     }
 
-    static class NotificationAreaInput
-    {
-        [StructLayout(LayoutKind.Sequential)] struct KEYBDINPUT { internal ushort vk,scan; internal uint flags,time; internal UIntPtr extra; }
-        [StructLayout(LayoutKind.Explicit)] struct UNION { [FieldOffset(0)] internal KEYBDINPUT key; }
-        [StructLayout(LayoutKind.Sequential)] struct INPUT { internal uint type; internal UNION data; }
-        [DllImport("user32.dll",SetLastError=true)] static extern uint SendInput(uint count,INPUT[] input,int size);
-        static INPUT Key(ushort key,bool up)
-        { return new INPUT{type=1,data=new UNION{key=new KEYBDINPUT{vk=key,flags=up?2u:0u}}}; }
-        internal static void ContextMenuKey()
-        {
-            if(Native.LaunchModifiersDown()||Native.Down(0x10)||Native.Down(0x5D))
-                throw new InvalidOperationException("Release keyboard modifiers before opening the native tray menu.");
-            var input=new[]{Key(0x5D,false),Key(0x5D,true)};
-            if(SendInput((uint)input.Length,input,Marshal.SizeOf(typeof(INPUT)))!=input.Length)
-                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(),"Windows rejected the context-menu key.");
-        }
-    }
-
     static class NotificationAreaAction
     {
         internal static string InvokeDefault(AutomationElement element)
@@ -160,26 +142,7 @@ namespace TaskbarTiles
             catch(ElementNotAvailableException) { return "That notification item changed. Reopen Taskbar Tiles and try again."; }
             catch(Exception ex) { return "Could not run the notification item action: "+ex.Message; }
         }
-        internal static string OpenNativeMenu(AutomationElement element)
-        {
-            try
-            {
-                bool focused=false;
-                try { element.SetFocus(); focused=true; } catch { }
-                if(!focused)
-                {
-                    object pattern;
-                    if(element.TryGetCurrentPattern(SelectionItemPattern.Pattern,out pattern))
-                    { ((SelectionItemPattern)pattern).Select(); focused=true; }
-                }
-                if(!focused) return "Windows does not expose keyboard focus for this notification item.";
-                Thread.Sleep(80);
-                NotificationAreaInput.ContextMenuKey();
-                return null;
-            }
-            catch(ElementNotAvailableException) { return "That notification item changed. Reopen Taskbar Tiles and try again."; }
-            catch(Exception ex) { return "Could not open the native tray menu: "+ex.Message; }
-        }
+
     }
 
     sealed class NotificationIconWorker : IDisposable
@@ -324,14 +287,14 @@ namespace TaskbarTiles
                 icons.Resolve(list,delegate{completed(list,status);});
             });
         }
-        internal void Act(NotificationItem item,bool nativeMenu,Action<string> completed)
+        internal void Act(NotificationItem item,Action<string> completed)
         {
             if(disposed||jobs.IsAddingCompleted){completed("Notification-area reader is not available.");return;}
             jobs.Add(delegate
             {
                 var element=Find(item);
                 if(element==null){completed("That notification item is no longer available. Refresh and try again.");return;}
-                completed(nativeMenu?NotificationAreaAction.OpenNativeMenu(element):NotificationAreaAction.InvokeDefault(element));
+                completed(NotificationAreaAction.InvokeDefault(element));
             });
         }
         public void Dispose()
@@ -435,13 +398,13 @@ namespace TaskbarTiles
         {
             if(hit==-19||hit==-20)return hit==-19?"Previous notification items":"Next notification items";
             var item=NotificationAtHit(hit);
-            return item==null?"":item.Name+"\nLeft-click: normal tray action · Right-click: actions and native tray menu";
+            return item==null?"":item.Name+"\nLeft-click: normal tray action · Right-click: item actions";
         }
-        void InvokeNotification(NotificationItem item,bool nativeMenu)
+        void InvokeNotification(NotificationItem item)
         {
             if(item==null||notificationReader==null)return;
             Dismiss();
-            notificationReader.Act(item,nativeMenu,delegate(string error)
+            notificationReader.Act(item,delegate(string error)
             { if(error!=null)Post(delegate{Notify(error);}); });
         }
         void ShowNotificationActions(NotificationItem item,Point clientPoint)
@@ -449,10 +412,10 @@ namespace TaskbarTiles
             if(item==null)return;
             if(notificationMenu!=null){notificationMenu.Close();notificationMenu.Dispose();}
             var menu=new ContextMenuStrip();
-            var open=menu.Items.Add("Open / default action"); open.Click+=delegate{InvokeNotification(item,false);};
-            var native=menu.Items.Add("Open native tray menu"); native.Click+=delegate{InvokeNotification(item,true);};
+            var open=menu.Items.Add("Open / default action"); open.Click+=delegate{InvokeNotification(item);};
             menu.Items.Add(new ToolStripSeparator());
             var copy=menu.Items.Add("Copy name"); copy.Click+=delegate{try{Clipboard.SetText(item.Name);}catch{}};
+            var appearance=menu.Items.Add("Taskbar Tiles appearance settings"); appearance.Click+=delegate{Dismiss();ShowSettings();};
             var settings=menu.Items.Add("Windows taskbar settings"); settings.Click+=delegate
             { Dismiss();try{Process.Start("ms-settings:taskbar");}catch(Exception ex){Notify(ex.Message);} };
             menu.Items.Add(new ToolStripSeparator());
