@@ -12,7 +12,7 @@ namespace TaskbarTiles
 {
     sealed class Options
     {
-        public int ConfigVersion = 8;
+        public int ConfigVersion = 9;
         public bool TouchSupportEnabled = false;
         public int TouchReturnDelayMs = 1000, PenReturnDelayMs = 2000, TouchReturnAction = 0;
         public bool TouchWaitForHover = true, TouchTypingCancels = true, TouchPauseForMenus = true;
@@ -41,6 +41,9 @@ namespace TaskbarTiles
         public int SearchVisibleRows = 7;
         public int SearchRowHeight = 54;
         public int AppRows = 2;
+        public bool ShowNotificationArea = true;
+        public int NotificationIconSize = 26;
+        public int NotificationIconSpacing = 8;
         public bool InterceptAltTab = true;
         public bool StickyAltTab = true;
         public bool ShowCloseButtons = true;
@@ -97,7 +100,8 @@ namespace TaskbarTiles
             { "WindowTitleIconSize", new[] { 12, 64 } },
             { "SearchButtonWidth", new[] { 200, 900 } }, { "RecentAppsLimit", new[] { 1, 10 } },
             { "SearchPanelWidth", new[] { 420, 1400 } }, { "SearchVisibleRows", new[] { 3, 12 } },
-            { "SearchRowHeight", new[] { 40, 84 } }, { "AppRows", new[] { 1, 3 } }, { "BasicLayout", new[] { 0, 2 } },
+            { "SearchRowHeight", new[] { 40, 84 } }, { "AppRows", new[] { 1, 3 } },
+            { "NotificationIconSize", new[] { 16, 48 } }, { "NotificationIconSpacing", new[] { 2, 24 } }, { "BasicLayout", new[] { 0, 2 } },
             { "PickerWidth", new[] { 640, 2200 } }, { "PickerHeight", new[] { 420, 1200 } },
             { "FullScreenButtonHeight", new[] { 36, 100 } }, { "FullScreenButtonMinWidth", new[] { 150, 400 } },
             { "ZoneLabelSize", new[] { 10, 28 } }, { "ZoneInset", new[] { 0, 60 } },
@@ -139,7 +143,7 @@ namespace TaskbarTiles
             // Translate former Auto (0) once; preserve explicitly selected column/row limits.
             if (o.WindowColumns == 0 || (!sawColumns && o.ConfigVersion < 6))
                 o.WindowColumns = Math.Max(1, Math.Min(12, (Math.Max(760, Math.Min(3600, o.MaxPanelWidth)) - 32) / (280 * Math.Max(70, Math.Min(220, o.PreviewScale)) / 100 + 12)));
-            o.ConfigVersion = Math.Max(8, o.ConfigVersion);
+            o.ConfigVersion = Math.Max(9, o.ConfigVersion);
             o.Validate(); return o;
         }
         internal static Options Load() { return File.Exists(FilePath) ? Parse(File.ReadAllLines(FilePath)) : new Options(); }
@@ -194,7 +198,7 @@ namespace TaskbarTiles
             // Replace our historical forced-new default once; never change an app's
             // configuration or a user's explicit shortcut command-line arguments.
             if (StoredVersion(lines) < 8) o.TerminalNewWindow = false;
-            o.ConfigVersion = Math.Max(8, o.ConfigVersion); return o;
+            o.ConfigVersion = Math.Max(9, o.ConfigVersion); return o;
         }
         internal static void Migrate()
         {
@@ -290,6 +294,10 @@ namespace TaskbarTiles
             appearance.Controls.Add(pageCapacityLabel);
             HintTree(pageCapacityLabel, "Calculated from maximum columns x maximum rows, not a separate setting. The live preview reports the effective limit when the chosen sizes cannot fit this monitor.");
             Number(appearance, "AppRows", "Maximum app rows", "Balances tiles across rows rather than leaving one tile on its own.", 1, 3, 1);
+            Section(appearance, "Notification area row", "Mirror the Windows notification area in one compact row between Taskbar apps and the footer. It is independent of taskbar auto-hide.");
+            Check(appearance, "ShowNotificationArea", "Show notification-area icons in the main menu");
+            Number(appearance, "NotificationIconSize", "Notification icon size", "Logical pixels. Default: 26. Ctrl+mouse-wheel over the notification row adjusts this quickly.", 16, 48, 2);
+            Number(appearance, "NotificationIconSpacing", "Notification icon spacing", "Gap between compact notification icons. Extra icons use pages while staying on one row.", 2, 24, 2);
             Check(appearance, "ShowAppLabels", "Show app names under icons");
             Check(appearance, "ShowLivePreviews", "Show live window previews");
             Check(appearance, "ShowMonitorBadges", "Show each window's monitor number");

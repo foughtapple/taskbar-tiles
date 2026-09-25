@@ -32,6 +32,9 @@ jobs:
       - name: Test native default action and hidden app reopening
         shell: powershell
         run: ./tools/Test-AppReopen.ps1
+      - name: Test notification-area mirror actions
+        shell: powershell
+        run: ./tools/Test-NotificationArea.ps1
       - name: Test auto-hide inventory search and recent apps
         shell: powershell
         run: ./tools/Test-LauncherExperience.ps1
