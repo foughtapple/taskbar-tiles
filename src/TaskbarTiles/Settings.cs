@@ -41,6 +41,9 @@ namespace TaskbarTiles
         public int SearchVisibleRows = 7;
         public int SearchRowHeight = 54;
         public int AppRows = 2;
+        public bool ShowNotificationArea = true;
+        public int NotificationIconSize = 26;
+        public int NotificationIconSpacing = 8;
         public bool InterceptAltTab = true;
         public bool StickyAltTab = true;
         public bool ShowCloseButtons = true;
@@ -97,7 +100,8 @@ namespace TaskbarTiles
             { "WindowTitleIconSize", new[] { 12, 64 } },
             { "SearchButtonWidth", new[] { 200, 900 } }, { "RecentAppsLimit", new[] { 1, 10 } },
             { "SearchPanelWidth", new[] { 420, 1400 } }, { "SearchVisibleRows", new[] { 3, 12 } },
-            { "SearchRowHeight", new[] { 40, 84 } }, { "AppRows", new[] { 1, 3 } }, { "BasicLayout", new[] { 0, 2 } },
+            { "SearchRowHeight", new[] { 40, 84 } }, { "AppRows", new[] { 1, 3 } },
+            { "NotificationIconSize", new[] { 16, 48 } }, { "NotificationIconSpacing", new[] { 2, 24 } }, { "BasicLayout", new[] { 0, 2 } },
             { "PickerWidth", new[] { 640, 2200 } }, { "PickerHeight", new[] { 420, 1200 } },
             { "FullScreenButtonHeight", new[] { 36, 100 } }, { "FullScreenButtonMinWidth", new[] { 150, 400 } },
             { "ZoneLabelSize", new[] { 10, 28 } }, { "ZoneInset", new[] { 0, 60 } },
@@ -290,6 +294,10 @@ namespace TaskbarTiles
             appearance.Controls.Add(pageCapacityLabel);
             HintTree(pageCapacityLabel, "Calculated from maximum columns x maximum rows, not a separate setting. The live preview reports the effective limit when the chosen sizes cannot fit this monitor.");
             Number(appearance, "AppRows", "Maximum app rows", "Balances tiles across rows rather than leaving one tile on its own.", 1, 3, 1);
+            Section(appearance, "Notification area row", "Mirror the Windows notification area in one compact row between Taskbar apps and the footer. It is independent of taskbar auto-hide.");
+            Check(appearance, "ShowNotificationArea", "Show notification-area icons in the main menu");
+            Number(appearance, "NotificationIconSize", "Notification icon size", "Logical pixels. Default: 26. Ctrl+mouse-wheel over the notification row adjusts this quickly.", 16, 48, 2);
+            Number(appearance, "NotificationIconSpacing", "Notification icon spacing", "Gap between compact notification icons. Extra icons use pages while staying on one row.", 2, 24, 2);
             Check(appearance, "ShowAppLabels", "Show app names under icons");
             Check(appearance, "ShowLivePreviews", "Show live window previews");
             Check(appearance, "ShowMonitorBadges", "Show each window's monitor number");

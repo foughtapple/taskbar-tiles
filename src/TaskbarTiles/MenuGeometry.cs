@@ -54,7 +54,7 @@ namespace TaskbarTiles
         internal static int Ceiling(int n, int d) { return Math.Max(1, (Math.Max(0, n) + Math.Max(1, d) - 1) / Math.Max(1, d)); }
         internal static float ScaleFor(Options o, Size work, float requested)
         {
-            int overhead = (o.EnableSearch ? 98 : 56) + 22 + 42 + 54 + (QuickAccessLayout.Enabled(o) ? o.FooterButtonHeight + 16 : 0);
+            int overhead = (o.EnableSearch ? 98 : 56) + 22 + 42 + 54 + NotificationAreaMetrics.LogicalHeight(o) + (QuickAccessLayout.Enabled(o) ? o.FooterButtonHeight + 16 : 0);
             int minimumHeight = overhead + MenuTextMetrics.MinimumCard(o) + MenuTextMetrics.MinimumTile(o) + 44;
             return Math.Max(.35f, Math.Min(requested, Math.Min(work.Width / 520f, work.Height / (float)minimumHeight)));
         }
@@ -70,7 +70,7 @@ namespace TaskbarTiles
             if (g.CardHeight > desiredCH) notes.Add("Card height expanded to fit the window-title text and icon");
             if (g.Tile > s(o.TileSize)) notes.Add("App tiles expanded to keep the requested label size readable");
             g.Header = s(o.EnableSearch ? 98 : 56);
-            g.Overhead = g.Header + s(22) + s(42) + s(54) + (QuickAccessLayout.Enabled(o) ? s(o.FooterButtonHeight + 16) : 0);
+            g.Overhead = g.Header + s(22) + s(42) + s(54) + s(NotificationAreaMetrics.LogicalHeight(o)) + (QuickAccessLayout.Enabled(o) ? s(o.FooterButtonHeight + 16) : 0);
             int fitColumns = Math.Max(1, (maxW - 2 * pad + gap) / (g.CardWidth + gap));
             g.Columns = Math.Max(1, Math.Min(o.WindowColumns, fitColumns));
             // Capacity is independent of the number of windows on the current page.

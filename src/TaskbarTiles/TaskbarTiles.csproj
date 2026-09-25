@@ -52,6 +52,8 @@
     <Compile Include="LaunchResolutionTests.cs" />
     <Compile Include="LaunchReliabilityTests.cs" />
     <Compile Include="LauncherTests.cs" />
+    <Compile Include="NotificationArea.cs" />
+    <Compile Include="NotificationAreaTests.cs" />
     <Compile Include="LayoutRegressionTests.cs" />
     <Compile Include="MenuGeometry.cs" />
     <Compile Include="Navigation.cs" />

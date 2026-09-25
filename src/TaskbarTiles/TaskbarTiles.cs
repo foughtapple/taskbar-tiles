@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.10.1";
+        internal const string Version = "0.11.0";
         static bool SignalToggle()
         {
             try
@@ -72,6 +72,8 @@ namespace TaskbarTiles
             if (args.Contains("--test-launcher-experience")) { Environment.Exit(LauncherExperienceTests.RunNative()); return; }
             if (args.Contains("--test-reopen-target")) { Environment.Exit(AppReopenTests.Fixture(args)); return; }
             if (args.Contains("--test-app-reopen")) { Environment.Exit(AppReopenTests.RunNative()); return; }
+            if (args.Contains("--test-notification-target")) { Environment.Exit(NotificationAreaTests.Fixture(args)); return; }
+            if (args.Contains("--test-notification-area")) { Environment.Exit(NotificationAreaTests.RunNative()); return; }
             if (args.Contains("--sync-streamdock")) { Environment.Exit(DockManager.SyncInstalled(false)); return; }
             if (args.Contains("--streamdock-ready")) { Environment.Exit(DockManager.SyncInstalled(true)); return; }
             if (args.Contains("--test-streamdock")) { Environment.Exit(StreamDockTests.Run()); return; }
@@ -851,7 +853,7 @@ namespace TaskbarTiles
             SetupFeatures(); SetupQuickAccess(); SetupFullscreen(); SetupActivation();
             switcherLayer = new SwitcherLayer(this, delegate
             { return !closing && transient == null && activation == null && !fullscreenOpening; });
-            SetupOutsideDismissal(); SetupShortcutRecovery(); SetupTouchSupport(); SetupRecentApps();
+            SetupOutsideDismissal(); SetupShortcutRecovery(); SetupTouchSupport(); SetupRecentApps(); SetupNotificationArea();
             RefreshApps();
         }
         protected override CreateParams CreateParams
@@ -894,6 +896,7 @@ namespace TaskbarTiles
                 hook.Enabled = options.InterceptAltTab; interceptItem.Checked = hook.Enabled;
                 if (touchService != null) touchService.Configure(options);
                 if (recentApps != null) recentApps.Configure(options);
+                if (notificationReader != null) RefreshNotificationArea();
                 ApplyFilter(false);
             }
             catch (Exception ex) { Program.Log("Settings: " + ex.Message); }
@@ -998,6 +1001,7 @@ namespace TaskbarTiles
             finally { suppressDeactivate = false; }
             UpdateThumbnails();
             RefreshApps();
+            RefreshNotificationArea();
         }
         List<WindowItem> GetWindows()
         {
@@ -1074,6 +1078,7 @@ namespace TaskbarTiles
                 tileRects.Add(new Rectangle(x + i % tileColumns * (tile + gap), appTop + S(42) + row * (tile + gap), tile, tile));
             }
             footerTop = height - S(40) - QuickAccessExtra;
+            LayoutNotificationArea(width, footerTop, pad);
             sizeDown = new Rectangle(width - pad - S(64), footerTop, S(28), S(28));
             sizeUp = new Rectangle(width - pad - S(28), footerTop, S(28), S(28));
             previewDown = new Rectangle(width - pad - S(284), footerTop, S(28), S(28));
@@ -1217,6 +1222,7 @@ namespace TaskbarTiles
                 if (options.ShowAppLabels) TextRenderer.DrawText(g, app.DisplayName, tileFont, label, light, flags);
             }
             if (apps.Count == 0) Label(g, string.IsNullOrEmpty(Query) ? taskbarStatus : "No matching apps", new Rectangle(S(22), appTop + S(42), Width - S(44), S(72)), false, muted, true);
+            PaintNotificationArea(g, light, muted, accent);
             paintPhase = "footer";
             PaintQuickAccess(g);
             Label(g, options.RightClickZones ? "Left-click: choose   /   Right-click: place   /   Esc: back" : "Click to choose   /   Esc to close", new Rectangle(S(22), footerTop, Width - S(options.QuickSizeButtons ? 490 : 44), S(28)), false, muted, false);
@@ -1233,6 +1239,7 @@ namespace TaskbarTiles
         {
             if (pageInfoRect.Contains(p)) return -17;
             int quick = HitQuickAccess(p); if (quick != -100) return quick;
+            int notification = HitNotificationArea(p); if (notification != -100) return notification;
             if (closeRect.Contains(p)) return -1;
             if (gearRect.Contains(p)) return -8;
             if (options.EnableUndoMove && mover.HasUndo && undoRect.Contains(p)) return -11;
@@ -1260,6 +1267,7 @@ namespace TaskbarTiles
             lastMouseHit = hit;
             string text = "";
             if (hit == -17) text = menuGeometry == null ? "" : menuGeometry.Summary(options) + "\nAdjust this in Settings > Appearance > Open-window pages.";
+            else if (hit >= 3000) text = NotificationTip(hit);
             else if (hit >= 2000) text = "Close " + windows[windowPage * perWindowPage + hit - 2000].Title;
             else if (hit >= 1000) text = apps[appPage * perAppPage + hit - 1000].DisplayName + "\nLeft-click: open another. Right-click: choose a screen or zone.";
             else if (hit >= 0) text = windows[windowPage * perWindowPage + hit].Title + "\nRight-click to choose a screen or zone.";
@@ -1269,6 +1277,7 @@ namespace TaskbarTiles
             else if (hit == -9) text = "Smaller open-window previews";
             else if (hit == -10) text = "Larger open-window previews";
             else if (hit == -11) text = "Undo last window move";
+            else if (hit == -19 || hit == -20) text = NotificationTip(hit);
             if ((hit <= -12 && hit >= -16) || hit == -18) text = QuickAccessTip(hit);
             tip.SetToolTip(this, text); Invalidate();
         }
@@ -1287,6 +1296,7 @@ namespace TaskbarTiles
             { CloseWindowCard(hit); return; }
             if (e.Button == MouseButtons.Right)
             {
+                if (hit >= 3000) { ShowNotificationActions(NotificationAtHit(hit), e.Location); return; }
                 if (!options.RightClickZones) return;
                 if (hit >= 2000) ChooseZone(windows[windowPage * perWindowPage + hit - 2000], null);
                 else if (hit >= 1000) ChooseZone(null, apps[appPage * perAppPage + hit - 1000]);
@@ -1294,6 +1304,12 @@ namespace TaskbarTiles
                 return;
             }
             if (e.Button != MouseButtons.Left) return;
+            if (hit >= 3000) { InvokeNotification(NotificationAtHit(hit)); return; }
+            if (hit == -19 || hit == -20)
+            {
+                int pages = Math.Max(1, (notificationItems.Count + notificationPerPage - 1) / notificationPerPage);
+                notificationPage = (notificationPage + (hit == -19 ? -1 : 1) + pages) % pages; LayoutMenu(); return;
+            }
             if ((hit <= -12 && hit >= -16) || hit == -18) ExecuteQuickAccess(hit);
             else if (hit == -1) Dismiss();
             else if (hit >= 2000) CloseWindowCard(hit - 2000);
@@ -1321,6 +1337,7 @@ namespace TaskbarTiles
         protected override void OnMouseWheel(MouseEventArgs e)
         {
             base.OnMouseWheel(e);
+            if (NotificationAreaWheel(e)) return;
             if ((ModifierKeys & Keys.Control) != 0)
             { if (e.Y >= appTop) ChangeSize(e.Delta < 0 ? -8 : 8); else ChangePreviewSize(e.Delta < 0 ? -10 : 10); return; }
             if (e.Y >= appTop && apps.Count > perAppPage)
@@ -1462,7 +1479,7 @@ namespace TaskbarTiles
             if (touchService != null) touchService.Dispose();
             DisposeOutsideDismissal();
             if (switcherLayer != null) switcherLayer.Dispose();
-            CancelPendingLaunch(); DisposeActivation(); ShutdownFullscreen(); ShutdownQuickAccess(); ShutdownFeatures();
+            CancelPendingLaunch(); DisposeActivation(); ShutdownFullscreen(); ShutdownNotificationArea(); ShutdownQuickAccess(); ShutdownFeatures();
             hook.Dispose(); Native.UnregisterHotKey(Handle, 10);
             settingsTimer.Stop(); launchTimer.Stop(); reader.Dispose(); ClearThumbnails();
             tray.Visible = false; tray.Dispose(); trayIcon.Dispose(); DisposeImages(allApps); allApps.Clear(); apps.Clear();
@@ -1585,6 +1602,7 @@ namespace TaskbarTiles
                 Check(Marshal.SizeOf(typeof(Native.THUMBNAILPROPERTIES)) == 48, "thumbnail structure packing");
                 log.AppendLine("PASS: native INPUT, keyboard and DWM thumbnail structure sizes.");
                 FeatureTests.Run(log);
+                NotificationAreaTests.Run(log);
                 LauncherTests.Run(log);
                 LauncherExperienceTests.Run(log);
                 SearchPageTests.Run(log);

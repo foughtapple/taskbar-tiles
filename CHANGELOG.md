@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0
+
+- Add a compact, pageable notification-area row between Taskbar apps and the footer, independent of taskbar auto-hide.
+- Add adjustable notification icon size/spacing with live settings preview and Ctrl+wheel sizing over the row.
+- Left-click requests the real tray item's default accessibility action; right-click offers Open, Copy name, taskbar settings and refresh.
+- Resolve icons locally where an unambiguous installed-app match exists; keep neutral fallbacks and avoid Explorer memory scraping/hidden-coordinate clicks.
+- Preserve Stream Dock 0.10.1 modules and existing launcher, touch, search, recent-app, activation, rendering and updater behaviour.
+
 ## 0.10.1
 
 - Consolidate all ten managed Stream Dock actions into one visible **Taskbar Tiles** plugin/category instead of separate repeated FoughtApple sections.

@@ -87,6 +87,12 @@ The app is C# 5 / .NET Framework 4.8 / WinForms, without third-party runtime pac
 
 GitHub Actions compiles/tests pull requests and builds a normal installer for a version update on main or matching version tags. Release gates cover real-menu rendering, native outside clicks, topmost ordering, launch fixtures, Touch Return policy/listener lifecycle, shortcut repair, updater HTTPS/checksums and installer lifecycle. Published releases include `SHA256SUMS.txt` and `build-info.json`; the latter records the exact commit/run and what CI tested. CI does not certify touchscreen hardware or the user's interactive desktop. [Testing](docs/TESTING.md) · [Architecture](docs/ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
+## Notification-area row
+
+Taskbar Tiles can mirror Windows notification-area (system-tray) items in a compact, single row between **Taskbar apps** and the footer. It is independent of Windows taskbar auto-hide. Icon size and spacing are adjustable under **Settings > Appearance**, and extra items page horizontally instead of creating another row.
+
+Left-click asks the real Explorer notification item to perform its normal/default action. Right-click opens a small Taskbar Tiles menu with **Open/default action**, **Copy name**, **Windows taskbar settings**, and **Refresh notification area**. Taskbar Tiles does not scrape Explorer memory, read notification contents, force the hidden taskbar open, or click hidden coordinates. Icons are resolved locally from strong installed-app name matches when possible; unresolved items use a neutral initials tile.
+
 ## Tray-hidden application reopening
 
 Ordinary Steam launcher entries ask the registered Steam client to show its main UI, including when it is already running in the notification area. The renderer/helper process is not launched in isolation. Explicit favourite arguments, game shortcuts and account-related commands are retained; no Steam setting or running game is changed.
