@@ -12,7 +12,7 @@ namespace TaskbarTiles
 {
     sealed class Options
     {
-        public int ConfigVersion = 9;
+        public int ConfigVersion = 8;
         public bool TouchSupportEnabled = false;
         public int TouchReturnDelayMs = 1000, PenReturnDelayMs = 2000, TouchReturnAction = 0;
         public bool TouchWaitForHover = true, TouchTypingCancels = true, TouchPauseForMenus = true;
@@ -143,7 +143,7 @@ namespace TaskbarTiles
             // Translate former Auto (0) once; preserve explicitly selected column/row limits.
             if (o.WindowColumns == 0 || (!sawColumns && o.ConfigVersion < 6))
                 o.WindowColumns = Math.Max(1, Math.Min(12, (Math.Max(760, Math.Min(3600, o.MaxPanelWidth)) - 32) / (280 * Math.Max(70, Math.Min(220, o.PreviewScale)) / 100 + 12)));
-            o.ConfigVersion = Math.Max(9, o.ConfigVersion);
+            o.ConfigVersion = Math.Max(8, o.ConfigVersion);
             o.Validate(); return o;
         }
         internal static Options Load() { return File.Exists(FilePath) ? Parse(File.ReadAllLines(FilePath)) : new Options(); }
@@ -198,7 +198,7 @@ namespace TaskbarTiles
             // Replace our historical forced-new default once; never change an app's
             // configuration or a user's explicit shortcut command-line arguments.
             if (StoredVersion(lines) < 8) o.TerminalNewWindow = false;
-            o.ConfigVersion = Math.Max(9, o.ConfigVersion); return o;
+            o.ConfigVersion = Math.Max(8, o.ConfigVersion); return o;
         }
         internal static void Migrate()
         {
