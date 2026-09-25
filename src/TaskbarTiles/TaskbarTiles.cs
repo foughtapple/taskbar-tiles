@@ -1304,7 +1304,7 @@ namespace TaskbarTiles
                 return;
             }
             if (e.Button != MouseButtons.Left) return;
-            if (hit >= 3000) { InvokeNotification(NotificationAtHit(hit), false); return; }
+            if (hit >= 3000) { InvokeNotification(NotificationAtHit(hit)); return; }
             if (hit == -19 || hit == -20)
             {
                 int pages = Math.Max(1, (notificationItems.Count + notificationPerPage - 1) / notificationPerPage);
