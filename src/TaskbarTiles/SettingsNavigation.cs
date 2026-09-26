@@ -30,6 +30,10 @@ namespace TaskbarTiles
             }
             base.WndProc(ref m);
         }
+        public override Rectangle DisplayRectangle
+        {
+            get { return ClientRectangle; }
+        }
         protected override void OnDrawItem(DrawItemEventArgs e)
         {
             using (var brush = new SolidBrush(Theme.Background)) e.Graphics.FillRectangle(brush, e.Bounds);
