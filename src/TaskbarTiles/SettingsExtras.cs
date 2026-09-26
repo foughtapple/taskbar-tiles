@@ -81,8 +81,8 @@ namespace TaskbarTiles
         void AddQuickAccessPage()
         {
             var p = Page("Quick access");
-            // Keep startup tools last; the new favourites collection has its own tab.
-            var tab = p.Parent as TabPage; tabs.TabPages.Remove(tab); tabs.TabPages.Insert(2, tab);
+            // Sidebar navigation now owns presentation order. Do not remove/reinsert
+            // TabPages; doing so could drop this page from the live collection.
             Section(p, "Bottom action bar", "Search opens an integrated launcher in this window. It does not open Windows Search. Recent apps and Favourites remain at the bottom-right.");
             Check(p, "WindowsSearchButton", "Show integrated Search on the bottom-left");
             Check(p, "FavouritesButton", "Show the Favourites launcher on the bottom-right");
@@ -97,8 +97,8 @@ namespace TaskbarTiles
         }
         void AddFavouritesPage()
         {
-            var p = Page("Favourites"); var tab = p.Parent as TabPage;
-            tabs.TabPages.Remove(tab); tabs.TabPages.Insert(3, tab);
+            var p = Page("Favourites");
+            // Sidebar navigation owns page order; keep the TabPage continuously attached.
             Section(p, "Your quick-launch list", "Apps, shortcuts, folders and websites. Tick entries to show them. Order is kept unless alphabetical sorting is enabled. Apply saves changes; Cancel discards unapplied edits.");
             var buttons = new FlowLayoutPanel { Width = 700, Height = 92, WrapContents = true, Margin = new Padding(0, 0, 0, 8) };
             AddTool(buttons, "Installed apps…", 140, AddInstalled);

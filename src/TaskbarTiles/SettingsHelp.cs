@@ -145,7 +145,7 @@ namespace TaskbarTiles
         }
         void AddSearchSettingsPage()
         {
-            var p = Page("Search"); var tab = (TabPage)p.Parent; tabs.TabPages.Remove(tab); tabs.TabPages.Insert(3, tab);
+            var p = Page("Search"); // Sidebar navigation owns presentation order.
             Section(p, "Search inside Taskbar Tiles", "Click Search at the bottom-left to expand an icon-and-name search surface in the same window. It does not open the Windows Search UI or search the web.");
             Check(p, "SearchInstalledApps", "Search installed apps and taskbar apps");
             Check(p, "SearchOpenWindows", "Search existing open windows");
