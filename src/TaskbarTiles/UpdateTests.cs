@@ -19,6 +19,12 @@ namespace TaskbarTiles
             Reject(delegate { ReleaseInfo.AssetUrl("v0.7.0", "runme.cmd"); }, "arbitrary executable name refused");
             Require(ReleaseInfo.AllowedDownloadUri(new Uri(ReleaseInfo.ApiUrl)), "public release endpoint allowed");
             Require(ReleaseInfo.AllowedDownloadUri(new Uri(ReleaseInfo.AssetUrl("v0.7.0", "SHA256SUMS.txt"))), "checksums fetched from same release");
+            string releaseTag; Version releaseVersion;
+            Require(ReleaseInfo.TryReleaseTagUri(new Uri("https://github.com/foughtapple/taskbar-tiles/releases/tag/v0.12.1"), out releaseTag, out releaseVersion) &&
+                releaseTag == "v0.12.1" && releaseVersion == new Version(0, 12, 1), "normal GitHub latest-release redirect target parsed without REST API");
+            Require(!ReleaseInfo.TryReleaseTagUri(new Uri("https://github.com/foughtapple/taskbar-tiles/releases/tag/not-a-version"), out releaseTag, out releaseVersion), "invalid release redirect rejected");
+            Require(!ReleaseInfo.TryReleaseTagUri(new Uri("https://github.com/other/repo/releases/tag/v0.12.1"), out releaseTag, out releaseVersion), "other repository release redirect rejected");
+            Require(AvailableUpdate.FromTag("v0.12.1", "fallback").AssetName == "TaskbarTiles-0.12.1-Setup.exe", "public redirect can construct installer asset without API metadata");
             foreach (string url in new[] { "http://github.com/foughtapple/taskbar-tiles/releases/a", "https://github.com.attacker.example/a", "https://github.com/other/repo/releases/a", "https://user@github.com/foughtapple/taskbar-tiles/releases/a", "https://evil.example/run.exe", "https://github.com:444/foughtapple/taskbar-tiles/releases/a" })
                 Require(!ReleaseInfo.AllowedDownloadUri(new Uri(url)), "untrusted download URL refused");
             string hash = new string('a', 64), file = ReleaseInfo.SetupName("v0.7.0");

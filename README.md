@@ -47,7 +47,7 @@ One press opens; another closes. Bind the default profile only when game-specifi
 
 ## Updates and removal
 
-Open **Settings → Updates → Check for updates…**, or use the tray's update command. Review the version/notes, then choose **Download & install**. The updater downloads the named installer from this repository, verifies its release SHA-256 and opens the normal Setup wizard. It never installs silently or polls at startup. Upgrading retains your configuration.
+Open **Settings → Updates → Check for updates…**, or use the tray's update command. Review the version/notes, then choose **Download & install**. Version discovery uses GitHub's normal public `/releases/latest` redirect rather than the unauthenticated REST API, avoiding REST rate-limit/403 failures. The updater downloads the named installer from this repository, verifies its release SHA-256 and opens the normal Setup wizard. It never installs silently or polls at startup. Upgrading retains your configuration.
 
 Uninstall via **Windows Settings → Apps → Taskbar Tiles**. Settings, favourites, backups and diagnostics remain in `%LOCALAPPDATA%\TaskbarTiles`; remove that folder manually only after uninstalling and only when you want to erase those files.
 

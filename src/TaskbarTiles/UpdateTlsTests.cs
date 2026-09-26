@@ -50,7 +50,8 @@ namespace TaskbarTiles
             log.AppendLine("PASS: " + checks + " updater TLS/runtime/Internet-marker/error-message regressions. No network requests in these helper tests.");
         }
 
-        // GETs GitHub metadata, the checksum list and an installer using production transport.
+        // Resolves GitHub's normal public latest-release redirect, then GETs the checksum
+        // list and installer using production transport. The REST API is not required.
         // Downloads into a unique temporary directory, verifies SHA-256, then deletes it.
         // Never installs, starts an app, changes user settings or supplies GitHub credentials.
         internal static int RunNetwork()
@@ -65,7 +66,7 @@ namespace TaskbarTiles
                 using (var stop = new CancellationTokenSource(TimeSpan.FromMinutes(3)))
                 {
                     AvailableUpdate update = UpdateTransport.Check(stop.Token);
-                    log.AppendLine("PASS: actual GitHub release metadata retrieved and validated (" + update.Tag + ").");
+                    log.AppendLine("PASS: actual GitHub public latest-release redirect resolved and checksum availability validated without REST API (" + update.Tag + ").");
                     string expected;
                     string file = UpdateTransport.DownloadTo(update, stop.Token, null, out expected, root);
                     if (!File.Exists(file) || new FileInfo(file).Length == 0 || ReleaseInfo.Hash(file) != expected)
