@@ -92,9 +92,18 @@ namespace TaskbarTiles
             if (tabs.SelectedTab != null)
             {
                 Rectangle page = tabs.SelectedTab.RectangleToScreen(tabs.SelectedTab.ClientRectangle);
-                Rectangle editor = tabs.RectangleToScreen(tabs.ClientRectangle);
-                if (page.Left < editor.Left || page.Right > editor.Right + 1)
-                    throw new InvalidOperationException("Settings page extends outside the editor column.");
+                Rectangle host = settingsContentHost.RectangleToScreen(settingsContentHost.ClientRectangle);
+                Rectangle nav = settingsNavigationPanel.RectangleToScreen(settingsNavigationPanel.ClientRectangle);
+                if (!host.Contains(page))
+                    throw new InvalidOperationException("Settings page extends outside the settings workspace.");
+                if (page.IntersectsWith(nav))
+                    throw new InvalidOperationException("Settings page overlaps the navigation rail.");
+                if (previewPanel.Visible)
+                {
+                    Rectangle preview = previewPanel.RectangleToScreen(previewPanel.ClientRectangle);
+                    if (page.IntersectsWith(preview))
+                        throw new InvalidOperationException("Settings page overlaps the live preview.");
+                }
             }
         }
     }
