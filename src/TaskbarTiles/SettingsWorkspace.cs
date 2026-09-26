@@ -13,7 +13,7 @@ namespace TaskbarTiles
         internal static SettingsWorkspaceGeometry Build(Size size, float dpi, bool preview)
         {
             var g = new SettingsWorkspaceGeometry();
-            Func<int,int> s = x => Math.Max(1, (int)Math.Round(x * dpi));
+            Func<int,int> s = value => Math.Max(1, (int)Math.Round(value * dpi));
             int w = Math.Max(1, size.Width), h = Math.Max(1, size.Height), gap = s(10);
             int rail = Math.Min(s(170), Math.Max(s(100), w / 4));
             rail = Math.Min(rail, Math.Max(1, w - gap - s(160)));

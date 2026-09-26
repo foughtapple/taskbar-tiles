@@ -16,7 +16,7 @@ namespace TaskbarTiles
         internal static QuickAccessLayout Build(int width, int height, float scale, Options o)
         {
             var g = new QuickAccessLayout(); if (!Enabled(o)) return g;
-            Func<int,int> s = n => Math.Max(1,(int)Math.Round(n*scale));
+            Func<int,int> s = value => Math.Max(1,(int)Math.Round(value*scale));
             int pad = Math.Min(s(22),Math.Max(1,width/12)), gap=s(8), h=s(o.FooterButtonHeight), y=height-h-s(12);
             var ids = new List<int>(); var preferred=new List<int>(); var minimum=new List<int>();
             Action<int,int,int> add = (id,p,m) => {ids.Add(id);preferred.Add(s(p));minimum.Add(s(m));};
