@@ -182,6 +182,14 @@ namespace TaskbarTiles
             }
         }
         internal int SettingsNavigationWidth { get { return settingsNavigationPanel == null ? 0 : settingsNavigationPanel.Width; } }
+        internal int SettingsNavigationLogicalWidth
+        {
+            get
+            {
+                if (settingsNavigationPanel == null) return 0;
+                return (int)Math.Round(settingsNavigationPanel.Width * 96.0 / Math.Max(96, DeviceDpi));
+            }
+        }
 
         void DisposeSettingsNavigation()
         {

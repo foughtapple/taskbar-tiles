@@ -48,7 +48,7 @@ namespace TaskbarTiles
                 {
                     form.Show(); Application.DoEvents(); form.PerformLayout(); Application.DoEvents();
                     Require(form.SettingsNavigationReady, "visible settings window has one dark navigation button per page");
-                    Require(form.SettingsNavigationWidth > 0 && form.SettingsNavigationWidth <= 180, "settings sidebar stays compact and leaves more room for page content");
+                    Require(form.SettingsNavigationLogicalWidth > 0 && form.SettingsNavigationLogicalWidth <= 180, "settings sidebar stays compact in logical pixels and leaves more room for page content");
                     using (var image = new Bitmap(form.Width, form.Height))
                     {
                         form.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size));
