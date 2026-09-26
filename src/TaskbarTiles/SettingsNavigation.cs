@@ -65,8 +65,8 @@ namespace TaskbarTiles
         {
             settingsNavigationGroupFont = new Font("Segoe UI", 8, FontStyle.Bold);
             settingsNavigationPanel = new Panel {
-                Dock = DockStyle.Left, Width = 205, BackColor = Color.FromArgb(14, 20, 29),
-                Padding = new Padding(8, 10, 8, 10)
+                Dock = DockStyle.Left, Width = 170, BackColor = Color.FromArgb(14, 20, 29),
+                Padding = new Padding(6, 10, 6, 10)
             };
             settingsNavigationFlow = new FlowLayoutPanel {
                 Dock = DockStyle.Fill, AutoScroll = true, WrapContents = false,
@@ -78,6 +78,7 @@ namespace TaskbarTiles
             settingsNavigationPanel.BringToFront();
             settingsNavigationPanel.SizeChanged += delegate { ResizeSettingsNavigation(); };
             tabs.SelectedIndexChanged += delegate { UpdateSettingsNavigationSelection(); };
+            Shown += delegate { BuildSettingsNavigation(); };
         }
 
         void BuildSettingsNavigation()
@@ -120,7 +121,7 @@ namespace TaskbarTiles
         void AddSettingsNavigationGroup(string text)
         {
             var label = new Label {
-                Text = text, AutoSize = false, Height = 26, Width = 170,
+                Text = text, AutoSize = false, Height = 24, Width = 145,
                 ForeColor = Color.FromArgb(118, 139, 166), Font = settingsNavigationGroupFont,
                 TextAlign = ContentAlignment.BottomLeft, Padding = new Padding(9, 0, 0, 4),
                 Margin = new Padding(0, settingsNavigationFlow.Controls.Count == 0 ? 0 : 10, 0, 2)
@@ -128,13 +129,19 @@ namespace TaskbarTiles
             settingsNavigationFlow.Controls.Add(label);
         }
 
+        static string NavigationLabel(string title)
+        {
+            if (title == "Touch screen monitor support") return "Touch Return";
+            return title;
+        }
+
         void AddSettingsNavigationButton(TabPage page)
         {
             var button = new Button {
-                Text = page.Text, Tag = page, Height = 38, Width = 170,
+                Text = NavigationLabel(page.Text), Tag = page, Height = 35, Width = 145,
                 FlatStyle = FlatStyle.Flat, BackColor = settingsNavigationPanel.BackColor,
                 ForeColor = Theme.Text, TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(10, 0, 6, 0), Margin = new Padding(0, 1, 0, 1),
+                Padding = new Padding(8, 0, 4, 0), Margin = new Padding(0, 1, 0, 1),
                 UseVisualStyleBackColor = false, TabStop = true
             };
             button.FlatAppearance.BorderSize = 0;
