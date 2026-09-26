@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.0
+
+- Fix the Settings editor being covered by its sidebar: navigation, editor and live preview now have separate measured rectangles.
+- Read the Windows 11 hidden-icons host and separate application tray icons (centre) from taskbar system controls (far right).
+- Cache only visible, unobstructed tray artwork in memory; never capture a window covering the taskbar.
+- Add Display settings, Bluetooth settings and Task Manager to the bottom bar, with individual switches.
+- Add persistent Recent / A-Z / Priority ordering for active windows, P buttons, a 50-slot app-priority picker showing ten rows, and a draft-aware Settings editor.
+- Preserve existing installer, Stream Dock, touch, launch, rendering and updater configuration.
+
 ## 0.13.0
 
 - Add Setup choices for bundled Stream Dock integration and Touch Return: Stream Dock defaults ON; Touch Return defaults OFF.

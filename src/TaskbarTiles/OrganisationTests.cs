@@ -24,7 +24,7 @@ namespace TaskbarTiles
             Require(slots[0].Key=="discord"&&slots[1].Key=="chrome","occupied rank inserts and shifts down");
             slots=WindowPriorityModel.Assign(slots,steam,50);
             slots=WindowPriorityModel.Assign(slots,chrome,1);
-            Require(slots[0].Key=="chrome"&&slots[1].Key=="discord"&&WindowPriorityModel.Rank(slots,"steam")>0,"moving an assigned app preserves all other entries");
+            Require(slots[0].Key=="chrome"&&slots[1].Key=="discord"&&WindowPriorityModel.Rank(slots,"steam")==50,"moving an assigned app preserves all other entries");
             var roundtrip=WindowPriorityModel.Read(WindowPriorityModel.Write(slots));
             Require(WindowPriorityModel.Rank(roundtrip,"CHROME")==1,"priority serialization and case-insensitive identity");
             var full=Enumerable.Range(1,50).Select(n=>new PriorityApp{Key="app"+n,Name="App "+n}).ToArray();
@@ -44,7 +44,7 @@ namespace TaskbarTiles
             Require(!NotificationRoots.IsSystem("","SystemTray.NormalIconView","Discord",false),"promoted app remains in the middle tray group");
             Require(!NotificationRoots.IsSystem("SystemTrayIcon","SystemTray.NormalIconView","Steam",true),"overflow items are tray apps");
             Require(NotificationRoots.IsSystem("SystemTray.Clock","","8:13 AM",false),"clock belongs at far right");
-            Require(NotificationRoots.IsChevron("OverflowChevron","","",false)==false,"placeholder");
+            Require(NotificationRoots.IsChevron("OverflowChevron","",""),"overflow chevron is not an application icon");
             foreach(float dpi in new[]{.75f,1f,1.5f,2.25f})
             foreach(int logicalWidth in new[]{640,900,1380,2200})
             {

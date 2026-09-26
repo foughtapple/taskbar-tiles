@@ -13,7 +13,7 @@ namespace TaskbarTiles
 {
     sealed class WindowHeaderGeometry
     {
-        internal Rectangle Icon, Title, Close;
+        internal Rectangle Icon, Title, Close, Priority;
         internal static WindowHeaderGeometry Build(Rectangle card, Options o, float scale)
         {
             Func<int, int> s = n => Math.Max(1, (int)Math.Round(n * scale));
@@ -21,6 +21,11 @@ namespace TaskbarTiles
             var g = new WindowHeaderGeometry();
             g.Close = new Rectangle(card.Right - s(31), card.Top + (band - s(24)) / 2, s(24), s(24));
             int left = card.Left + s(12), right = o.ShowCloseButtons ? g.Close.Left - s(6) : card.Right - s(12);
+            if (o.ShowPriorityButtons)
+            {
+                g.Priority = new Rectangle(card.Left + s(6), card.Top + (band - s(24)) / 2, s(34), s(24));
+                left = g.Priority.Right + s(6);
+            }
             if (o.ShowWindowTitleIcons)
             {
                 int size = Math.Min(s(o.WindowTitleIconSize), Math.Min(band - s(8), right - left - s(30)));

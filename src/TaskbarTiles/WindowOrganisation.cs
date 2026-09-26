@@ -49,14 +49,22 @@ namespace TaskbarTiles
             var slots = original.Select(a => a == null ? null : a.Clone()).ToList();
             int old = Rank(original, app.Key) - 1, target = number - 1;
             if (old == target) { slots[target] = app.Clone(); return slots.ToArray(); }
-            // Moving an assigned app removes it first, leaving a spare slot at the end.
-            if (old >= 0) { slots.RemoveAt(old); slots.Add(null); }
+            if (old >= 0) slots[old] = null;
             if (slots[target] == null) slots[target] = app.Clone();
             else
             {
                 int gap = slots.FindIndex(target, a => a == null);
-                if (gap < 0) throw new InvalidOperationException("There is no free priority slot at or below " + number + ". Remove or move an entry first; no priority has been dropped.");
-                slots.RemoveAt(gap); slots.Insert(target, app.Clone());
+                if (gap >= 0)
+                {
+                    for (int i = gap; i > target; i--) slots[i] = slots[i - 1];
+                    slots[target] = app.Clone();
+                }
+                else if (old >= 0 && old < target)
+                {
+                    for (int i = old; i < target; i++) slots[i] = slots[i + 1];
+                    slots[target] = app.Clone();
+                }
+                else throw new InvalidOperationException("There is no free priority slot at or below " + number + ". Remove or move an entry first; no priority has been dropped.");
             }
             return slots.ToArray();
         }
@@ -88,7 +96,7 @@ namespace TaskbarTiles
                     if (names.Count >= 256) names.Clear();
                     names[exe] = name ?? "";
                 }
-                window.PriorityName = string.IsNullOrWhiteSpace(name) ? "Application" : name;
+                window.PriorityName = string.IsNullOrWhiteSpace(name) ? "Application" : name.Substring(0, Math.Min(256,name.Length));
             }
             catch { window.PriorityKey = ""; window.PriorityName = "Application"; }
         }
@@ -197,11 +205,10 @@ namespace TaskbarTiles
         {
             if (header.Priority.IsEmpty) return;
             int rank = WindowPriorityModel.Rank(Priorities(), window.PriorityKey);
-            DrawingUtil.Round(g, header.Priority, S(4), rank > 0 ? Color.FromArgb(37, sixty(), 83) : Theme.Card,
+            DrawingUtil.Round(g, header.Priority, S(4), rank > 0 ? Color.FromArgb(37, 60, 83) : Theme.Card,
                 lastMouseHit == 4000 + pageIndex ? Theme.Accent : Theme.Border, 1);
             Label(g, rank > 0 ? "P" + rank : "P", header.Priority, false, rank > 0 ? Theme.Accent : Theme.Muted, true);
         }
-        static int sixty() { return 60; }
         void ChooseWindowPriority(int pageIndex)
         {
             int i = windowPage * perWindowPage + pageIndex;

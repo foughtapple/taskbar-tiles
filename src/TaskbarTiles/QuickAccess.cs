@@ -9,40 +9,6 @@ using System.Windows.Forms;
 
 namespace TaskbarTiles
 {
-    sealed class QuickAccessLayout
-    {
-        internal Rectangle Search, Favourites, Recent, Desktop, Clipboard, Help;
-        internal static bool Enabled(Options o) { return o.WindowsSearchButton || o.FavouritesButton || o.RecentAppsButton || o.DesktopButton || o.ClipboardButton; }
-        internal static QuickAccessLayout Build(int width, int height, float scale, Options o)
-        {
-            var result = new QuickAccessLayout(); if (!Enabled(o)) return result;
-            Func<int, int> s = n => Math.Max(1, (int)Math.Round(n * scale));
-            int pad = s(22), gap = s(8), h = s(o.FooterButtonHeight), y = height - h - s(12), left = pad, right = width - pad;
-            int named = (o.FavouritesButton ? 1 : 0) + (o.RecentAppsButton ? 1 : 0);
-            int small = (o.DesktopButton ? 1 : 0) + (o.ClipboardButton ? 1 : 0);
-            int namedWidth = Math.Min(s(156), Math.Max(s(60), (right - left - (o.WindowsSearchButton ? s(120) : 0) - small * (s(36) + gap) - named * gap) / Math.Max(1, named)));
-            if (o.FavouritesButton) { result.Favourites = new Rectangle(right - namedWidth, y, namedWidth, h); right = result.Favourites.Left - gap; }
-            if (o.RecentAppsButton) { result.Recent = new Rectangle(right - namedWidth, y, namedWidth, h); right = result.Recent.Left - gap; }
-            if (o.WindowsSearchButton)
-            {
-                int searchWidth = Math.Max(1, Math.Min(s(o.SearchButtonWidth), right - left - small * (s(36) + gap)));
-                result.Search = new Rectangle(left, y, searchWidth, h); left = result.Search.Right + gap;
-            }
-            if (o.DesktopButton) { result.Desktop = new Rectangle(left, y, s(36), h); left = result.Desktop.Right + gap; }
-            if (o.ClipboardButton) { result.Clipboard = new Rectangle(left, y, s(36), h); left = result.Clipboard.Right + gap; }
-            if (right - left > s(55)) result.Help = new Rectangle(left, y, s(36), h);
-            return result;
-        }
-        internal IEnumerable<Rectangle> Buttons()
-        { return new[] { Search, Favourites, Recent, Desktop, Clipboard, Help }.Where(r => !r.IsEmpty); }
-        internal int Hit(Point p)
-        {
-            if (!Search.IsEmpty && Search.Contains(p)) return -12; if (!Favourites.IsEmpty && Favourites.Contains(p)) return -13;
-            if (!Recent.IsEmpty && Recent.Contains(p)) return -18;
-            if (!Desktop.IsEmpty && Desktop.Contains(p)) return -14; if (!Clipboard.IsEmpty && Clipboard.Contains(p)) return -15;
-            if (!Help.IsEmpty && Help.Contains(p)) return -16; return -100;
-        }
-    }
     sealed partial class Switcher
     {
         QuickAccessLayout quick = new QuickAccessLayout();
@@ -70,6 +36,9 @@ namespace TaskbarTiles
         int HitQuickAccess(Point p) { return quick.Hit(p); }
         string QuickAccessTip(int hit)
         {
+            if (hit == -30) return "Open Windows Display settings";
+            if (hit == -31) return "Open Windows Bluetooth settings";
+            if (hit == -32) return "Open Task Manager";
             if (hit == -12) return "Search here — installed apps, open windows, favourites, settings and indexed filenames (Ctrl+Shift+S)";
             if (hit == -18) return "Recent apps — up to ten recently opened apps not already in the Taskbar apps section (Ctrl+Shift+R here)";
             if (hit == -13) return "Favourites — apps, folders and websites you choose in Settings (Ctrl+Space here)";
@@ -88,6 +57,9 @@ namespace TaskbarTiles
             PaintQuickButton(g, quick.Desktop, -14, "", "desktop");
             PaintQuickButton(g, quick.Clipboard, -15, "", "clipboard");
             PaintQuickButton(g, quick.Help, -16, "", "help");
+            PaintQuickButton(g, quick.Display, -30, quick.Display.Width >= S(110) ? "Display settings" : "", "desktop");
+            PaintQuickButton(g, quick.Bluetooth, -31, quick.Bluetooth.Width >= S(110) ? "Bluetooth" : "", "bluetooth");
+            PaintQuickButton(g, quick.TaskManager, -32, quick.TaskManager.Width >= S(110) ? "Task Manager" : "", "tasks");
         }
         void PaintQuickButton(Graphics g, Rectangle r, int hit, string title, string glyph)
         {
@@ -106,6 +78,10 @@ namespace TaskbarTiles
                 }
                 else if (glyph == "clock") { g.DrawEllipse(pen, x - d, y - d, d * 2, d * 2); g.DrawLine(pen, x, y, x, y - d * .65f); g.DrawLine(pen, x, y, x + d * .55f, y + d * .25f); }
                 else if (glyph == "desktop") { g.DrawRectangle(pen, x - d, y - d, d * 2, d * 1.5f); g.DrawLine(pen, x, y + d * .5f, x, y + d); g.DrawLine(pen, x - d * .6f, y + d, x + d * .6f, y + d); }
+                else if (glyph == "bluetooth")
+                { g.DrawLines(pen, new[]{new PointF(x,y-d),new PointF(x+d*.65f,y-d*.4f),new PointF(x-d*.65f,y+d*.5f)}); g.DrawLines(pen,new[]{new PointF(x,y+d),new PointF(x+d*.65f,y+d*.4f),new PointF(x-d*.65f,y-d*.5f)});g.DrawLine(pen,x,y-d,x,y+d); }
+                else if (glyph == "tasks")
+                {g.DrawRectangle(pen,x-d,y-d,d*2,d*2);g.DrawLines(pen,new[]{new PointF(x-d*.8f,y+d*.3f),new PointF(x-d*.2f,y),new PointF(x,y-d*.65f),new PointF(x+d*.25f,y+d*.5f),new PointF(x+d*.75f,y-d*.2f)});}
                 else if (glyph == "clipboard") { g.DrawRectangle(pen, x - d * .8f, y - d, d * 1.6f, d * 2); g.DrawRectangle(pen, x - d * .4f, y - d * 1.2f, d * .8f, d * .5f); }
                 else Label(g, "?", r, true, Theme.Muted, true);
             }
@@ -113,6 +89,8 @@ namespace TaskbarTiles
         }
         void ExecuteQuickAccess(int hit)
         {
+            if (hit <= -30 && hit >= -32)
+            { Dismiss(); try { SystemQuickActions.Open(hit); } catch (Exception ex) { Notify(ex.Message); } return; }
             if (hit == -12) { ShowIntegratedSearch(); return; }
             if (hit == -13) { ShowFavourites(); return; }
             if (hit == -18) { ShowRecentApps(); return; }
@@ -190,7 +168,7 @@ namespace TaskbarTiles
                 windows = allWindows.Where(w => !options.CurrentMonitorOnly || Screen.FromHandle(w.Handle).DeviceName == Screen.FromPoint(monitorPoint).DeviceName).ToList(); apps = allApps.ToList();
                 if (windows.Count == 0) windows = Enumerable.Range(1, 4).Select(n => new WindowItem { Title = "Example window " + n, Handle = IntPtr.Zero }).ToList();
                 if (apps.Count == 0) apps = new[] { "Browser", "Files", "Editor", "Terminal", "Settings", "Music" }.Select(n => new AppButton { Name = n, DisplayName = n }).ToList();
-                selected = windowPage = appPage = 0; LayoutMenu();
+                windows = OrganiseWindows(windows); selected = windowPage = appPage = 0; LayoutMenu();
                 lastMenuPreviewSummary = menuGeometry.Summary(options);
                 var image = new Bitmap(Math.Max(1, Width), Math.Max(1, Height));
                 try

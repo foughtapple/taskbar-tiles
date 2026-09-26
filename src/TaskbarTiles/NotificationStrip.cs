@@ -82,13 +82,20 @@ namespace TaskbarTiles
         {
             var g = new NotificationStripGeometry();
             int pad = Math.Max(1,(int)Math.Round(22*dpi)), gap = Math.Max(1,spacing), cell = Math.Max(16,icon+(int)Math.Round(10*dpi));
-            int right = width-pad, systemCount = Math.Min(system, Math.Max(0,(width/3)/(cell+gap)));
-            int systemWidth = systemCount == 0 ? 0 : systemCount*cell+(systemCount-1)*gap;
-            for (int i=0;i<systemCount;i++) g.System.Add(new Rectangle(right-systemWidth+i*(cell+gap),top,cell,cell));
+            int right=width-pad, systemCount=system;
+            int systemGap=gap, systemCell=cell;
+            if(systemCount>0 && systemCount*cell+(systemCount-1)*gap>width/3)
+            {
+                systemGap=Math.Max(1,Math.Min(gap,width/Math.Max(1,systemCount*12)));
+                systemCell=Math.Max(1,(width/3-(systemCount-1)*systemGap)/systemCount);
+            }
+            int systemWidth=systemCount==0?0:systemCount*systemCell+(systemCount-1)*systemGap;
+            for(int i=0;i<systemCount;i++)g.System.Add(new Rectangle(right-systemWidth+i*(systemCell+systemGap),top,systemCell,cell));
             int reserved = Math.Max(pad,systemWidth+pad+gap*2);
             int centreWidth = Math.Max(cell, width-2*reserved), centreLeft=(width-centreWidth)/2;
             bool paged = apps*(cell+gap)-gap > centreWidth;
-            int arrows = paged ? 2*(cell+gap) : 0;
+            int arrow=Math.Max(8,(int)Math.Round(16*dpi)), arrowGap=Math.Max(1,(int)Math.Round(4*dpi));
+            int arrows = paged ? 2*(arrow+arrowGap) : 0;
             g.PerPage = Math.Max(1,(centreWidth-arrows+gap)/(cell+gap));
             int pages = Math.Max(1,(apps+g.PerPage-1)/g.PerPage);
             g.Page = Math.Max(0,Math.Min(page,pages-1));
@@ -98,8 +105,8 @@ namespace TaskbarTiles
             for(int i=0;i<shown;i++) g.Apps.Add(new Rectangle(x+i*(cell+gap),top,cell,cell));
             if(paged)
             {
-                g.Previous=new Rectangle(Math.Max(centreLeft,x-cell-gap),top,cell,cell);
-                g.Next=new Rectangle(x+rowWidth+gap,top,cell,cell);
+                g.Previous=new Rectangle(Math.Max(centreLeft,x-arrow-arrowGap),top,arrow,cell);
+                g.Next=new Rectangle(x+rowWidth+arrowGap,top,arrow,cell);
             }
             if(apps==0) g.Load=new Rectangle(centreLeft,top,centreWidth,cell);
             return g;
@@ -182,7 +189,7 @@ namespace TaskbarTiles
             {
                 Rectangle r=notificationRects[i]; var item=shownNotifications[i];
                 if(lastMouseHit==3000+i)DrawingUtil.Round(g,r,S(6),Theme.Card,Theme.Border,1);
-                int size=S(options.NotificationIconSize);
+                int size=Math.Max(1,Math.Min(S(options.NotificationIconSize),Math.Min(r.Width,r.Height)-S(4)));
                 var box=new Rectangle(r.Left+(r.Width-size)/2,r.Top+(r.Height-size)/2,size,size);
                 // Actual tray artwork wins over a reconstructed app/count tile.
                 if(!DrawMenuImage(g,item.Image,box,"tray artwork"))
