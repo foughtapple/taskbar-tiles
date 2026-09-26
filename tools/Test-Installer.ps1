@@ -81,7 +81,9 @@ try {
 } finally { $p.Dispose() }
 if (-not ((Get-Content -LiteralPath $settings) -contains 'TouchSupportEnabled=true')) { throw 'Touch Return installer option could not enable its master switch.' }
 
-$uninstall = Join-Path $dest 'unins000.exe'
+$uninstallFile = Get-ChildItem -LiteralPath $dest -Filter 'unins*.exe' | Select-Object -First 1
+if ($null -eq $uninstallFile) { throw 'Default install did not create an uninstaller executable.' }
+$uninstall = $uninstallFile.FullName
 $p = Start-Process $uninstall -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -PassThru
 try {
     if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'Default-install uninstaller timed out.' }
