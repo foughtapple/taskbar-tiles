@@ -38,6 +38,9 @@ jobs:
       - name: Test dark Settings navigation
         shell: powershell
         run: ./tools/Test-SettingsNavigation.ps1
+      - name: Test Settings containment, sorting, priorities and tray groups
+        shell: powershell
+        run: ./tools/Test-Organisation.ps1
       - name: Test auto-hide inventory search and recent apps
         shell: powershell
         run: ./tools/Test-LauncherExperience.ps1
