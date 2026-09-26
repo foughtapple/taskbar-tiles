@@ -21,6 +21,25 @@ namespace TaskbarTiles
         internal const string ProjectUrl = "https://github.com/" + Repository;
         internal const string LatestUrl = ProjectUrl + "/releases/latest";
         internal const string ApiUrl = "https://api.github.com/repos/" + Repository + "/releases/latest";
+        internal static string ReleaseTagUrl(string tag)
+        {
+            Version version;
+            if (!TryVersion(tag, out version)) throw new InvalidDataException("Unexpected release tag.");
+            return ProjectUrl + "/releases/tag/" + tag;
+        }
+        internal static bool TryReleaseTagUri(Uri uri, out string tag, out Version version)
+        {
+            tag = null; version = null;
+            if (uri == null || uri.Scheme != Uri.UriSchemeHttps || !uri.IsDefaultPort || !string.IsNullOrEmpty(uri.UserInfo) ||
+                !uri.DnsSafeHost.Equals("github.com", StringComparison.OrdinalIgnoreCase)) return false;
+            string prefix = "/" + Repository + "/releases/tag/";
+            if (!uri.AbsolutePath.StartsWith(prefix, StringComparison.Ordinal) || uri.Query.Length != 0 || uri.Fragment.Length != 0) return false;
+            string candidate = Uri.UnescapeDataString(uri.AbsolutePath.Substring(prefix.Length)).TrimEnd('/');
+            if (candidate.Contains("/")) return false;
+            Version parsed;
+            if (!TryVersion(candidate, out parsed)) return false;
+            tag = candidate; version = parsed; return true;
+        }
         internal static bool TryVersion(string tag, out Version version)
         {
             version = null;
@@ -63,6 +82,12 @@ namespace TaskbarTiles
     {
         internal string Tag, Notes, AssetName;
         internal Version Version;
+        internal static AvailableUpdate FromTag(string tag, string notes)
+        {
+            Version version;
+            if (!ReleaseInfo.TryVersion(tag, out version)) throw new InvalidDataException("Unsupported version format in release.");
+            return new AvailableUpdate { Tag = tag, Version = version, AssetName = ReleaseInfo.SetupName(tag), Notes = notes ?? "" };
+        }
         internal static AvailableUpdate Parse(string json)
         {
             var obj = new JavaScriptSerializer { MaxJsonLength = 2097152 }.Deserialize<Dictionary<string, object>>(json);
@@ -87,7 +112,7 @@ namespace TaskbarTiles
             }
             if (!hasSetup || !hasHash) throw new InvalidDataException("The latest release does not yet have a complete installer and checksum. Try again after its build finishes.");
             object body; obj.TryGetValue("body", out body);
-            return new AvailableUpdate { Tag = tag, Version = version, AssetName = setup, Notes = body as string ?? "" };
+            return FromTag(tag, body as string ?? "");
         }
     }
     static class UpdateTransport
@@ -136,8 +161,63 @@ namespace TaskbarTiles
         }
         internal static string Text(string url, int limit, CancellationToken token)
         { using (var memory = new MemoryStream()) { Get(new Uri(url), memory, limit, token, null); return Encoding.UTF8.GetString(memory.ToArray()).TrimStart((char)0xFEFF); } }
+
+        // Version discovery intentionally uses GitHub's normal public /releases/latest
+        // redirect rather than the unauthenticated REST API. The REST API has a low
+        // shared-IP rate limit and can return HTTP 403 even while public release files
+        // remain fully available. No credentials or machine-wide proxy/TLS changes.
+        internal static AvailableUpdate CheckFromPublicRelease(CancellationToken token)
+        {
+            Uri current = new Uri(ReleaseInfo.LatestUrl);
+            for (int redirects = 0; redirects < 6; redirects++)
+            {
+                if (!ReleaseInfo.AllowedDownloadUri(current)) throw new InvalidDataException("The update redirected outside the trusted GitHub hosts.");
+                token.ThrowIfCancellationRequested();
+                var request = (HttpWebRequest)WebRequest.Create(current);
+                request.AllowAutoRedirect = false; request.Timeout = 25000; request.ReadWriteTimeout = 25000;
+                request.UserAgent = "TaskbarTiles/" + Program.Version;
+                using (token.Register(request.Abort))
+                using (var response = (HttpWebResponse)request.GetResponse())
+                {
+                    int code = (int)response.StatusCode;
+                    if (code >= 300 && code <= 399)
+                    {
+                        string location = response.Headers["Location"]; Uri next;
+                        if (string.IsNullOrEmpty(location) || !Uri.TryCreate(current, location, out next))
+                            throw new InvalidDataException("GitHub returned an invalid latest-release redirect.");
+                        string tag; Version version;
+                        if (ReleaseInfo.TryReleaseTagUri(next, out tag, out version))
+                        {
+                            var update = AvailableUpdate.FromTag(tag,
+                                "Taskbar Tiles " + version.ToString(3) + " is the latest published GitHub release.\r\n\r\n" +
+                                "The updater found it through GitHub's public release redirect and verified that its checksum list contains this installer's SHA-256.\r\n\r\n" +
+                                "Use Browser download to view the full release notes.");
+                            string sums = Text(ReleaseInfo.AssetUrl(tag, "SHA256SUMS.txt"), 65536, token);
+                            ReleaseInfo.ExpectedHash(sums, update.AssetName);
+                            return update;
+                        }
+                        current = next; continue;
+                    }
+                    if (response.StatusCode == HttpStatusCode.OK)
+                    {
+                        string tag; Version version;
+                        if (ReleaseInfo.TryReleaseTagUri(current, out tag, out version))
+                        {
+                            var update = AvailableUpdate.FromTag(tag, "Taskbar Tiles " + version.ToString(3) + " is the latest published GitHub release.");
+                            string sums = Text(ReleaseInfo.AssetUrl(tag, "SHA256SUMS.txt"), 65536, token);
+                            ReleaseInfo.ExpectedHash(sums, update.AssetName);
+                            return update;
+                        }
+                        throw new InvalidDataException("GitHub did not identify its latest release.");
+                    }
+                    throw new InvalidDataException("GitHub did not provide its latest release.");
+                }
+            }
+            throw new InvalidDataException("Too many latest-release redirects.");
+        }
+
         internal static AvailableUpdate Check(CancellationToken token)
-        { return AvailableUpdate.Parse(Text(ReleaseInfo.ApiUrl, 2097152, token)); }
+        { return CheckFromPublicRelease(token); }
         internal static string Download(AvailableUpdate update, CancellationToken token, Action<long, long> progress, out string verifiedHash)
         { return DownloadTo(update, token, progress, out verifiedHash, Path.Combine(Program.Home, "Updates")); }
         // The online integration test uses a unique temporary root; normal updates keep their existing location.
@@ -228,7 +308,9 @@ namespace TaskbarTiles
                 return "Windows could not establish a secure TLS connection to GitHub. Use Browser download to update manually. Certificate checks remain enabled; your installed version is unchanged.";
             if (web != null && web.Status == WebExceptionStatus.TrustFailure)
                 return "Windows could not verify GitHub's certificate. Check the PC clock or your network's certificate policy. Do not disable certificate checks. Browser download is available; your installed version is unchanged.";
-            if (response != null && response.StatusCode == HttpStatusCode.NotFound) return "No public release is available at the configured repository yet. Publish the first release before using GitHub updates.";
+            if (response != null && response.StatusCode == HttpStatusCode.Forbidden)
+                return "GitHub refused this request (HTTP 403). Taskbar Tiles no longer needs GitHub's rate-limited API for version checks; use Browser download if this was an asset request. Your installed version is unchanged.";
+            if (response != null && response.StatusCode == HttpStatusCode.NotFound) return "No public release is available at the configured repository yet, or a release asset is missing. Browser download is available; your installed version is unchanged.";
             return "Update check/download did not complete. Your installed version is unchanged. " + ex.Message;
         }
         void Download()

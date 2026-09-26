@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.1
+
+- Fix updater HTTP 403 failures by removing the unauthenticated GitHub REST API from required version discovery.
+- Resolve the latest version through GitHub's normal public `/releases/latest` redirect, then require a matching SHA256SUMS entry before enabling Download & install.
+- Keep HTTPS host/redirect restrictions, OS TLS/certificate validation, installer SHA-256 verification and the Internet security marker unchanged.
+- Add redirect parsing and live network coverage so future releases verify the API-free update path.
+
 ## 0.12.0
 
 - Replace the wrapped native Settings tab strip with a grouped dark left-hand navigation rail; hide the system tab headers and keep live previews/settings pages intact.
