@@ -52,7 +52,9 @@ namespace TaskbarTiles
         }
         void ApplyFilter(bool reset)
         {
-            windows = allWindows.Where(w => MatchesQuery(w.Title) && (!options.CurrentMonitorOnly || Screen.FromHandle(w.Handle).DeviceName == Screen.FromPoint(monitorPoint).DeviceName)).ToList();
+            IntPtr previous = selected >= 0 && selected < windows.Count ? windows[selected].Handle : IntPtr.Zero;
+            windows = OrganiseWindows(allWindows.Where(w => MatchesQuery(w.Title) && (!options.CurrentMonitorOnly || Screen.FromHandle(w.Handle).DeviceName == Screen.FromPoint(monitorPoint).DeviceName)));
+            if (!reset && previous != IntPtr.Zero) { int keep = windows.FindIndex(w => w.Handle == previous); if (keep >= 0) selected = keep; }
             apps = allApps.Where(a => MatchesQuery(a.DisplayName)).ToList();
             if (reset) { selected = 0; windowPage = appPage = 0; }
             selected = Math.Max(0, Math.Min(selected, windows.Count - 1));

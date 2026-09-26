@@ -75,6 +75,11 @@
     <Compile Include="SettingsLayout.cs" />
     <Compile Include="SettingsNavigation.cs" />
     <Compile Include="SettingsNavigationTests.cs" />
+    <Compile Include="SettingsWorkspace.cs" />
+    <Compile Include="WindowOrganisation.cs" />
+    <Compile Include="NotificationStrip.cs" />
+    <Compile Include="SystemQuickActions.cs" />
+    <Compile Include="OrganisationTests.cs" />
     <Compile Include="TaskbarTiles.cs" />
     <Compile Include="UpdateTests.cs" />
     <Compile Include="UpdateTlsTests.cs" />

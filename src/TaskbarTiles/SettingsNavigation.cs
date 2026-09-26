@@ -20,6 +20,20 @@ namespace TaskbarTiles
             Padding = Point.Empty;
             BackColor = Theme.Background;
         }
+        // Suppress the native tab border/header in the page display rectangle.
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == 0x1328 && m.LParam != IntPtr.Zero)
+            {
+                System.Runtime.InteropServices.Marshal.StructureToPtr(new Native.RECT(ClientRectangle), m.LParam, false);
+                m.Result = IntPtr.Zero; return;
+            }
+            base.WndProc(ref m);
+        }
+        public override Rectangle DisplayRectangle
+        {
+            get { return ClientRectangle; }
+        }
         protected override void OnDrawItem(DrawItemEventArgs e)
         {
             using (var brush = new SolidBrush(Theme.Background)) e.Graphics.FillRectangle(brush, e.Bounds);
@@ -36,7 +50,7 @@ namespace TaskbarTiles
         }
 
         internal static readonly Group[] Groups = new[] {
-            new Group("GENERAL", "Appearance", "Navigation", "Quick access"),
+            new Group("GENERAL", "Appearance", "Navigation", "Window organisation", "Quick access"),
             new Group("LAUNCHERS", "Favourites", "Search", "Recent apps"),
             new Group("DISPLAY & INPUT", "Screens & zones", "Monitor layouts", "Touch screen monitor support"),
             new Group("INTEGRATIONS", "Stream Dock", "Updates", "Startup & tools", "Shortcut health")
@@ -121,7 +135,7 @@ namespace TaskbarTiles
         void AddSettingsNavigationGroup(string text)
         {
             var label = new Label {
-                Text = text, AutoSize = false, Height = 24, Width = 145,
+                Text = text, UseMnemonic = false, AutoSize = false, Height = 24, Width = 145,
                 ForeColor = Color.FromArgb(118, 139, 166), Font = settingsNavigationGroupFont,
                 TextAlign = ContentAlignment.BottomLeft, Padding = new Padding(9, 0, 0, 4),
                 Margin = new Padding(0, settingsNavigationFlow.Controls.Count == 0 ? 0 : 10, 0, 2)
@@ -142,7 +156,7 @@ namespace TaskbarTiles
                 FlatStyle = FlatStyle.Flat, BackColor = settingsNavigationPanel.BackColor,
                 ForeColor = Theme.Text, TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(8, 0, 4, 0), Margin = new Padding(0, 1, 0, 1),
-                UseVisualStyleBackColor = false, TabStop = true
+                UseVisualStyleBackColor = false, UseMnemonic = false, TabStop = true
             };
             button.FlatAppearance.BorderSize = 0;
             button.FlatAppearance.MouseOverBackColor = Color.FromArgb(28, 39, 54);

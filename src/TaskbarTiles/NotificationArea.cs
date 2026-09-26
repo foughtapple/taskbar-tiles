@@ -20,7 +20,7 @@ namespace TaskbarTiles
         internal string Key="", Name="", AutomationId="", ClassName="", RuntimeId="";
         internal IntPtr Root;
         internal Rectangle Bounds;
-        internal bool Offscreen, Enabled;
+        internal bool Offscreen, Enabled, SystemItem;
         internal Bitmap Image;
     }
 
@@ -69,7 +69,7 @@ namespace TaskbarTiles
             if(s.Contains("tasklistbutton")||s.Contains("startbutton")||s.Contains("searchbutton")||s.Contains("taskview")) return true;
             if((name??"").Equals("Show desktop",StringComparison.OrdinalIgnoreCase)) return true;
             if((name??"").IndexOf("Show hidden icons",StringComparison.OrdinalIgnoreCase)>=0) return true;
-            if((name??"").StartsWith("Taskbar Tiles",StringComparison.OrdinalIgnoreCase)) return true;
+            if(NotificationRoots.IsChevron(id,cls,name)) return true;
             return false;
         }
         internal static bool Candidate(AutomationElement element,AutomationElement root,bool overflow)
@@ -78,7 +78,8 @@ namespace TaskbarTiles
             {
                 var c=element.Current;
                 if(string.IsNullOrWhiteSpace(c.Name)||IsExcluded(c.AutomationId,c.ClassName,c.Name)) return false;
-                if(c.ControlType!=ControlType.Button && c.ControlType!=ControlType.ListItem && c.ControlType!=ControlType.MenuItem) return false;
+                if(c.ControlType!=ControlType.Button && c.ControlType!=ControlType.ListItem && c.ControlType!=ControlType.MenuItem &&
+                    !(c.ControlType==ControlType.Custom && (c.ClassName??"").EndsWith("IconView",StringComparison.Ordinal))) return false;
                 if(overflow||IsContainer(c.AutomationId,c.ClassName)) return true;
                 var walker=TreeWalker.RawViewWalker; AutomationElement p=element;
                 for(int i=0;i<14;i++)
@@ -150,14 +151,6 @@ namespace TaskbarTiles
                 var image = new Bitmap(box.Width, box.Height);
                 using (var g = Graphics.FromImage(image))
                     g.CopyFromScreen(box.Location, Point.Empty, box.Size, CopyPixelOperation.SourceCopy);
-                // The taskbar button background is usually uniform at the corners.
-                // Remove the exact corner colour only; do not aggressively key colours
-                // because a tray application's artwork may legitimately use them.
-                if (image.Width > 1 && image.Height > 1)
-                {
-                    Color background = image.GetPixel(0, 0);
-                    image.MakeTransparent(background);
-                }
                 return image;
             }
             catch { return null; }
@@ -233,6 +226,7 @@ namespace TaskbarTiles
     {
         readonly BlockingCollection<Action> jobs=new BlockingCollection<Action>();
         readonly Dictionary<string,Bitmap> cache=new Dictionary<string,Bitmap>(StringComparer.OrdinalIgnoreCase);
+        readonly Dictionary<string,Bitmap> artworkCache=new Dictionary<string,Bitmap>(StringComparer.Ordinal);
         List<FavouriteEntry> catalog;
         volatile bool disposed;
         internal NotificationIconWorker()
@@ -242,6 +236,7 @@ namespace TaskbarTiles
                 foreach(var job in jobs.GetConsumingEnumerable())
                     try { job(); } catch(Exception ex) { Program.Log("Notification icon worker: "+ex.GetType().Name); }
                 foreach(var image in cache.Values) if(image!=null) image.Dispose();
+                foreach(var image in artworkCache.Values) if(image!=null) image.Dispose();
             }));
             thread.IsBackground=true; thread.Name="Notification area icon reader"; thread.SetApartmentState(ApartmentState.STA); thread.Start();
         }
@@ -258,9 +253,14 @@ namespace TaskbarTiles
                         if(disposed) break;
                         try
                         {
-                            if(item.Image!=null) continue; // Prefer artwork captured from the actual Windows tray item.
-                            int discordCount;
-                            if(DiscordNotificationVisual.TryCount(item.Name,out discordCount)) continue;
+                            Bitmap previous;
+                            if(item.Image!=null)
+                            {
+                                if(artworkCache.TryGetValue(item.Key,out previous)){previous.Dispose();artworkCache.Remove(item.Key);}
+                                if(artworkCache.Count>=256){string first=artworkCache.Keys.First();artworkCache[first].Dispose();artworkCache.Remove(first);}
+                                artworkCache[item.Key]=(Bitmap)item.Image.Clone();continue;
+                            }
+                            if(artworkCache.TryGetValue(item.Key,out previous)){item.Image=(Bitmap)previous.Clone();continue;}
                             string target=TargetFor(item.Name);
                             if(target.Length==0) continue;
                             Bitmap cached;
@@ -311,7 +311,12 @@ namespace TaskbarTiles
                 string cls=Native.Class(h);
                 if(cls=="Shell_TrayWnd") primary.Add(h);
                 else if(cls=="Shell_SecondaryTrayWnd") secondary.Add(h);
-                else if(cls=="NotifyIconOverflowWindow") overflow.Add(h);
+                else if(NotificationRoots.IsOverflowClass(cls))
+                {
+                    overflow.Add(h);
+                    IntPtr bridge=NotificationRoots.FindWindowEx(h,IntPtr.Zero,"Windows.UI.Composition.DesktopWindowContentBridge",null);
+                    if(bridge!=IntPtr.Zero)overflow.Add(bridge);
+                }
                 return true;
             },IntPtr.Zero);
             primary.AddRange(secondary); primary.AddRange(overflow); return primary;
@@ -323,11 +328,12 @@ namespace TaskbarTiles
             {
                 try
                 {
-                    var root=AutomationElement.FromHandle(rootHandle); bool overflow=Native.Class(rootHandle)=="NotifyIconOverflowWindow";
+                    var root=AutomationElement.FromHandle(rootHandle); bool overflow=NotificationRoots.IsOverflow(rootHandle);
                     var condition=new OrCondition(
                         new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Button),
                         new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.ListItem),
-                        new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.MenuItem));
+                        new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.MenuItem),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Custom));
                     var elements=root.FindAll(TreeScope.Descendants,condition);
                     for(int i=0;i<elements.Count;i++)
                     {
@@ -339,10 +345,10 @@ namespace TaskbarTiles
                         string key=NotificationAreaPolicy.Key(runtime,c.AutomationId,c.ClassName,c.Name);
                         if(!seen.Add(key)) continue;
                         Rectangle bounds=NotificationAreaPolicy.Bounds(c.BoundingRectangle);
-                        Bitmap artwork=TrayArtwork.Capture(bounds,c.IsOffscreen);
+                        Bitmap artwork=!c.IsOffscreen && NotificationRoots.Uncovered(rootHandle,TrayArtwork.InnerBounds(bounds)) ? TrayArtwork.Capture(bounds,false) : null;
                         result.Add(new NotificationItem{Key=key,Name=c.Name,AutomationId=c.AutomationId??"",ClassName=c.ClassName??"",
                             RuntimeId=runtime,Root=rootHandle,Bounds=bounds,
-                            Offscreen=c.IsOffscreen,Enabled=c.IsEnabled,Image=artwork});
+                            Offscreen=c.IsOffscreen,Enabled=c.IsEnabled,Image=artwork,SystemItem=NotificationRoots.IsSystem(c.AutomationId,c.ClassName,c.Name,overflow)});
                     }
                 }
                 catch(Exception ex){Program.Log("Notification area root: "+ex.GetType().Name);}
@@ -355,11 +361,12 @@ namespace TaskbarTiles
             {
                 try
                 {
-                    var root=AutomationElement.FromHandle(rootHandle); bool overflow=Native.Class(rootHandle)=="NotifyIconOverflowWindow";
+                    var root=AutomationElement.FromHandle(rootHandle); bool overflow=NotificationRoots.IsOverflow(rootHandle);
                     var condition=new OrCondition(
                         new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Button),
                         new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.ListItem),
-                        new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.MenuItem));
+                        new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.MenuItem),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Custom));
                     var elements=root.FindAll(TreeScope.Descendants,condition);
                     for(int i=0;i<elements.Count;i++)
                         if(NotificationAreaPolicy.Candidate(elements[i],root,overflow)&&NotificationAreaPolicy.Same(item,elements[i])) return elements[i];
@@ -392,152 +399,4 @@ namespace TaskbarTiles
         { if(disposed)return;disposed=true;jobs.CompleteAdding();icons.Dispose(); }
     }
 
-    sealed partial class Switcher
-    {
-        NotificationAreaReader notificationReader;
-        readonly List<NotificationItem> notificationItems=new List<NotificationItem>();
-        readonly List<Rectangle> notificationRects=new List<Rectangle>();
-        Rectangle notificationBand=Rectangle.Empty,notificationPrev=Rectangle.Empty,notificationNext=Rectangle.Empty;
-        int notificationPage,notificationPerPage=1;
-        string notificationStatus="Reading notification area...";
-        bool notificationRefresh;
-        ContextMenuStrip notificationMenu;
-
-        void SetupNotificationArea()
-        {
-            notificationReader=new NotificationAreaReader();
-            RefreshNotificationArea();
-        }
-        void RefreshNotificationArea()
-        {
-            if(renderingPreview||notificationReader==null||notificationRefresh||closing)return;
-            if(!options.ShowNotificationArea)
-            {
-                DisposeNotificationImages(); notificationItems.Clear(); notificationStatus=""; notificationPage=0;
-                if(Visible)LayoutMenu(); return;
-            }
-            notificationRefresh=true;
-            notificationReader.Read(options.ShowAllNotificationItems,delegate(List<NotificationItem> found,string status)
-            {
-                if(closing){DisposeNotificationImages(found);return;}
-                Post(delegate
-                {
-                    notificationRefresh=false; DisposeNotificationImages();
-                    notificationItems.Clear(); notificationItems.AddRange(found); notificationStatus=status; notificationPage=0;
-                    if(Visible)LayoutMenu(); else Invalidate();
-                });
-            });
-        }
-        static void DisposeNotificationImages(IEnumerable<NotificationItem> items)
-        { foreach(var item in items)if(item.Image!=null)item.Image.Dispose(); }
-        void DisposeNotificationImages(){DisposeNotificationImages(notificationItems);}
-        void LayoutNotificationArea(int width,int footer,int pad)
-        {
-            notificationRects.Clear(); notificationPrev=notificationNext=notificationBand=Rectangle.Empty;
-            if(!options.ShowNotificationArea)return;
-            int icon=S(options.NotificationIconSize), cell=icon+S(10);
-            int count=renderingPreview?6:notificationItems.Count;
-            int top=footer-cell-S(6);
-            notificationRects.AddRange(NotificationAreaMetrics.Cells(count,notificationPage,width,top,icon,S(options.NotificationIconSpacing),
-                out notificationPrev,out notificationNext,out notificationPerPage));
-            int pages=Math.Max(1,(count+notificationPerPage-1)/notificationPerPage);
-            notificationPage=Math.Max(0,Math.Min(notificationPage,pages-1));
-            notificationBand=new Rectangle(pad,top-S(4),Math.Max(1,width-pad*2),cell+S(8));
-        }
-        void PaintNotificationArea(Graphics g,Color text,Color muted,Color accent)
-        {
-            if(!options.ShowNotificationArea||notificationBand.IsEmpty)return;
-            paintPhase="notification area";
-            int start=notificationPage*notificationPerPage;
-            for(int i=0;i<notificationRects.Count;i++)
-            {
-                Rectangle r=notificationRects[i]; bool hover=lastMouseHit==3000+i;
-                if(hover)DrawingUtil.Round(g,r,S(8),Color.FromArgb(45,59,78),Color.FromArgb(76,95,121),1);
-                int size=S(options.NotificationIconSize);
-                var box=new Rectangle(r.Left+(r.Width-size)/2,r.Top+(r.Height-size)/2,size,size);
-                Bitmap image=null; string name=renderingPreview&&i==0?"Discord - 3 notifications":"Notification item "+(start+i+1);
-                if(!renderingPreview&&start+i<notificationItems.Count){image=notificationItems[start+i].Image;name=notificationItems[start+i].Name;}
-                int discordCount;
-                if(DiscordNotificationVisual.TryCount(name,out discordCount))
-                    DiscordNotificationVisual.Paint(g,box,discordCount);
-                else if(!DrawMenuImage(g,image,box,"notification icon"))
-                {
-                    DrawingUtil.Round(g,box,S(7),Color.FromArgb(39,52,70),Color.FromArgb(61,78,101),1);
-                    Label(g,TextTools.Initials(name),box,false,accent,true);
-                }
-            }
-            int count=renderingPreview?6:notificationItems.Count;
-            if(count==0&&!string.IsNullOrEmpty(notificationStatus))
-                Label(g,notificationStatus,notificationBand,false,muted,true);
-            if(count>notificationPerPage)
-            {
-                PaintAction(g,notificationPrev,-19,"prev"); PaintAction(g,notificationNext,-20,"next");
-            }
-        }
-        int HitNotificationArea(Point p)
-        {
-            if(!options.ShowNotificationArea||notificationBand.IsEmpty)return -100;
-            int count=renderingPreview?6:notificationItems.Count;
-            if(count>notificationPerPage&&notificationPrev.Contains(p))return -19;
-            if(count>notificationPerPage&&notificationNext.Contains(p))return -20;
-            for(int i=0;i<notificationRects.Count;i++)if(notificationRects[i].Contains(p))return 3000+i;
-            return -100;
-        }
-        NotificationItem NotificationAtHit(int hit)
-        {
-            int index=notificationPage*notificationPerPage+hit-3000;
-            return index>=0&&index<notificationItems.Count?notificationItems[index]:null;
-        }
-        string NotificationTip(int hit)
-        {
-            if(hit==-19||hit==-20)return hit==-19?"Previous notification items":"Next notification items";
-            var item=NotificationAtHit(hit);
-            if(item==null)return "";
-            int discordCount;
-            string count=DiscordNotificationVisual.TryCount(item.Name,out discordCount)?"\nDiscord unread: "+discordCount:"";
-            return item.Name+count+"\nLeft-click: normal tray action · Right-click: item actions";
-        }
-        void InvokeNotification(NotificationItem item)
-        {
-            if(item==null||notificationReader==null)return;
-            Dismiss();
-            notificationReader.Act(item,delegate(string error)
-            { if(error!=null)Post(delegate{Notify(error);}); });
-        }
-        void ShowNotificationActions(NotificationItem item,Point clientPoint)
-        {
-            if(item==null)return;
-            if(notificationMenu!=null){notificationMenu.Close();notificationMenu.Dispose();}
-            var menu=new ContextMenuStrip();
-            var open=menu.Items.Add("Open / default action"); open.Click+=delegate{InvokeNotification(item);};
-            menu.Items.Add(new ToolStripSeparator());
-            var copy=menu.Items.Add("Copy name"); copy.Click+=delegate{try{Clipboard.SetText(item.Name);}catch{}};
-            var appearance=menu.Items.Add("Taskbar Tiles appearance settings"); appearance.Click+=delegate{Dismiss();ShowSettings();};
-            var settings=menu.Items.Add("Windows taskbar settings"); settings.Click+=delegate
-            { Dismiss();try{Process.Start("ms-settings:taskbar");}catch(Exception ex){Notify(ex.Message);} };
-            menu.Items.Add(new ToolStripSeparator());
-            var refresh=menu.Items.Add("Refresh notification area"); refresh.Click+=delegate{RefreshNotificationArea();};
-            menu.Closed+=delegate{if(ReferenceEquals(notificationMenu,menu))notificationMenu=null;menu.Dispose();};
-            notificationMenu=menu; menu.Show(this,clientPoint);
-        }
-        bool NotificationAreaWheel(MouseEventArgs e)
-        {
-            if(!options.ShowNotificationArea||notificationBand.IsEmpty||!notificationBand.Contains(e.Location))return false;
-            int count=notificationItems.Count, pages=Math.Max(1,(count+notificationPerPage-1)/notificationPerPage);
-            if((ModifierKeys&Keys.Control)!=0)
-            {
-                int next=Math.Max(16,Math.Min(48,options.NotificationIconSize+(e.Delta<0?-2:2)));
-                try{Options.SaveValue("NotificationIconSize",next.ToString());ReloadSettings(true);}catch(Exception ex){Notify(ex.Message);}
-                return true;
-            }
-            if(pages>1){notificationPage=(notificationPage+(e.Delta<0?1:-1)+pages)%pages;LayoutMenu();return true;}
-            return true;
-        }
-        void ShutdownNotificationArea()
-        {
-            if(notificationMenu!=null){notificationMenu.Close();notificationMenu.Dispose();notificationMenu=null;}
-            DisposeNotificationImages(); notificationItems.Clear();
-            if(notificationReader!=null){notificationReader.Dispose();notificationReader=null;}
-        }
-    }
 }

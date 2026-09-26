@@ -113,3 +113,11 @@ MIT. See [LICENSE](LICENSE) and [third-party notices](THIRD-PARTY-NOTICES.txt) f
 ## Optional Stream Dock modules (0.10+)
 
 **Settings > Stream Dock** manages the custom game/Steam/clipboard/screenshot/voice controls and printer/PC/order displays independently of the taskbar. Enable only the actions you use, Apply while Stream Dock is closed, then add them from the single **Taskbar Tiles** category in Stream Dock. The normal Taskbar Tiles release installer carries future module updates; disabled/new actions stay off and private settings remain local. [Full integration and update guide](docs/STREAM-DOCK.md).
+
+## Active-window organisation (0.14.0)
+
+The main **Order** button cycles **Recent**, **A-Z** and **Priority** and saves the mode. Recent preserves Windows switching order; A-Z sorts window titles. The **P** at the top-left of a window card assigns its application a saved priority from 1 to 50. The picker shows ten rows and scrolls through all fifty. Each occupied slot shows its app name; inserting into an occupied slot shifts entries without dropping an application. Unassigned apps follow assigned apps, and multiple windows of one app retain their recent order. Manage the draft list under **Settings > Window organisation**; Apply saves, Cancel discards.
+
+Application tray icons occupy the middle strip; language/network/audio/clock and other system controls sit at the far right. The Windows 11 hidden-icons window is now included. If Explorer has not created that surface yet, use **Load tray apps...**, then reopen Taskbar Tiles. This opens the native tray only on your explicit click and never changes Windows pin/visibility settings. Actual exposed tray artwork is preferred; offscreen icons without cached artwork use their local application icon or a neutral fallback.
+
+The bottom bar includes **Display settings**, **Bluetooth** and **Task Manager**; individual switches are under **Settings > Quick access**.

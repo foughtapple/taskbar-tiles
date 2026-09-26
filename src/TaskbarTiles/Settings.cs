@@ -41,6 +41,12 @@ namespace TaskbarTiles
         public int SearchVisibleRows = 7;
         public int SearchRowHeight = 54;
         public int AppRows = 2;
+        public int WindowSortMode = 0;
+        public bool ShowPriorityButtons = true;
+        public string WindowPrioritySlots = "";
+        public bool DisplaySettingsButton = true;
+        public bool BluetoothSettingsButton = true;
+        public bool TaskManagerButton = true;
         public bool ShowNotificationArea = true;
         public bool ShowAllNotificationItems = true;
         public int NotificationIconSize = 26;
@@ -102,6 +108,7 @@ namespace TaskbarTiles
             { "SearchButtonWidth", new[] { 200, 900 } }, { "RecentAppsLimit", new[] { 1, 10 } },
             { "SearchPanelWidth", new[] { 420, 1400 } }, { "SearchVisibleRows", new[] { 3, 12 } },
             { "SearchRowHeight", new[] { 40, 84 } }, { "AppRows", new[] { 1, 3 } },
+            { "WindowSortMode", new[] { 0, 2 } },
             { "NotificationIconSize", new[] { 16, 48 } }, { "NotificationIconSpacing", new[] { 2, 24 } }, { "BasicLayout", new[] { 0, 2 } },
             { "PickerWidth", new[] { 640, 2200 } }, { "PickerHeight", new[] { 420, 1200 } },
             { "FullScreenButtonHeight", new[] { 36, 100 } }, { "FullScreenButtonMinWidth", new[] { 150, 400 } },
@@ -277,7 +284,7 @@ namespace TaskbarTiles
             var content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
             content.Controls.Add(tabs); Controls.Add(content); Controls.Add(bottom); Controls.Add(header);
             CreateLivePreview(content);
-            AttachSettingsNavigation(content);
+            AttachSettingsWorkspace(content);
             var appearance = Page("Appearance");
             Section(appearance, "Tile sizes", "App tiles and open-window previews have separate size controls.");
             Number(appearance, "TileSize", "App tile size", "Square launcher tiles, in logical pixels. Default: 120.", 56, 256, 8);
@@ -374,7 +381,7 @@ namespace TaskbarTiles
             AddFavouritesPage();
             AddSearchSettingsPage();
             AddRecentAppsPage();
-            AddTouchSupportPage(); AddShortcutRecoveryPage();
+            AddTouchSupportPage(); AddShortcutRecoveryPage(); AddWindowOrganisationPage();
             BuildSettingsNavigation();
             LoadControls(); HookLiveChanges(); InstallSettingHints();
             if (!string.IsNullOrEmpty(initialTab))
@@ -451,7 +458,7 @@ namespace TaskbarTiles
                 else if (choice != null) choice.SelectedIndex = (int)v;
                 else pair.Value.Text = Convert.ToString(v);
             }
-            loading = false; UpdatePageControls(); QueuePreview();
+            loading = false; PopulatePriorityList(-1); UpdatePageControls(); QueuePreview();
         }
         bool ApplyEdit()
         {

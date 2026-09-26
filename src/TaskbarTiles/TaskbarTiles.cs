@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.13.0";
+        internal const string Version = "0.14.0";
         static bool SignalToggle()
         {
             try
@@ -74,6 +74,7 @@ namespace TaskbarTiles
             if (args.Contains("--test-app-reopen")) { Environment.Exit(AppReopenTests.RunNative()); return; }
             if (args.Contains("--test-notification-target")) { Environment.Exit(NotificationAreaTests.Fixture(args)); return; }
             if (args.Contains("--test-notification-area")) { Environment.Exit(NotificationAreaTests.RunNative()); return; }
+            if (args.Contains("--test-navigation-update")) { Environment.Exit(OrganisationTests.RunNative()); return; }
             if (args.Contains("--test-settings-navigation")) { Environment.Exit(SettingsNavigationTests.RunNative()); return; }
             if (args.Contains("--seed-streamdock-defaults")) { Environment.Exit(DockManager.SeedFirstInstallDefaults()); return; }
             if (args.Contains("--enable-touch-return-default"))
@@ -734,6 +735,7 @@ namespace TaskbarTiles
         public IntPtr Handle;
         public string Title;
         public uint ProcessId;
+        public string PriorityKey = "", PriorityName = "";
     }
 
     sealed partial class Switcher : Form
@@ -985,7 +987,8 @@ namespace TaskbarTiles
             var original = allWindows.FirstOrDefault(w => w.Handle == foregroundBeforeOpen);
             if (original != null) { allWindows.Remove(original); allWindows.Insert(0, original); }
             ApplyFilter(false);
-            selected = windows.Count > 1 ? (reverse ? windows.Count - 1 : 1) : 0;
+            selected = windows.Count > 1 ? (reverse ? windows.Count - 1 : options.WindowSortMode == 0 ? 1 : 0) : 0;
+            if (options.WindowSortMode != 0 && windows.Count > 1 && windows[selected].Handle == foregroundBeforeOpen) selected = reverse ? windows.Count - 2 : 1;
             windowPage = 0; appPage = 0;
             area = Screen.FromPoint(monitorPoint).WorkingArea;
             scale = Native.ScaleAt(monitorPoint);
@@ -1032,7 +1035,8 @@ namespace TaskbarTiles
                 if (h == IntPtr.Zero || !Native.IsWindow(h)) return true;
                 if (!seen.Add(h)) return true;
                 var actualTitle = new StringBuilder(1024); Native.GetWindowText(h, actualTitle, actualTitle.Capacity);
-                list.Add(new WindowItem { Handle = h, ProcessId = WindowNative.ProcessId(h), Title = actualTitle.Length > 0 ? actualTitle.ToString() : title.ToString() });
+                var item = new WindowItem { Handle = h, ProcessId = WindowNative.ProcessId(h), Title = actualTitle.Length > 0 ? actualTitle.ToString() : title.ToString() };
+                WindowPriorityIdentity.Populate(item); list.Add(item);
                 return true;
             }, IntPtr.Zero);
             return list;
@@ -1092,7 +1096,7 @@ namespace TaskbarTiles
             previewDown = new Rectangle(width - pad - S(284), footerTop, S(28), S(28));
             previewUp = new Rectangle(width - pad - S(248), footerTop, S(28), S(28));
             ArrangeQuickAccess();
-            pageInfoRect = new Rectangle(S(204), S(14), Math.Max(1, winPrev.Left - S(280)), S(28));
+            ArrangeOrganisation();
             if (integratedSearch != null && integratedSearch.Visible) ArrangeIntegratedSearch();
             if (Visible && !renderingPreview) UpdateThumbnails(); Invalidate();
         }
@@ -1165,6 +1169,7 @@ namespace TaskbarTiles
             Label(g, windows.Count.ToString(), count, false, accent, true);
             if (menuGeometry != null)
                 Label(g, menuGeometry.Notice.Length == 0 ? perWindowPage + " max/page · up to " + columns + " x " + menuGeometry.MaximumRows : "Screen limit · " + perWindowPage + "/page", pageInfoRect, false, menuGeometry.Notice.Length == 0 ? muted : Color.FromArgb(245, 195, 108), false);
+            PaintOrganisation(g);
             PaintAction(g, closeRect, -1, "close"); PaintAction(g, gearRect, -8, "gear");
             if (options.EnableUndoMove && mover.HasUndo) PaintAction(g, undoRect, -11, "undo");
             if (windows.Count > perWindowPage)
@@ -1180,6 +1185,7 @@ namespace TaskbarTiles
                 DrawingUtil.Round(g, r, S(10), hover ? Color.FromArgb(40, 50, 65) : Color.FromArgb(31, 39, 51),
                     active ? accent : hover ? Color.FromArgb(89, 111, 140) : Color.FromArgb(53, 65, 83), active ? Math.Max(1.5f, scale * 1.5f) : 1);
                 var header = WindowHeaderGeometry.Build(r, options, scale);
+                PaintPriority(g, header, windows[index], i);
                 if (!header.Icon.IsEmpty)
                 {
                     var icon = headerIcons == null ? null : headerIcons.Get(windows[index].Handle);
@@ -1245,6 +1251,8 @@ namespace TaskbarTiles
         static int PageCount(int count, int size) { return Math.Max(1, (count + size - 1) / size); }
         int Hit(Point p)
         {
+            if (organisationRect.Contains(p)) return -21;
+            int priority = HitPriority(p); if (priority != -100) return priority;
             if (pageInfoRect.Contains(p)) return -17;
             int quick = HitQuickAccess(p); if (quick != -100) return quick;
             int notification = HitNotificationArea(p); if (notification != -100) return notification;
@@ -1275,6 +1283,9 @@ namespace TaskbarTiles
             lastMouseHit = hit;
             string text = "";
             if (hit == -17) text = menuGeometry == null ? "" : menuGeometry.Summary(options) + "\nAdjust this in Settings > Appearance > Open-window pages.";
+            else if (hit >= 4000) text = "Set this app's priority (1-50). Ten choices are visible at a time; scroll for more.";
+            else if (hit == -21) text = "Cycle active-window order: Recent, A-Z, Priority. The last mode is saved. Edit the priority list in Settings > Window organisation.";
+            else if (hit == -22) text = NotificationTip(hit);
             else if (hit >= 3000) text = NotificationTip(hit);
             else if (hit >= 2000) text = "Close " + windows[windowPage * perWindowPage + hit - 2000].Title;
             else if (hit >= 1000) text = apps[appPage * perAppPage + hit - 1000].DisplayName + "\nLeft-click: open another. Right-click: choose a screen or zone.";
@@ -1286,7 +1297,7 @@ namespace TaskbarTiles
             else if (hit == -10) text = "Larger open-window previews";
             else if (hit == -11) text = "Undo last window move";
             else if (hit == -19 || hit == -20) text = NotificationTip(hit);
-            if ((hit <= -12 && hit >= -16) || hit == -18) text = QuickAccessTip(hit);
+            if (QuickAccessLayout.IsHit(hit)) text = QuickAccessTip(hit);
             tip.SetToolTip(this, text); Invalidate();
         }
         protected override void OnMouseDown(MouseEventArgs e)
@@ -1304,6 +1315,8 @@ namespace TaskbarTiles
             { CloseWindowCard(hit); return; }
             if (e.Button == MouseButtons.Right)
             {
+                if (hit >= 4000) { ChooseWindowPriority(hit - 4000); return; }
+                if (hit == -21) { Dismiss(); SettingsCore("Window organisation"); return; }
                 if (hit >= 3000) { ShowNotificationActions(NotificationAtHit(hit), e.Location); return; }
                 if (!options.RightClickZones) return;
                 if (hit >= 2000) ChooseZone(windows[windowPage * perWindowPage + hit - 2000], null);
@@ -1312,13 +1325,15 @@ namespace TaskbarTiles
                 return;
             }
             if (e.Button != MouseButtons.Left) return;
+            if (hit >= 4000) { ChooseWindowPriority(hit - 4000); return; }
+            if (hit == -21) { CycleOrganisation(); return; }
+            if (hit == -22) { LoadWindowsTray(); return; }
             if (hit >= 3000) { InvokeNotification(NotificationAtHit(hit)); return; }
             if (hit == -19 || hit == -20)
             {
-                int pages = Math.Max(1, (notificationItems.Count + notificationPerPage - 1) / notificationPerPage);
-                notificationPage = (notificationPage + (hit == -19 ? -1 : 1) + pages) % pages; LayoutMenu(); return;
+                PageNotifications(hit == -19 ? -1 : 1); return;
             }
-            if ((hit <= -12 && hit >= -16) || hit == -18) ExecuteQuickAccess(hit);
+            if (QuickAccessLayout.IsHit(hit)) ExecuteQuickAccess(hit);
             else if (hit == -1) Dismiss();
             else if (hit >= 2000) CloseWindowCard(hit - 2000);
             else if (hit == -8) ShowSettings();
@@ -1372,7 +1387,7 @@ namespace TaskbarTiles
             if (QuickAccessKey(keyData)) return true;
             Keys code = keyData & Keys.KeyCode;
             if (code == Keys.Escape) { if (!string.IsNullOrEmpty(Query)) searchBox.Clear(); else Dismiss(); return true; }
-            if (code == Keys.F5) { RefreshMenuGraphics(); RefreshWindows(); RefreshApps(); return true; }
+            if (code == Keys.F5) { RefreshMenuGraphics(); RefreshWindows(); RefreshApps(); RefreshNotificationArea(); return true; }
             if (keyData == (Keys.Control | Keys.F) && options.EnableSearch) { searchBox.Focus(); searchBox.SelectAll(); return true; }
             if (code == Keys.Enter) { if (windows.Count == 0 && apps.Count > 0) QueueLaunch(apps[0], null); else AcceptWindow(); return true; }
             if (searchBox.Focused && (code == Keys.Left || code == Keys.Right || code == Keys.Home || code == Keys.End)) return base.ProcessCmdKey(ref msg, keyData);
@@ -1612,6 +1627,7 @@ namespace TaskbarTiles
                 FeatureTests.Run(log);
                 NotificationAreaTests.Run(log);
                 SettingsNavigationTests.Run(log);
+                OrganisationTests.Run(log);
                 LauncherTests.Run(log);
                 LauncherExperienceTests.Run(log);
                 SearchPageTests.Run(log);

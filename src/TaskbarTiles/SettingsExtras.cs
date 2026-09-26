@@ -85,6 +85,9 @@ namespace TaskbarTiles
             // TabPages; doing so could drop this page from the live collection.
             Section(p, "Bottom action bar", "Search opens an integrated launcher in this window. It does not open Windows Search. Recent apps and Favourites remain at the bottom-right.");
             Check(p, "WindowsSearchButton", "Show integrated Search on the bottom-left");
+            Check(p, "DisplaySettingsButton", "Show Display settings on the bottom bar");
+            Check(p, "BluetoothSettingsButton", "Show Bluetooth settings on the bottom bar");
+            Check(p, "TaskManagerButton", "Show Task Manager on the bottom bar");
             Check(p, "FavouritesButton", "Show the Favourites launcher on the bottom-right");
             Check(p, "DesktopButton", "Show the desktop shortcut (Win+D)");
             Check(p, "ClipboardButton", "Show Windows clipboard history (Win+V; no clipboard contents are read)");
@@ -258,15 +261,7 @@ namespace TaskbarTiles
             previewCaption = new Label { Dock = DockStyle.Bottom, Height = 115, ForeColor = Theme.Muted, Padding = new Padding(3, 8, 3, 0), AutoEllipsis = true };
             previewPicture = new PictureBox { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.FromArgb(11, 17, 25) };
             previewPanel.Controls.Add(previewPicture); previewPanel.Controls.Add(previewCaption); previewPanel.Controls.Add(header); content.Controls.Add(previewPanel);
-            content.SizeChanged += delegate
-            {
-                float dpi = Math.Max(.75f, DeviceDpi / 96f);
-                bool narrow = content.ClientSize.Width < 1020 * dpi;
-                previewPanel.Dock = narrow ? DockStyle.Bottom : DockStyle.Right;
-                if (narrow) { previewPanel.Height = Math.Min((int)(260 * dpi), Math.Max((int)(180 * dpi), content.Height / 3)); previewCaption.Height = (int)(54 * dpi); }
-                else { previewPanel.Width = (int)(370 * dpi); previewCaption.Height = (int)(115 * dpi); }
-                QueuePreview();
-            };
+            content.SizeChanged += delegate { ArrangeSettingsWorkspace(); QueuePreview(); };
             previewTimer.Tick += delegate { RenderPreview(false); };
             Shown += delegate
             {

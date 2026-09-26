@@ -66,8 +66,8 @@ namespace TaskbarTiles
                     foreach (int searchWidth in new[] { 200, 420, 900 })
                         for (int flags = 0; flags < 32; flags++)
                         {
-                            var o = new Options { SearchButtonWidth = searchWidth, WindowsSearchButton = (flags & 1) != 0,
-                                FavouritesButton = (flags & 2) != 0, DesktopButton = (flags & 4) != 0,
+                            var o = new Options { SearchButtonWidth = searchWidth, DisplaySettingsButton=false, BluetoothSettingsButton=false, TaskManagerButton=false,
+                                WindowsSearchButton = (flags & 1) != 0, FavouritesButton = (flags & 2) != 0, DesktopButton = (flags & 4) != 0,
                                 ClipboardButton = (flags & 8) != 0, RecentAppsButton = (flags & 16) != 0 };
                             int width = (int)Math.Round(logicalWidth * scale), height = (int)Math.Round(600 * scale);
                             var g = QuickAccessLayout.Build(width, height, scale, o); var buttons = g.Buttons().ToList();
