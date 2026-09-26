@@ -51,10 +51,20 @@ namespace TaskbarTiles
                             if(count>per)Require(!prev.IsEmpty&&!next.IsEmpty&&prev.Left>=0&&next.Right<=width,"page buttons fit");
                             layouts++;
                         }
+            var defaults=new Options();
+            Require(defaults.ShowNotificationArea&&defaults.NotificationShowAllItems,"notification row and all-item inventory default on");
             var off=new Options{ShowNotificationArea=false};
             var on=new Options{ShowNotificationArea=true,NotificationIconSize=26};
             Require(NotificationAreaMetrics.LogicalHeight(off)==0,"disabled row takes no height");
             Require(NotificationAreaMetrics.LogicalHeight(on)>=50,"enabled row reserves compact band");
+            using(var flat=new Bitmap(24,24))
+            using(var flatG=Graphics.FromImage(flat))
+            {
+                flatG.Clear(Color.Black);
+                Require(!NotificationVisualCapture.HasVisualSignal(flat),"uniform root crop rejected as a fake tray image");
+                flatG.FillEllipse(Brushes.White,5,5,14,14);
+                Require(NotificationVisualCapture.HasVisualSignal(flat),"real visual contrast accepted for tray-image mirroring");
+            }
             log.AppendLine("PASS: "+layouts+" notification-row layouts and "+checks+" policy/geometry assertions. No tray actions were sent.");
         }
 
@@ -108,6 +118,12 @@ namespace TaskbarTiles
                     var root=AutomationElement.FromHandle(window);
                     var button=root.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.NameProperty,"Fixture tray item"));
                     Require(button!=null,"fixture action element found through UI Automation");
+                    using(var snapshot=NotificationVisualCapture.CaptureRoot(window))
+                    {
+                        Rectangle buttonBounds=NotificationAreaPolicy.Bounds(button.Current.BoundingRectangle);
+                        using(var visual=NotificationVisualCapture.Crop(snapshot,buttonBounds))
+                            Require(visual!=null&&visual.Width>4&&visual.Height>4,"PrintWindow tray-image path captures and crops a real cross-process control");
+                    }
                     string error=NotificationAreaAction.InvokeDefault(button);
                     Require(error==null&&invoked.WaitOne(5000),"default notification action invoked cross-process");
                     try{if(!process.HasExited)process.Kill();}catch{}

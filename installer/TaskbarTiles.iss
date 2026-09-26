@@ -37,6 +37,8 @@ ChangesAssociations=no
 [Tasks]
 Name: "startup"; Description: "Start Taskbar Tiles when I sign in"; GroupDescription: "Startup:"; Flags: checkedonce
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
+Name: "streamdock"; Description: "Install and enable the bundled Stream Dock integration"; GroupDescription: "Optional integrations:"; Check: IsFreshInstall
+Name: "touchreturn"; Description: "Enable Touch Return (mouse/focus back to the previous screen after touchscreen use)"; GroupDescription: "Optional integrations:"; Flags: unchecked; Check: IsFreshInstall
 [Files]
 Source: "..\build\app\TaskbarTiles.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\build\app\TaskbarTiles.exe.config"; DestDir: "{app}"; Flags: ignoreversion
@@ -57,6 +59,13 @@ Filename: "{app}\TaskbarTiles.exe"; Description: "Start Taskbar Tiles"; Flags: n
 [Code]
 var
   BackupDone: Boolean;
+  ExistingInstall: Boolean;
+  ExistingPreferences: Boolean;
+
+function IsFreshInstall(): Boolean;
+begin
+  Result := (not ExistingInstall) and (not ExistingPreferences);
+end;
 function StopResident(const Folder: String): Boolean;
 var
   Code, I: Integer;
@@ -73,15 +82,15 @@ begin
 end;
 function InitializeSetup(): Boolean;
 begin
+  ExistingInstall := FileExists(ExpandConstant('{localappdata}\TaskbarTiles\TaskbarTiles.exe'));
+  ExistingPreferences := FileExists(ExpandConstant('{localappdata}\TaskbarTiles\settings.ini')) or
+    FileExists(ExpandConstant('{localappdata}\TaskbarTiles\StreamDockData\state.json'));
   Result := IsDotNetInstalled(net48, 0);
   if not Result then MsgBox('Taskbar Tiles needs Microsoft .NET Framework 4.8 or later. Install it from Microsoft, then run Setup again.', mbError, MB_OK);
 end;
 procedure InitializeWizard();
-var
-  Existing: Boolean;
 begin
-  Existing := FileExists(ExpandConstant('{localappdata}\TaskbarTiles\TaskbarTiles.exe'));
-  if Existing then begin
+  if ExistingInstall then begin
     WizardSelectTasks('');
     if FileExists(ExpandConstant('{userstartup}\Taskbar Tiles.lnk')) then WizardSelectTasks('startup');
     if FileExists(ExpandConstant('{userdesktop}\Taskbar Tiles.lnk')) then WizardSelectTasks('desktopicon');
@@ -127,11 +136,32 @@ begin
   if CurStep = ssPostInstall then begin
     if not WizardIsTaskSelected('startup') then DeleteFile(ExpandConstant('{userstartup}\Taskbar Tiles.lnk'));
     if not WizardIsTaskSelected('desktopicon') then DeleteFile(ExpandConstant('{userdesktop}\Taskbar Tiles.lnk'));
-    { Apply only previously selected plugins; no setup or monitoring on first install. }
-    Code := 0;
-    if not Exec(ExpandConstant('{app}\TaskbarTiles.exe'), '--sync-streamdock', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then begin
-      Log('Taskbar Tiles installed; Stream Dock changes remain pending. See StreamDockData\last-result.txt.');
-      if not WizardSilent then MsgBox('Taskbar Tiles was updated. Some Stream Dock updates remain pending. Close Stream Dock, open Taskbar Tiles Settings > Stream Dock and choose Apply. Existing settings were retained.', mbInformation, MB_OK);
+    { Fresh installs expose explicit integration choices. Upgrades preserve the
+      existing state/configuration and never re-enable an option the user disabled. }
+    if not ExistingInstall then begin
+      if WizardIsTaskSelected('streamdock') then begin
+        Code := 0;
+        if not Exec(ExpandConstant('{app}\TaskbarTiles.exe'), '--init-streamdock-defaults', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then begin
+          Log('Fresh-install Stream Dock integration is selected but remains pending. See StreamDockData\last-result.txt.');
+          if not WizardSilent then MsgBox('Taskbar Tiles saved the Stream Dock integration choice, but it could not finish installing the plugin. Fully exit Stream Dock, then open Taskbar Tiles Settings > Stream Dock and choose Apply.', mbInformation, MB_OK);
+        end;
+      end;
+      if WizardIsTaskSelected('touchreturn') then begin
+        Code := 0;
+        if not Exec(ExpandConstant('{app}\TaskbarTiles.exe'), '--installer-enable-touch', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then begin
+          Log('Could not enable the Touch Return master switch during Setup.');
+          if not WizardSilent then MsgBox('Touch Return remains off. You can enable it later in Taskbar Tiles Settings > Touch screen monitor support.', mbInformation, MB_OK);
+        end;
+      end;
+    end;
+    { Existing installs/reinstalls reconcile only their saved Stream Dock
+      choices. A truly fresh selected install was already handled above. }
+    if ExistingInstall or ExistingPreferences then begin
+      Code := 0;
+      if not Exec(ExpandConstant('{app}\TaskbarTiles.exe'), '--sync-streamdock', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then begin
+        Log('Taskbar Tiles installed; Stream Dock changes remain pending. See StreamDockData\last-result.txt.');
+        if not WizardSilent then MsgBox('Taskbar Tiles was installed. Some Stream Dock updates remain pending. Fully exit Stream Dock, open Taskbar Tiles Settings > Stream Dock and choose Apply. Existing settings were retained.', mbInformation, MB_OK);
+      end;
     end;
     { Supersede only our own optional local-build registration, never other apps. }
     RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\TaskbarTiles-LocalBuild');

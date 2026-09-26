@@ -129,6 +129,84 @@ namespace TaskbarTiles
         }
     }
 
+    static class NotificationVisualCapture
+    {
+        [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint flags);
+
+        internal sealed class Snapshot : IDisposable
+        {
+            internal Bitmap Image;
+            internal Rectangle ScreenBounds;
+            public void Dispose() { if (Image != null) { Image.Dispose(); Image = null; } }
+        }
+
+        static bool SafeBounds(Rectangle r)
+        {
+            return r.Width > 0 && r.Height > 0 && r.Width <= 8192 && r.Height <= 4320 &&
+                (long)r.Width * r.Height <= 24000000L;
+        }
+
+        internal static Snapshot CaptureRoot(IntPtr hwnd)
+        {
+            Native.RECT native;
+            if (hwnd == IntPtr.Zero || !Native.GetWindowRect(hwnd, out native)) return null;
+            Rectangle bounds = native.Rectangle;
+            if (!SafeBounds(bounds)) return null;
+            Bitmap image = null;
+            try
+            {
+                image = new Bitmap(bounds.Width, bounds.Height);
+                using (var graphics = Graphics.FromImage(image))
+                {
+                    IntPtr hdc = graphics.GetHdc();
+                    bool ok;
+                    try { ok = PrintWindow(hwnd, hdc, 2); }
+                    finally { graphics.ReleaseHdc(hdc); }
+                    if (!ok) { image.Dispose(); return null; }
+                }
+                return new Snapshot { Image = image, ScreenBounds = bounds };
+            }
+            catch
+            {
+                if (image != null) image.Dispose();
+                return null;
+            }
+        }
+
+        internal static Bitmap Crop(Snapshot snapshot, Rectangle screenBounds)
+        {
+            if (snapshot == null || snapshot.Image == null || screenBounds.IsEmpty) return null;
+            Rectangle local = new Rectangle(screenBounds.Left - snapshot.ScreenBounds.Left,
+                screenBounds.Top - snapshot.ScreenBounds.Top, screenBounds.Width, screenBounds.Height);
+            local.Intersect(new Rectangle(Point.Empty, snapshot.Image.Size));
+            if (local.Width < 4 || local.Height < 4 || local.Width > 256 || local.Height > 256) return null;
+            try
+            {
+                var result = new Bitmap(local.Width, local.Height);
+                using (var g = Graphics.FromImage(result))
+                    g.DrawImage(snapshot.Image, new Rectangle(Point.Empty, result.Size), local, GraphicsUnit.Pixel);
+                if (!HasVisualSignal(result)) { result.Dispose(); return null; }
+                return result;
+            }
+            catch { return null; }
+        }
+
+        internal static bool HasVisualSignal(Bitmap image)
+        {
+            if (image == null || image.Width < 1 || image.Height < 1) return false;
+            int minR=255,minG=255,minB=255,maxR=0,maxG=0,maxB=0,opaque=0;
+            int stepX=Math.Max(1,image.Width/10), stepY=Math.Max(1,image.Height/10);
+            for(int y=0;y<image.Height;y+=stepY)
+                for(int x=0;x<image.Width;x+=stepX)
+                {
+                    Color c=image.GetPixel(x,y); if(c.A<16)continue; opaque++;
+                    minR=Math.Min(minR,c.R);minG=Math.Min(minG,c.G);minB=Math.Min(minB,c.B);
+                    maxR=Math.Max(maxR,c.R);maxG=Math.Max(maxG,c.G);maxB=Math.Max(maxB,c.B);
+                }
+            return opaque>=2 && Math.Max(maxR-minR,Math.Max(maxG-minG,maxB-minB))>=10;
+        }
+    }
+
     static class DiscordNotificationVisual
     {
         static readonly Regex CountByWord = new Regex(@"(?i)(?<n>\d{1,4})\s*(?:new\s+|unread\s+)?(?:notification(?:s)?|message(?:s)?|mention(?:s)?)\b", RegexOptions.Compiled);
@@ -224,7 +302,7 @@ namespace TaskbarTiles
                         try
                         {
                             int discordCount;
-                            if(DiscordNotificationVisual.TryCount(item.Name,out discordCount)) continue;
+                            if(DiscordNotificationVisual.TryCount(item.Name,out discordCount) || item.Image != null) continue;
                             string target=TargetFor(item.Name);
                             if(target.Length==0) continue;
                             Bitmap cached;
@@ -280,14 +358,17 @@ namespace TaskbarTiles
             },IntPtr.Zero);
             primary.AddRange(secondary); primary.AddRange(overflow); return primary;
         }
-        static List<NotificationItem> Scan()
+        static List<NotificationItem> Scan(bool includeHidden)
         {
             var result=new List<NotificationItem>(); var seen=new HashSet<string>(StringComparer.Ordinal);
             foreach(IntPtr rootHandle in Roots())
             {
+                NotificationVisualCapture.Snapshot snapshot=null;
                 try
                 {
                     var root=AutomationElement.FromHandle(rootHandle); bool overflow=Native.Class(rootHandle)=="NotifyIconOverflowWindow";
+                    if(!includeHidden && overflow) continue;
+                    snapshot=NotificationVisualCapture.CaptureRoot(rootHandle);
                     var condition=new OrCondition(
                         new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Button),
                         new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.ListItem),
@@ -297,15 +378,19 @@ namespace TaskbarTiles
                     {
                         var element=elements[i];
                         if(!NotificationAreaPolicy.Candidate(element,root,overflow)) continue;
-                        var c=element.Current; string runtime=NotificationAreaPolicy.Runtime(element);
+                        var c=element.Current;
+                        if(!includeHidden && c.IsOffscreen) continue;
+                        string runtime=NotificationAreaPolicy.Runtime(element);
                         string key=NotificationAreaPolicy.Key(runtime,c.AutomationId,c.ClassName,c.Name);
                         if(!seen.Add(key)) continue;
+                        Rectangle bounds=NotificationAreaPolicy.Bounds(c.BoundingRectangle);
                         result.Add(new NotificationItem{Key=key,Name=c.Name,AutomationId=c.AutomationId??"",ClassName=c.ClassName??"",
-                            RuntimeId=runtime,Root=rootHandle,Bounds=NotificationAreaPolicy.Bounds(c.BoundingRectangle),
-                            Offscreen=c.IsOffscreen,Enabled=c.IsEnabled});
+                            RuntimeId=runtime,Root=rootHandle,Bounds=bounds,Offscreen=c.IsOffscreen,Enabled=c.IsEnabled,
+                            Image=NotificationVisualCapture.Crop(snapshot,bounds)});
                     }
                 }
                 catch(Exception ex){Program.Log("Notification area root: "+ex.GetType().Name);}
+                finally { if(snapshot!=null)snapshot.Dispose(); }
             }
             return result;
         }
@@ -328,12 +413,12 @@ namespace TaskbarTiles
             }
             return null;
         }
-        internal void Read(Action<List<NotificationItem>,string> completed)
+        internal void Read(bool includeHidden,Action<List<NotificationItem>,string> completed)
         {
             if(disposed||jobs.IsAddingCompleted)return;
             jobs.Add(delegate
             {
-                var list=Scan(); string status=list.Count==0?
+                var list=Scan(includeHidden); string status=list.Count==0?
                     "Windows has not exposed notification-area items yet. Refresh after the taskbar/Explorer is ready.":"";
                 icons.Resolve(list,delegate{completed(list,status);});
             });
@@ -377,7 +462,7 @@ namespace TaskbarTiles
                 if(Visible)LayoutMenu(); return;
             }
             notificationRefresh=true;
-            notificationReader.Read(delegate(List<NotificationItem> found,string status)
+            notificationReader.Read(options.NotificationShowAllItems,delegate(List<NotificationItem> found,string status)
             {
                 if(closing){DisposeNotificationImages(found);return;}
                 Post(delegate

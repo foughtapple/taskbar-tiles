@@ -12,3 +12,12 @@ identity. Only install builds from a source you trust; do not disable Windows se
 
 Uninstall through Windows Settings > Apps. Personal settings and favourites remain
 on disk unless you remove their folder yourself after uninstalling.
+
+
+Optional integrations on a fresh install
+----------------------------------------
+Stream Dock integration is selected by default. It enables the bundled Taskbar Tiles Stream Dock actions and keeps their module updater enabled. Fully exit Stream Dock before Setup if you want the plugin files applied immediately.
+
+Touch Return (the touchscreen mouse/focus return feature) is included in Taskbar Tiles but is OFF by default. Setup offers an unchecked option to enable its master switch. Even when enabled, it will not return automatically until a touchscreen/pen device and monitor pass the in-app detection/association test.
+
+When upgrading an existing Taskbar Tiles installation, Setup preserves your saved Stream Dock action choices, Stream Dock auto-update preference and Touch Return setting rather than resetting them.

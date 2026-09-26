@@ -33,7 +33,9 @@ namespace TaskbarTiles
                 passed = 0; string bundle = Path.Combine(tmp, "bundle"), plugins = Path.Combine(tmp, "plugins"), state = Path.Combine(tmp, "state");
                 var c = Fixture(bundle, "1.0.0", false); var m = new DockManager(bundle, plugins, state, () => ""); var p = c.Packages[0];
                 string live = Path.Combine(plugins, p.Folder); string a = p.Actions[0].Id, b = p.Actions[1].Id;
-                Check(!m.HasState && !m.Rows().Any(x => x.Selected), "new catalogue is opt-in");
+                Check(!m.HasState && !m.Rows().Any(x => x.Selected), "new catalogue is opt-in until Setup or Settings explicitly adopts it");
+                var freshDefaults=m.FreshInstallDefaults();
+                Check(freshDefaults.AutoUpdate&&freshDefaults.EnabledActions.OrderBy(x=>x).SequenceEqual(new[]{a,b}.OrderBy(x=>x))&&freshDefaults.ManagedPackages.SequenceEqual(new[]{"demo"}),"fresh-install Stream Dock option enables the complete bundled package");
                 Check(m.Apply(new DockState(), true, false).Contains("off"), "unconfigured startup is read-only");
                 Check(!Directory.Exists(plugins), "no plugin root created by read-only startup");
                 m.Apply(new DockState { EnabledActions = new[] { a } }, false, false);

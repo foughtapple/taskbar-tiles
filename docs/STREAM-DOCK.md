@@ -2,6 +2,10 @@
 
 Taskbar Tiles 0.10.1 uses an optional **Settings > Stream Dock** tab and one unified **Taskbar Tiles** plugin/category. It is a local package manager, separate from the taskbar switcher. It does not run the monitors, rewrite Stream Dock scenes, or change other installed plugins.
 
+## Fresh install defaults
+
+Starting with Taskbar Tiles 0.13.0, Setup offers **Install and enable the bundled Stream Dock integration** on fresh installs and checks it by default. Selecting it enables every action in the single unified Taskbar Tiles package and turns module auto-update on. If Stream Dock is currently running, Setup records the choice and leaves installation pending; fully exit Stream Dock and use **Settings > Stream Dock > Apply** to finish. Existing installs/upgrades keep their saved per-action choices and auto-update preference instead of being reset.
+
 ## First upgrade / bring the existing plugins under management
 
 1. Update Taskbar Tiles normally using **Settings > Updates > Check for updates**, or install the current GitHub release's Setup executable. Do not run the old separate plugin installers afterward.

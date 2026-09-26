@@ -181,6 +181,7 @@ namespace TaskbarTiles
                     settingsNavigationButtons.Values.All(b => b.BackColor != Color.White);
             }
         }
+        internal int SettingsNavigationWidth { get { return settingsNavigationPanel == null ? 0 : settingsNavigationPanel.Width; } }
 
         void DisposeSettingsNavigation()
         {
