@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0
+
+- Add fresh-install integration choices: Stream Dock integration is checked by default; Touch Return is available but unchecked by default. Upgrades preserve existing saved choices.
+- Fresh Stream Dock selection enables every bundled action in the unified Taskbar Tiles Stream Dock package with module auto-update on; a blocked live Stream Dock swap remains pending rather than losing the choice.
+- Default the notification-area row to all detected tray items, including hidden/overflow entries, with an opt-out to visible-only inventory.
+- Mirror the actual Windows-rendered tray-item image where the shell can render it safely; fall back to a strongly matched app icon or neutral initials when unavailable. Discord keeps its special black/red unread counter.
+- Narrow the dark Settings navigation rail from 205 to 172 logical pixels and add ellipsis handling for long page names.
+- Preserve 0.12.1's API-free updater, unified Stream Dock settings, Touch Return safety gates and all existing user data.
+
 ## 0.12.1
 
 - Fix updater HTTP 403 failures by removing the unauthenticated GitHub REST API from required version discovery.

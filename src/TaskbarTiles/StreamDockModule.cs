@@ -350,6 +350,39 @@ namespace TaskbarTiles
             }
             return string.Join(", ", found.Distinct().Take(8));
         }
+        internal DockState FreshInstallDefaults()
+        {
+            return new DockState {
+                AutoUpdate = true,
+                EnabledActions = Catalog.Packages.SelectMany(p => p.Actions).Select(a => a.Id).Distinct().OrderBy(x => x).ToArray(),
+                ManagedPackages = Catalog.Packages.Select(p => p.Id).Distinct().OrderBy(x => x).ToArray()
+            };
+        }
+
+        internal static int InitialiseFreshInstallDefaults()
+        {
+            try
+            {
+                var m = Open();
+                // Setup must never reset an existing user's Stream Dock choices.
+                if (m.HasState) return 0;
+                var desired = m.FreshInstallDefaults();
+                Directory.CreateDirectory(m.Store);
+                // Persist the user's fresh-install choice before attempting the file
+                // swap. If Stream Dock is open, startup/Settings can reconcile later.
+                AtomicText(m.StatePath, Encode(desired));
+                string message = m.Apply(desired, true, false);
+                Program.Log("Stream Dock fresh-install defaults: " + message);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Program.Log("Stream Dock fresh-install integration pending: " + ex.Message);
+                try { AtomicText(Path.Combine(Program.Home, "StreamDockData", "last-result.txt"), "INSTALL PENDING: " + ex.Message); } catch { }
+                return 20;
+            }
+        }
+
         internal static int SyncInstalled(bool readinessOnly)
         {
             try {
