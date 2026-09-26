@@ -172,6 +172,18 @@ namespace TaskbarTiles
             }
         }
 
+        internal string SettingsNavigationDebug
+        {
+            get
+            {
+                string pages = string.Join(" | ", tabs.TabPages.Cast<TabPage>().Select(p => p.Text).ToArray());
+                string buttons = string.Join(" | ", settingsNavigationButtons.Keys.Select(p => p.Text).ToArray());
+                return "rail=" + (settingsNavigationPanel == null ? -1 : settingsNavigationPanel.Width) +
+                    "; dpi=" + DeviceDpi + "; tabs=" + tabs.TabPages.Count + "; buttons=" + settingsNavigationButtons.Count +
+                    "; pages=[" + pages + "]; buttonPages=[" + buttons + "]";
+            }
+        }
+
         internal bool SettingsNavigationReady
         {
             get

@@ -48,7 +48,7 @@ namespace TaskbarTiles
                 using (var form = new SettingsWindow(new Options(), delegate(Options o) { }))
                 {
                     form.Show(); Application.DoEvents(); form.PerformLayout(); Application.DoEvents();
-                    Require(form.SettingsNavigationReady, "visible settings window has one dark navigation button per page");
+                    Require(form.SettingsNavigationReady, "visible settings window has one dark navigation button per page; " + form.SettingsNavigationDebug);
                     using (var image = new Bitmap(form.Width, form.Height))
                     {
                         form.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size));
