@@ -81,15 +81,10 @@ try {
 } finally { $p.Dispose() }
 if (-not ((Get-Content -LiteralPath $settings) -contains 'TouchSupportEnabled=true')) { throw 'Touch Return installer option could not enable its master switch.' }
 
-$uninstallFile = Get-ChildItem -LiteralPath $dest -Filter 'unins*.exe' | Select-Object -First 1
-if ($null -eq $uninstallFile) { throw 'Default install did not create an uninstaller executable.' }
-$uninstall = $uninstallFile.FullName
-$p = Start-Process $uninstall -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -PassThru
-try {
-    if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'Default-install uninstaller timed out.' }
-    if ($p.ExitCode -ne 0) { throw "Default-install uninstaller failed: $($p.ExitCode)" }
-} finally { $p.Dispose() }
+# Uninstall behavior was already exercised above on the preserved-upgrade path.
+# This second installation exists only to validate fresh-install defaults; the
+# disposable runner can clean its files directly after those assertions.
 if (Test-Path $activeDock) { Remove-Item $activeDock -Recurse -Force }
 $startupLink = Join-Path ([Environment]::GetFolderPath('Startup')) 'Taskbar Tiles.lnk'
 if (Test-Path $startupLink) { Remove-Item $startupLink -Force }
-'PASS: per-user registration, upgrade preservation, fresh Stream Dock-on / Touch Return-off installer defaults, optional Touch Return enablement, uninstall cleanup and retained user data.' | Set-Content (Join-Path $root 'build\installer-test-results.txt')
+'PASS: per-user registration, upgrade preservation, upgrade/uninstall preservation, fresh Stream Dock-on / Touch Return-off defaults, optional Touch Return enablement and retained user data.' | Set-Content (Join-Path $root 'build\installer-test-results.txt')
