@@ -129,6 +129,41 @@ namespace TaskbarTiles
         }
     }
 
+    static class TrayArtwork
+    {
+        internal static Rectangle InnerBounds(Rectangle bounds)
+        {
+            if (bounds.Width < 8 || bounds.Height < 8) return Rectangle.Empty;
+            int side = Math.Max(8, (int)Math.Round(Math.Min(bounds.Width, bounds.Height) * 0.62));
+            side = Math.Min(side, Math.Min(bounds.Width, bounds.Height));
+            return new Rectangle(bounds.Left + (bounds.Width - side) / 2, bounds.Top + (bounds.Height - side) / 2, side, side);
+        }
+
+        internal static Bitmap Capture(Rectangle bounds, bool offscreen)
+        {
+            try
+            {
+                if (offscreen) return null;
+                Rectangle box = InnerBounds(bounds);
+                Rectangle visible = Rectangle.Intersect(box, SystemInformation.VirtualScreen);
+                if (visible.Width != box.Width || visible.Height != box.Height || box.IsEmpty) return null;
+                var image = new Bitmap(box.Width, box.Height);
+                using (var g = Graphics.FromImage(image))
+                    g.CopyFromScreen(box.Location, Point.Empty, box.Size, CopyPixelOperation.SourceCopy);
+                // The taskbar button background is usually uniform at the corners.
+                // Remove the exact corner colour only; do not aggressively key colours
+                // because a tray application's artwork may legitimately use them.
+                if (image.Width > 1 && image.Height > 1)
+                {
+                    Color background = image.GetPixel(0, 0);
+                    image.MakeTransparent(background);
+                }
+                return image;
+            }
+            catch { return null; }
+        }
+    }
+
     static class DiscordNotificationVisual
     {
         static readonly Regex CountByWord = new Regex(@"(?i)(?<n>\d{1,4})\s*(?:new\s+|unread\s+)?(?:notification(?:s)?|message(?:s)?|mention(?:s)?)\b", RegexOptions.Compiled);
@@ -223,6 +258,7 @@ namespace TaskbarTiles
                         if(disposed) break;
                         try
                         {
+                            if(item.Image!=null) continue; // Prefer artwork captured from the actual Windows tray item.
                             int discordCount;
                             if(DiscordNotificationVisual.TryCount(item.Name,out discordCount)) continue;
                             string target=TargetFor(item.Name);
@@ -280,7 +316,7 @@ namespace TaskbarTiles
             },IntPtr.Zero);
             primary.AddRange(secondary); primary.AddRange(overflow); return primary;
         }
-        static List<NotificationItem> Scan()
+        static List<NotificationItem> Scan(bool includeHidden)
         {
             var result=new List<NotificationItem>(); var seen=new HashSet<string>(StringComparer.Ordinal);
             foreach(IntPtr rootHandle in Roots())
@@ -297,12 +333,16 @@ namespace TaskbarTiles
                     {
                         var element=elements[i];
                         if(!NotificationAreaPolicy.Candidate(element,root,overflow)) continue;
-                        var c=element.Current; string runtime=NotificationAreaPolicy.Runtime(element);
+                        var c=element.Current;
+                        if(!includeHidden && (overflow || c.IsOffscreen)) continue;
+                        string runtime=NotificationAreaPolicy.Runtime(element);
                         string key=NotificationAreaPolicy.Key(runtime,c.AutomationId,c.ClassName,c.Name);
                         if(!seen.Add(key)) continue;
+                        Rectangle bounds=NotificationAreaPolicy.Bounds(c.BoundingRectangle);
+                        Bitmap artwork=TrayArtwork.Capture(bounds,c.IsOffscreen);
                         result.Add(new NotificationItem{Key=key,Name=c.Name,AutomationId=c.AutomationId??"",ClassName=c.ClassName??"",
-                            RuntimeId=runtime,Root=rootHandle,Bounds=NotificationAreaPolicy.Bounds(c.BoundingRectangle),
-                            Offscreen=c.IsOffscreen,Enabled=c.IsEnabled});
+                            RuntimeId=runtime,Root=rootHandle,Bounds=bounds,
+                            Offscreen=c.IsOffscreen,Enabled=c.IsEnabled,Image=artwork});
                     }
                 }
                 catch(Exception ex){Program.Log("Notification area root: "+ex.GetType().Name);}
@@ -328,12 +368,12 @@ namespace TaskbarTiles
             }
             return null;
         }
-        internal void Read(Action<List<NotificationItem>,string> completed)
+        internal void Read(bool includeHidden,Action<List<NotificationItem>,string> completed)
         {
             if(disposed||jobs.IsAddingCompleted)return;
             jobs.Add(delegate
             {
-                var list=Scan(); string status=list.Count==0?
+                var list=Scan(includeHidden); string status=list.Count==0?
                     "Windows has not exposed notification-area items yet. Refresh after the taskbar/Explorer is ready.":"";
                 icons.Resolve(list,delegate{completed(list,status);});
             });
@@ -377,7 +417,7 @@ namespace TaskbarTiles
                 if(Visible)LayoutMenu(); return;
             }
             notificationRefresh=true;
-            notificationReader.Read(delegate(List<NotificationItem> found,string status)
+            notificationReader.Read(options.ShowAllNotificationItems,delegate(List<NotificationItem> found,string status)
             {
                 if(closing){DisposeNotificationImages(found);return;}
                 Post(delegate

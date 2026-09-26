@@ -42,6 +42,7 @@ namespace TaskbarTiles
         public int SearchRowHeight = 54;
         public int AppRows = 2;
         public bool ShowNotificationArea = true;
+        public bool ShowAllNotificationItems = true;
         public int NotificationIconSize = 26;
         public int NotificationIconSpacing = 8;
         public bool InterceptAltTab = true;
@@ -297,6 +298,7 @@ namespace TaskbarTiles
             Number(appearance, "AppRows", "Maximum app rows", "Balances tiles across rows rather than leaving one tile on its own.", 1, 3, 1);
             Section(appearance, "Notification area row", "Mirror the Windows notification area in one compact row between Taskbar apps and the footer. It is independent of taskbar auto-hide.");
             Check(appearance, "ShowNotificationArea", "Show notification-area icons in the main menu");
+            Check(appearance, "ShowAllNotificationItems", "Show all Windows tray items, including hidden/overflow items");
             Number(appearance, "NotificationIconSize", "Notification icon size", "Logical pixels. Default: 26. Ctrl+mouse-wheel over the notification row adjusts this quickly.", 16, 48, 2);
             Number(appearance, "NotificationIconSpacing", "Notification icon spacing", "Gap between compact notification icons. Extra icons use pages while staying on one row.", 2, 24, 2);
             Check(appearance, "ShowAppLabels", "Show app names under icons");

@@ -28,6 +28,11 @@ namespace TaskbarTiles
             Require(NotificationAreaPolicy.IsExcluded("","TaskListButton","Steam"),"taskbar app button excluded");
             Require(NotificationAreaPolicy.StrongNameMatch("Steam - 2 notifications","Steam"),"status suffix can resolve an icon");
             Require(!NotificationAreaPolicy.StrongNameMatch("OneDrive","Drive"),"weak substring does not guess an icon");
+            var defaults = new Options();
+            Require(defaults.ShowAllNotificationItems, "all notification-area items are shown by default");
+            var outer = new Rectangle(100, 200, 40, 32);
+            var inner = TrayArtwork.InnerBounds(outer);
+            Require(!inner.IsEmpty && outer.Contains(inner) && inner.Width == inner.Height, "captured tray artwork uses a centred square inside the Windows tray button");
             int discord;
             Require(DiscordNotificationVisual.TryCount("Discord",out discord)&&discord==0,"Discord without an explicit count renders zero");
             Require(DiscordNotificationVisual.TryCount("Discord - 1 notification",out discord)&&discord==1,"Discord singular notification count parsed");

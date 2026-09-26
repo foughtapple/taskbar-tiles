@@ -30,6 +30,7 @@ namespace TaskbarTiles
 
             using (var tabs = new HeaderlessSettingsTabs())
             {
+                Require(SettingsNavigationModel.Groups.SelectMany(g => g.Pages).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 13, "navigation model covers every expected settings page exactly once");
                 Require(tabs.Appearance == TabAppearance.FlatButtons, "native white tab styling is not used");
                 Require(tabs.DrawMode == TabDrawMode.OwnerDrawFixed, "hidden tab strip is owner-drawn");
                 Require(tabs.ItemSize.Height <= 1 && tabs.ItemSize.Width <= 1, "native tab strip is collapsed to a one-pixel host");
@@ -47,7 +48,7 @@ namespace TaskbarTiles
                 using (var form = new SettingsWindow(new Options(), delegate(Options o) { }))
                 {
                     form.Show(); Application.DoEvents(); form.PerformLayout(); Application.DoEvents();
-                    Require(form.SettingsNavigationReady, "visible settings window has one dark navigation button per page");
+                    Require(form.SettingsNavigationReady, "visible settings window has one dark navigation button per page; " + form.SettingsNavigationDebug);
                     using (var image = new Bitmap(form.Width, form.Height))
                     {
                         form.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size));

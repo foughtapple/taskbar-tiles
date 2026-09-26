@@ -14,6 +14,8 @@
 
 Run Setup normally. It installs for your account, adds a Start menu shortcut and an entry in **Windows Settings → Apps**, and offers startup at sign-in. Administrator access, Git and developer tools are not required for an installed release. Requires Windows 10/11 with .NET Framework 4.8 or later; Windows 11 is the primary manual-testing target.
 
+Setup now also shows two optional integration choices: **Stream Dock integration** is checked by default; **Touch Return** is unchecked by default. On a fresh install, the Stream Dock choice seeds all bundled Taskbar Tiles Stream Dock actions and keeps automatic module updates enabled. Touch Return only enables its master feature switch; it still requires the normal monitor/device detection setup before automatic return can run. Upgrades do not overwrite an existing Stream Dock state file or existing Touch Return settings.
+
 **Upgrading from a previous source-built version? Do not uninstall first.** Setup updates the same `%LOCALAPPDATA%\TaskbarTiles` directory, preserving your settings, favourites, startup choice and X-Mouse command. [Migration and removal instructions](docs/INSTALLATION.md).
 
 > Builds are currently unsigned. SHA-256 checksums detect corruption; they do not independently authenticate the publisher. Review the source and provenance, and do not disable Windows security to install this app.
@@ -88,6 +90,8 @@ The app is C# 5 / .NET Framework 4.8 / WinForms, without third-party runtime pac
 GitHub Actions compiles/tests pull requests and builds a normal installer for a version update on main or matching version tags. Release gates cover real-menu rendering, native outside clicks, topmost ordering, launch fixtures, Touch Return policy/listener lifecycle, shortcut repair, updater HTTPS/checksums and installer lifecycle. Published releases include `SHA256SUMS.txt` and `build-info.json`; the latter records the exact commit/run and what CI tested. CI does not certify touchscreen hardware or the user's interactive desktop. [Testing](docs/TESTING.md) · [Architecture](docs/ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ## Notification-area row
+
+By default, Taskbar Tiles asks Windows for **all notification-area items**, including hidden/overflow entries. Visible items prefer a capture of the **actual tray artwork** Windows is drawing; hidden items fall back to the app icon when Windows does not expose drawable pixels. Disable **Show all Windows tray items** under Settings > Appearance if you only want currently visible tray entries.
 
 Discord gets a dedicated unread counter tile in this row: **black with 0**, **red with a positive count**, with the count drawn large and centred. The count is read from the Windows accessibility name exposed by Discord; if Discord exposes no explicit count, the visual is zero rather than guessing from pixels.
 

@@ -24,6 +24,7 @@ namespace TaskbarTiles
             { "ShowMonitorBadges", "Add the monitor number to each window card. This identifies the window's current screen, not a move destination." },
             { "QuickSizeButtons", "Show separate minus/plus controls for window previews and app tiles. They save size changes immediately; Ctrl+mouse-wheel over a section also changes its size." },
             { "ShowNotificationArea", "Show a compact mirror of Windows notification-area/tray items between Taskbar apps and the footer. Taskbar auto-hide does not intentionally hide this row. Left-click requests the real item's default action; right-click opens Taskbar Tiles actions including a best-effort native tray menu." },
+            { "ShowAllNotificationItems", "Show every notification-area item Windows exposes, including hidden/overflow entries. On by default. Turn it off to show only currently visible tray items. Visible entries prefer the actual tray artwork; hidden entries fall back to their app icon when Windows does not expose drawable artwork." },
             { "NotificationIconSize", "Size of each notification-area icon in logical pixels. Default 26, range 16-48. This does not change Windows' taskbar icon size. Ctrl+mouse-wheel over the row adjusts it." },
             { "NotificationIconSpacing", "Horizontal gap between notification-area cells. Default 8 logical pixels. The row remains single-line; extra items use previous/next paging controls." },
             { "EnableSearch", "Show the narrow filter at the top of the main menu. It filters open-window titles and visible taskbar app names only. It is separate from the broader bottom-left Search launcher." },
@@ -144,7 +145,7 @@ namespace TaskbarTiles
         }
         void AddSearchSettingsPage()
         {
-            var p = Page("Search"); var tab = (TabPage)p.Parent; tabs.TabPages.Remove(tab); tabs.TabPages.Insert(3, tab);
+            var p = Page("Search"); // Sidebar navigation owns presentation order.
             Section(p, "Search inside Taskbar Tiles", "Click Search at the bottom-left to expand an icon-and-name search surface in the same window. It does not open the Windows Search UI or search the web.");
             Check(p, "SearchInstalledApps", "Search installed apps and taskbar apps");
             Check(p, "SearchOpenWindows", "Search existing open windows");

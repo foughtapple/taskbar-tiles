@@ -350,6 +350,28 @@ namespace TaskbarTiles
             }
             return string.Join(", ", found.Distinct().Take(8));
         }
+        internal static int SeedFirstInstallDefaults()
+        {
+            try
+            {
+                var m = Open();
+                if (m.HasState) return 0; // Never replace an existing user's choices.
+                var state = new DockState {
+                    AutoUpdate = true,
+                    EnabledActions = m.Catalog.Packages.SelectMany(p => p.Actions).Select(a => a.Id).Distinct().OrderBy(x => x).ToArray(),
+                    ManagedPackages = new string[0]
+                };
+                AtomicText(m.StatePath, Encode(state));
+                Program.Log("Stream Dock first-install defaults seeded: " + state.EnabledActions.Length + " actions enabled.");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Program.Log("Stream Dock first-install defaults failed: " + ex.Message);
+                return 20;
+            }
+        }
+
         internal static int SyncInstalled(bool readinessOnly)
         {
             try {
