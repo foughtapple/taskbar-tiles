@@ -1,0 +1,41 @@
+name: Prepare scoped navigation source changes
+on:
+  push:
+    branches: [feature/settings-tray-priorities-0.14.0]
+    paths: [tools/prepare0140.py, .github/workflows/prepare0140.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.repository == 'foughtapple/taskbar-tiles' && github.ref == 'refs/heads/feature/settings-tray-priorities-0.14.0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feature/settings-tray-priorities-0.14.0
+      - name: Apply checked source edits on this feature branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/feature/settings-tray-priorities-0.14.0'
+          test -f tools/prepare0140.py
+          python3 tools/prepare0140.py
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # Workflow changes are reviewed/applied separately through the connector.
+          git add src config tools version.txt docs README.md CHANGELOG.md
+          git commit -m 'Wire settings containment, split tray, quick actions and saved window priorities'
+          git push origin HEAD:refs/heads/feature/settings-tray-priorities-0.14.0
+          mkdir -p /tmp/taskbar-source-review
+          git archive --format=zip --output=/tmp/taskbar-source-review/source.zip HEAD
+          cp .github/workflows/build.yml /tmp/taskbar-source-review/build.yml
+          cp .github/workflows/release.yml /tmp/taskbar-source-review/release.yml
+          git rev-parse HEAD > /tmp/taskbar-source-review/commit.txt
+      - name: Source review bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: navigation-source-review
+          path: /tmp/taskbar-source-review/
+          retention-days: 3
