@@ -8,6 +8,7 @@ using System.Drawing;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Automation;
 using System.Windows.Forms;
@@ -128,6 +129,54 @@ namespace TaskbarTiles
         }
     }
 
+    static class DiscordNotificationVisual
+    {
+        static readonly Regex CountByWord = new Regex(@"(?i)(?<n>\d{1,4})\s*(?:new\s+|unread\s+)?(?:notification(?:s)?|message(?:s)?|mention(?:s)?)\b", RegexOptions.Compiled);
+        static readonly Regex CountInParens = new Regex(@"(?i)\bdiscord(?:\s+(?:canary|ptb))?\b[^\r\n]*?\((?<n>\d{1,4})\)", RegexOptions.Compiled);
+        static readonly Regex CountAfterDiscord = new Regex(@"(?i)\bdiscord(?:\s+(?:canary|ptb))?\b[^\r\n]*?(?:[-,:]\s*)(?<n>\d{1,4})\s*$", RegexOptions.Compiled);
+
+        internal static bool TryCount(string name, out int count)
+        {
+            count = 0;
+            if (string.IsNullOrWhiteSpace(name) || !Regex.IsMatch(name, @"(?i)\bdiscord(?:\s+(?:canary|ptb))?\b")) return false;
+            foreach (var regex in new[] { CountByWord, CountInParens, CountAfterDiscord })
+            {
+                var match = regex.Match(name);
+                int parsed;
+                if (match.Success && int.TryParse(match.Groups["n"].Value, out parsed))
+                { count = Math.Max(0, Math.Min(9999, parsed)); return true; }
+            }
+            // Discord's tray provider commonly omits an explicit zero. If the item
+            // is definitely Discord but exposes no count, zero is the safe visual.
+            return true;
+        }
+
+        internal static Color Background(int count)
+        { return count > 0 ? Color.FromArgb(237, 66, 69) : Color.Black; }
+
+        internal static string CountText(int count)
+        { return count > 999 ? "999+" : Math.Max(0, count).ToString(); }
+
+        internal static float FontPixels(int iconPixels, string text)
+        {
+            float factor = text.Length >= 4 ? .46f : text.Length == 3 ? .54f : .68f;
+            return Math.Max(9f, iconPixels * factor);
+        }
+
+        internal static void Paint(Graphics g, Rectangle box, int count)
+        {
+            string text = CountText(count);
+            Color fill = Background(count);
+            DrawingUtil.Round(g, box, Math.Max(3, box.Height / 5), fill,
+                count > 0 ? Color.FromArgb(255, 103, 106) : Color.FromArgb(68, 68, 68), 1);
+            float px = FontPixels(Math.Min(box.Width, box.Height), text);
+            using (var font = new Font("Segoe UI", px, FontStyle.Bold, GraphicsUnit.Pixel))
+                TextRenderer.DrawText(g, text, font, box, Color.White,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+        }
+    }
+
     static class NotificationAreaAction
     {
         internal static string InvokeDefault(AutomationElement element)
@@ -174,6 +223,8 @@ namespace TaskbarTiles
                         if(disposed) break;
                         try
                         {
+                            int discordCount;
+                            if(DiscordNotificationVisual.TryCount(item.Name,out discordCount)) continue;
                             string target=TargetFor(item.Name);
                             if(target.Length==0) continue;
                             Bitmap cached;
@@ -364,9 +415,12 @@ namespace TaskbarTiles
                 if(hover)DrawingUtil.Round(g,r,S(8),Color.FromArgb(45,59,78),Color.FromArgb(76,95,121),1);
                 int size=S(options.NotificationIconSize);
                 var box=new Rectangle(r.Left+(r.Width-size)/2,r.Top+(r.Height-size)/2,size,size);
-                Bitmap image=null; string name="Notification item "+(start+i+1);
+                Bitmap image=null; string name=renderingPreview&&i==0?"Discord - 3 notifications":"Notification item "+(start+i+1);
                 if(!renderingPreview&&start+i<notificationItems.Count){image=notificationItems[start+i].Image;name=notificationItems[start+i].Name;}
-                if(!DrawMenuImage(g,image,box,"notification icon"))
+                int discordCount;
+                if(DiscordNotificationVisual.TryCount(name,out discordCount))
+                    DiscordNotificationVisual.Paint(g,box,discordCount);
+                else if(!DrawMenuImage(g,image,box,"notification icon"))
                 {
                     DrawingUtil.Round(g,box,S(7),Color.FromArgb(39,52,70),Color.FromArgb(61,78,101),1);
                     Label(g,TextTools.Initials(name),box,false,accent,true);
@@ -398,7 +452,10 @@ namespace TaskbarTiles
         {
             if(hit==-19||hit==-20)return hit==-19?"Previous notification items":"Next notification items";
             var item=NotificationAtHit(hit);
-            return item==null?"":item.Name+"\nLeft-click: normal tray action · Right-click: item actions";
+            if(item==null)return "";
+            int discordCount;
+            string count=DiscordNotificationVisual.TryCount(item.Name,out discordCount)?"\nDiscord unread: "+discordCount:"";
+            return item.Name+count+"\nLeft-click: normal tray action · Right-click: item actions";
         }
         void InvokeNotification(NotificationItem item)
         {

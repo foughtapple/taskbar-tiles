@@ -73,6 +73,8 @@
     <Compile Include="SettingsExtras.cs" />
     <Compile Include="SettingsHelp.cs" />
     <Compile Include="SettingsLayout.cs" />
+    <Compile Include="SettingsNavigation.cs" />
+    <Compile Include="SettingsNavigationTests.cs" />
     <Compile Include="TaskbarTiles.cs" />
     <Compile Include="UpdateTests.cs" />
     <Compile Include="UpdateTlsTests.cs" />

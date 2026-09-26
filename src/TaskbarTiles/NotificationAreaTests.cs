@@ -28,6 +28,14 @@ namespace TaskbarTiles
             Require(NotificationAreaPolicy.IsExcluded("","TaskListButton","Steam"),"taskbar app button excluded");
             Require(NotificationAreaPolicy.StrongNameMatch("Steam - 2 notifications","Steam"),"status suffix can resolve an icon");
             Require(!NotificationAreaPolicy.StrongNameMatch("OneDrive","Drive"),"weak substring does not guess an icon");
+            int discord;
+            Require(DiscordNotificationVisual.TryCount("Discord",out discord)&&discord==0,"Discord without an explicit count renders zero");
+            Require(DiscordNotificationVisual.TryCount("Discord - 1 notification",out discord)&&discord==1,"Discord singular notification count parsed");
+            Require(DiscordNotificationVisual.TryCount("Discord, 27 unread messages",out discord)&&discord==27,"Discord unread message count parsed");
+            Require(DiscordNotificationVisual.TryCount("Discord (105)",out discord)&&discord==105,"Discord parenthesised count parsed");
+            Require(DiscordNotificationVisual.Background(0)==Color.Black&&DiscordNotificationVisual.Background(1)==Color.FromArgb(237,66,69),"Discord zero black and positive count red");
+            Require(DiscordNotificationVisual.FontPixels(48,"8")>DiscordNotificationVisual.FontPixels(48,"999+"),"Discord count text scales down only for wider counts");
+            Require(!DiscordNotificationVisual.TryCount("Steam - 4 notifications",out discord),"non-Discord tray items keep their normal icons");
 
             int layouts=0;
             foreach(int width in new[]{520,760,1200,2200,3600})

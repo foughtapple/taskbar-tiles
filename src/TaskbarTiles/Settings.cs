@@ -248,7 +248,7 @@ namespace TaskbarTiles
         readonly Action<Options> applied;
         readonly Dictionary<string, Control> fields = new Dictionary<string, Control>();
         readonly List<Tuple<MonitorData, ComboBox>> monitorChoices = new List<Tuple<MonitorData, ComboBox>>();
-        readonly TabControl tabs = new TabControl();
+        readonly TabControl tabs = new HeaderlessSettingsTabs();
         readonly CheckBox startup;
         readonly Font sectionFont = new Font("Segoe UI", 11, FontStyle.Bold);
         bool loading;
@@ -258,13 +258,13 @@ namespace TaskbarTiles
             edit = current.Clone(); applied = onApply; SetupSettingsDismissal(current.HideOnFocusLoss); previewCapture = capture; taskbarChoices = taskbar == null ? new List<AppButton>() : taskbar.ToList(); InitialiseFavouriteDraft();
             Text = "Taskbar Tiles " + Program.Version + " - Settings"; ShowInTaskbar = false;
             StartPosition = FormStartPosition.CenterScreen; FormBorderStyle = FormBorderStyle.Sizable;
-            MinimumSize = new Size(700, 520); ClientSize = new Size(1260, 800);
+            MinimumSize = new Size(900, 620); ClientSize = new Size(1380, 840);
             AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
             Font = new Font("Segoe UI", 10); BackColor = Theme.Background; ForeColor = Theme.Text;
-            var header = Theme.Label("  Taskbar Tiles   /   Settings     v" + Program.Version, 48);
-            header.Font = new Font("Segoe UI", 16, FontStyle.Bold);
-            tabs.Dock = DockStyle.Fill; tabs.Padding = new Point(10, 6); tabs.Multiline = true;
-            var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 60, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8) };
+            var header = Theme.Label("  Taskbar Tiles   Settings   ·   v" + Program.Version, 54);
+            header.Font = new Font("Segoe UI", 16, FontStyle.Bold); header.BackColor = Color.FromArgb(14, 20, 29);
+            tabs.Dock = DockStyle.Fill;
+            var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 60, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8), BackColor = Color.FromArgb(14, 20, 29) };
             var save = Theme.Button("Save && close", 125); save.Click += delegate { if (ApplyEdit()) Close(); };
             var apply = Theme.Button("Apply", 90); apply.Click += delegate { ApplyEdit(); };
             var cancel = Theme.Button("Cancel", 90); cancel.Click += delegate { Close(); };
@@ -273,9 +273,10 @@ namespace TaskbarTiles
                 string mapping = edit.MonitorOverrides; edit = new Options { MonitorOverrides = mapping }; LoadControls();
             };
             bottom.Controls.AddRange(new Control[] { save, apply, cancel, reset });
-            var content = new Panel { Dock = DockStyle.Fill };
+            var content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
             content.Controls.Add(tabs); Controls.Add(content); Controls.Add(bottom); Controls.Add(header);
             CreateLivePreview(content);
+            AttachSettingsNavigation(content);
             var appearance = Page("Appearance");
             Section(appearance, "Tile sizes", "App tiles and open-window previews have separate size controls.");
             Number(appearance, "TileSize", "App tile size", "Square launcher tiles, in logical pixels. Default: 120.", 56, 256, 8);
@@ -372,6 +373,7 @@ namespace TaskbarTiles
             AddSearchSettingsPage();
             AddRecentAppsPage();
             AddTouchSupportPage(); AddShortcutRecoveryPage();
+            BuildSettingsNavigation();
             LoadControls(); HookLiveChanges(); InstallSettingHints();
             if (!string.IsNullOrEmpty(initialTab))
                 foreach (TabPage page in tabs.TabPages) if (page.Text == initialTab) tabs.SelectedTab = page;
@@ -462,6 +464,6 @@ namespace TaskbarTiles
             }
             catch (Exception ex) { if (!DismissedByFocusLoss) MessageBox.Show(this, ex.Message, "Could not save settings", MessageBoxButtons.OK, MessageBoxIcon.Error); return false; }
         }
-        protected override void Dispose(bool disposing) { if (disposing) { DisposeSettingsDismissal(); DisposeExtras(); settingHints.Dispose(); sectionFont.Dispose(); } base.Dispose(disposing); }
+        protected override void Dispose(bool disposing) { if (disposing) { DisposeSettingsDismissal(); DisposeExtras(); DisposeSettingsNavigation(); settingHints.Dispose(); sectionFont.Dispose(); } base.Dispose(disposing); }
     }
 }
