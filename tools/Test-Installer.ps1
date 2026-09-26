@@ -58,8 +58,7 @@ try {
 } finally { $p.Dispose() }
 $exe = Join-Path $dest 'TaskbarTiles.exe'
 $settings = Join-Path $dest 'settings.ini'
-if (-not (Select-String -LiteralPath $settings -Pattern '^TouchSupportEnabled=false
- -Quiet)) { throw 'Touch Return was not off by default on a fresh install.' }
+if (-not ((Get-Content -LiteralPath $settings) -contains 'TouchSupportEnabled=false')) { throw 'Touch Return was not off by default on a fresh install.' }
 $statePath = Join-Path $dest 'StreamDockData\state.json'
 if (-not (Test-Path $statePath)) { throw 'Fresh install did not create the default Stream Dock state.' }
 $state = Get-Content $statePath -Raw | ConvertFrom-Json
@@ -80,8 +79,7 @@ try {
     if (-not $p.WaitForExit(30000)) { $p.Kill(); throw 'Touch Return installer-option backend timed out.' }
     if ($p.ExitCode -ne 0) { throw 'Touch Return installer-option backend failed.' }
 } finally { $p.Dispose() }
-if (-not (Select-String -LiteralPath $settings -Pattern '^TouchSupportEnabled=true
- -Quiet)) { throw 'Touch Return installer option could not enable its master switch.' }
+if (-not ((Get-Content -LiteralPath $settings) -contains 'TouchSupportEnabled=true')) { throw 'Touch Return installer option could not enable its master switch.' }
 
 $uninstall = Join-Path $dest 'unins000.exe'
 $p = Start-Process $uninstall -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -PassThru
