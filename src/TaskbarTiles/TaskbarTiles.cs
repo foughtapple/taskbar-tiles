@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.11.0";
+        internal const string Version = "0.12.0";
         static bool SignalToggle()
         {
             try
@@ -74,6 +74,7 @@ namespace TaskbarTiles
             if (args.Contains("--test-app-reopen")) { Environment.Exit(AppReopenTests.RunNative()); return; }
             if (args.Contains("--test-notification-target")) { Environment.Exit(NotificationAreaTests.Fixture(args)); return; }
             if (args.Contains("--test-notification-area")) { Environment.Exit(NotificationAreaTests.RunNative()); return; }
+            if (args.Contains("--test-settings-navigation")) { Environment.Exit(SettingsNavigationTests.RunNative()); return; }
             if (args.Contains("--sync-streamdock")) { Environment.Exit(DockManager.SyncInstalled(false)); return; }
             if (args.Contains("--streamdock-ready")) { Environment.Exit(DockManager.SyncInstalled(true)); return; }
             if (args.Contains("--test-streamdock")) { Environment.Exit(StreamDockTests.Run()); return; }
@@ -1603,6 +1604,7 @@ namespace TaskbarTiles
                 log.AppendLine("PASS: native INPUT, keyboard and DWM thumbnail structure sizes.");
                 FeatureTests.Run(log);
                 NotificationAreaTests.Run(log);
+                SettingsNavigationTests.Run(log);
                 LauncherTests.Run(log);
                 LauncherExperienceTests.Run(log);
                 SearchPageTests.Run(log);

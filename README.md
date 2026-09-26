@@ -27,7 +27,7 @@ Run Setup normally. It installs for your account, adds a Start menu shortcut and
 | **Search** | An integrated icon-and-name search panel for apps, open windows, favourites, common settings/folders and indexed filenames. It does not open Windows Search. |
 | **Favourites** | A curated launcher, with groups, import/export, custom icons and optional arguments. |
 | **Screens & zones** | Right-click a window or launcher entry, then choose a monitor or zone. “Full screen” maximises on that monitor; it is not F11/exclusive fullscreen. |
-| **Settings** | Independent tile, title, icon and app-name sizes; balanced paging; hover tips; live previews; and feature toggles. |
+| **Settings** | Dark left-hand navigation, compact aligned controls, independent tile/title/icon/app-name sizes, hover tips, live previews and feature toggles. |
 
 The monitor picker fits the entire arrangement without scrolling. Saved FancyZones layouts are read-only: Taskbar Tiles uses their rectangles without changing PowerToys configuration or zone history. Where a layout cannot be resolved, the UI labels its fallback **Basic zones** rather than pretending to show a saved layout.
 
@@ -88,6 +88,9 @@ The app is C# 5 / .NET Framework 4.8 / WinForms, without third-party runtime pac
 GitHub Actions compiles/tests pull requests and builds a normal installer for a version update on main or matching version tags. Release gates cover real-menu rendering, native outside clicks, topmost ordering, launch fixtures, Touch Return policy/listener lifecycle, shortcut repair, updater HTTPS/checksums and installer lifecycle. Published releases include `SHA256SUMS.txt` and `build-info.json`; the latter records the exact commit/run and what CI tested. CI does not certify touchscreen hardware or the user's interactive desktop. [Testing](docs/TESTING.md) · [Architecture](docs/ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ## Notification-area row
+
+Discord gets a dedicated unread counter tile in this row: **black with 0**, **red with a positive count**, with the count drawn large and centred. The count is read from the Windows accessibility name exposed by Discord; if Discord exposes no explicit count, the visual is zero rather than guessing from pixels.
+
 
 Taskbar Tiles can mirror Windows notification-area (system-tray) items in a compact, single row between **Taskbar apps** and the footer. It is independent of Windows taskbar auto-hide. Icon size and spacing are adjustable under **Settings > Appearance**, and extra items page horizontally instead of creating another row.
 

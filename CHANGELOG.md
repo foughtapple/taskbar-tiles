@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0
+
+- Replace the wrapped native Settings tab strip with a grouped dark left-hand navigation rail; hide the system tab headers and keep live previews/settings pages intact.
+- Increase the default Settings window workspace and keep Stream Dock, Updates, Touch Return, Search and other pages grouped predictably.
+- Give Discord notification-area items a dedicated counter tile: black at 0, red at 1+, with a much larger centred count and 999+ cap.
+- Parse common Discord accessibility labels for notification/message/mention counts; if Discord exposes no explicit count, display 0 instead of inventing one.
+- Preserve the unified Stream Dock package and all existing switcher, launcher, notification-row, updater and settings data.
+
 ## 0.11.0
 
 - Add a compact, pageable notification-area row between Taskbar apps and the footer, independent of taskbar auto-hide.
