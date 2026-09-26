@@ -176,8 +176,11 @@ namespace TaskbarTiles
         {
             get
             {
-                return settingsNavigationPanel != null && settingsNavigationPanel.Visible &&
+                var expected = SettingsNavigationModel.Groups.SelectMany(g => g.Pages).ToArray();
+                var actual = new HashSet<string>(tabs.TabPages.Cast<TabPage>().Select(p => p.Text), StringComparer.OrdinalIgnoreCase);
+                return settingsNavigationPanel != null && settingsNavigationPanel.Visible && settingsNavigationPanel.Width <= 175 &&
                     settingsNavigationButtons.Count == tabs.TabPages.Count &&
+                    expected.All(actual.Contains) &&
                     settingsNavigationButtons.Values.All(b => b.BackColor != Color.White);
             }
         }

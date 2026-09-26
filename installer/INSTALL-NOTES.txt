@@ -12,3 +12,8 @@ identity. Only install builds from a source you trust; do not disable Windows se
 
 Uninstall through Windows Settings > Apps. Personal settings and favourites remain
 on disk unless you remove their folder yourself after uninstalling.
+
+
+Optional integrations in Setup:
+- Stream Dock integration is selected by default on a fresh install. Existing Stream Dock choices are not replaced on upgrade.
+- Touch Return is off by default. Selecting it enables the master switch only; touchscreen/pen association still requires the in-app passive detection test.

@@ -35,6 +35,8 @@ RestartApplications=no
 DisableWelcomePage=no
 ChangesAssociations=no
 [Tasks]
+Name: "streamdock"; Description: "Install and manage Taskbar Tiles Stream Dock modules"; GroupDescription: "Optional integrations:"; Flags: checkedonce
+Name: "touchreturn"; Description: "Enable Touch Return (mouse/focus back to the previous screen after touchscreen use)"; GroupDescription: "Optional integrations:"; Flags: unchecked
 Name: "startup"; Description: "Start Taskbar Tiles when I sign in"; GroupDescription: "Startup:"; Flags: checkedonce
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 [Files]
@@ -57,6 +59,7 @@ Filename: "{app}\TaskbarTiles.exe"; Description: "Start Taskbar Tiles"; Flags: n
 [Code]
 var
   BackupDone: Boolean;
+  ExistingInstall: Boolean;
 function StopResident(const Folder: String): Boolean;
 var
   Code, I: Integer;
@@ -78,13 +81,18 @@ begin
 end;
 procedure InitializeWizard();
 var
-  Existing: Boolean;
+  SelectedTasks: String;
 begin
-  Existing := FileExists(ExpandConstant('{localappdata}\TaskbarTiles\TaskbarTiles.exe'));
-  if Existing then begin
-    WizardSelectTasks('');
-    if FileExists(ExpandConstant('{userstartup}\Taskbar Tiles.lnk')) then WizardSelectTasks('startup');
-    if FileExists(ExpandConstant('{userdesktop}\Taskbar Tiles.lnk')) then WizardSelectTasks('desktopicon');
+  ExistingInstall := FileExists(ExpandConstant('{localappdata}\TaskbarTiles\TaskbarTiles.exe'));
+  if ExistingInstall then begin
+    { Stream Dock is presented ON by default in Setup, including upgrades. The
+      first-install seeding command still refuses to replace an existing state file. }
+    SelectedTasks := 'streamdock';
+    if FileExists(ExpandConstant('{userstartup}\Taskbar Tiles.lnk')) then
+      SelectedTasks := SelectedTasks + ',startup';
+    if FileExists(ExpandConstant('{userdesktop}\Taskbar Tiles.lnk')) then
+      SelectedTasks := SelectedTasks + ',desktopicon';
+    WizardSelectTasks(SelectedTasks);
   end;
 end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -127,7 +135,24 @@ begin
   if CurStep = ssPostInstall then begin
     if not WizardIsTaskSelected('startup') then DeleteFile(ExpandConstant('{userstartup}\Taskbar Tiles.lnk'));
     if not WizardIsTaskSelected('desktopicon') then DeleteFile(ExpandConstant('{userdesktop}\Taskbar Tiles.lnk'));
-    { Apply only previously selected plugins; no setup or monitoring on first install. }
+
+    { First-install choices only. Upgrades preserve the user's existing Stream Dock
+      and Touch Return configuration regardless of these new Setup task defaults. }
+    if not ExistingInstall then begin
+      if WizardIsTaskSelected('streamdock') then begin
+        Code := 0;
+        if not Exec(ExpandConstant('{app}\TaskbarTiles.exe'), '--seed-streamdock-defaults', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
+          Log('Could not seed first-install Stream Dock defaults; Settings can apply them later.');
+      end;
+      if WizardIsTaskSelected('touchreturn') then begin
+        Code := 0;
+        if not Exec(ExpandConstant('{app}\TaskbarTiles.exe'), '--enable-touch-return-default', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
+          Log('Could not enable the first-install Touch Return master switch.');
+      end;
+    end;
+
+    { Apply saved/seeded Stream Dock choices. If Stream Dock is running, keep the
+      pending state and let Settings or the next app start retry safely. }
     Code := 0;
     if not Exec(ExpandConstant('{app}\TaskbarTiles.exe'), '--sync-streamdock', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then begin
       Log('Taskbar Tiles installed; Stream Dock changes remain pending. See StreamDockData\last-result.txt.');

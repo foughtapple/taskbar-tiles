@@ -30,6 +30,7 @@ namespace TaskbarTiles
 
             using (var tabs = new HeaderlessSettingsTabs())
             {
+                Require(SettingsNavigationModel.Groups.SelectMany(g => g.Pages).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 13, "navigation model covers every expected settings page exactly once");
                 Require(tabs.Appearance == TabAppearance.FlatButtons, "native white tab styling is not used");
                 Require(tabs.DrawMode == TabDrawMode.OwnerDrawFixed, "hidden tab strip is owner-drawn");
                 Require(tabs.ItemSize.Height <= 1 && tabs.ItemSize.Width <= 1, "native tab strip is collapsed to a one-pixel host");

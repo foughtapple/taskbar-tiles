@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0
+
+- Add Setup choices for bundled Stream Dock integration and Touch Return: Stream Dock defaults ON; Touch Return defaults OFF.
+- Fresh Stream Dock installs seed all bundled Taskbar Tiles actions while upgrades preserve an existing Stream Dock state/choices.
+- Keep Touch Return fail-safe: even when selected in Setup it still needs a tested monitor/device association before automatic return can trigger.
+- Default the notification row to all Windows tray items, including hidden/overflow entries, with a setting to show visible-only instead.
+- Prefer the actual Windows tray artwork for visible notification items; fall back to local app icons/initials when hidden artwork cannot be safely captured.
+- Narrow the Settings navigation rail and rebuild it after the window is shown so the final page collection is represented.
+
 ## 0.12.1
 
 - Fix updater HTTP 403 failures by removing the unauthenticated GitHub REST API from required version discovery.
