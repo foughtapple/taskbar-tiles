@@ -40,7 +40,8 @@ namespace TaskbarTiles
         {
             if (overflow) return false;
             string metadata = ((id ?? "") + " " + (cls ?? "")).ToLowerInvariant();
-            string[] system = { "clock", "controlcenter", "actioncenter", "notificationcenter", "language", "inputindicator", "texticonview", "battery", "volume", "network", "touchkeyboard", "penmenu" };
+            if (metadata.Contains("notifyicon") || metadata.Contains("normaliconview")) return false;
+            string[] system = { "clock", "controlcenter", "actioncenter", "notificationcenter", "language", "inputindicator", "texticonview", "texticoncontent", "battery", "volume", "network", "touchkeyboard", "penmenu", "microphone", "omnibutton" };
             if (system.Any(metadata.Contains)) return true;
             // Real app icons in both promoted and overflow stacks are app entries.
             if (metadata.Contains("notifyicon") || metadata.Contains("normaliconview")) return false;
@@ -137,7 +138,7 @@ namespace TaskbarTiles
         }
         void RefreshNotificationArea()
         {
-            if(renderingPreview||notificationReader==null||notificationRefresh||closing||notificationMenu!=null)return;
+            if(renderingPreview||notificationReader==null||notificationRefresh||closing||NotificationMenuOpen)return;
             if(!options.ShowNotificationArea)
             {
                 DisposeNotificationImages(notificationItems); notificationItems.Clear(); notificationStatus="";
@@ -150,7 +151,7 @@ namespace TaskbarTiles
                 Post(delegate
                 {
                     notificationRefresh=false;
-                    if (pressedMouseHit >= 3000 || notificationMenu != null) { DisposeNotificationImages(found); return; }
+                    if (pressedMouseHit >= 3000 || NotificationMenuOpen) { DisposeNotificationImages(found); return; }
                     var old=notificationItems.ToArray(); notificationItems.Clear(); notificationItems.AddRange(found);
                     notificationStatus=status;
                     if(Visible) { LayoutNotificationArea(Width,footerTop,S(22)); Invalidate(notificationBand); }
@@ -194,8 +195,7 @@ namespace TaskbarTiles
                 // Actual tray artwork wins over a reconstructed app/count tile.
                 if(!DrawMenuImage(g,item.Image,box,"tray artwork"))
                 {
-                    DrawingUtil.Round(g,box,S(5),Theme.Card,Theme.Border,1);
-                    Label(g,TextTools.Initials(item.Name),box,false,accent,true);
+                    TrayImageFallback.Paint(g,box);
                 }
             }
             if(!loadNotificationRect.IsEmpty)
@@ -221,7 +221,7 @@ namespace TaskbarTiles
             if(hit==-19||hit==-20)return hit==-19?"Previous tray apps":"Next tray apps";
             if(hit==-22)return "Open the Windows hidden-icons menu once so its app icons can be read. Then reopen Taskbar Tiles. Your Windows taskbar settings are unchanged.";
             var item=NotificationAtHit(hit);
-            return item==null?"":item.Name+"\n"+(item.SystemItem?"Taskbar system control":"Tray application")+" · Left-click: default action · Right-click: actions";
+            return item==null?"":item.Name+"\n"+(item.SystemItem?"Taskbar system control":"Tray application")+" · "+item.ImageSource+" · Left-click: default action · Right-click: actions";
         }
         void PageNotifications(int direction)
         {
@@ -246,15 +246,11 @@ namespace TaskbarTiles
         }
         void ShowNotificationActions(NotificationItem item,Point point)
         {
-            if(item==null)return;
-            if(notificationMenu!=null)notificationMenu.Close();
-            var menu=new ContextMenuStrip { BackColor=Theme.Card, ForeColor=Theme.Text };
-            menu.Items.Add("Open / default action",null,delegate{InvokeNotification(item);});
-            menu.Items.Add("Open Windows hidden tray",null,delegate{LoadWindowsTray();});
-            menu.Items.Add("Refresh tray items",null,delegate{BeginInvoke(new Action(RefreshNotificationArea));});
-            menu.Items.Add("Copy name",null,delegate{try{Clipboard.SetText(item.Name);}catch{}});
-            menu.Closed+=delegate{if(ReferenceEquals(notificationMenu,menu))notificationMenu=null;menu.Dispose();};
-            notificationMenu=menu;menu.Show(this,point);
+            if(item==null || closing || IsDisposed)return;
+            EnsureNotificationMenu();
+            if(notificationMenu.Visible)notificationMenu.Close();
+            notificationMenuTarget=item;
+            notificationMenu.Show(this,point);
         }
         bool NotificationAreaWheel(MouseEventArgs e)
         {
@@ -270,7 +266,7 @@ namespace TaskbarTiles
         void ShutdownNotificationArea()
         {
             notificationTimer.Stop();notificationTimer.Dispose();
-            if(notificationMenu!=null){var menu=notificationMenu;notificationMenu=null;menu.Close();menu.Dispose();}
+            if(notificationMenu!=null){var menu=notificationMenu;notificationMenu=null;TrayMenuLifetime.Release(this,menu);}
             DisposeNotificationImages(notificationItems);notificationItems.Clear();shownNotifications.Clear();
             if(notificationReader!=null){notificationReader.Dispose();notificationReader=null;}
         }

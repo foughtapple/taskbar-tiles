@@ -91,6 +91,7 @@ namespace TaskbarTiles
             try
             {
                 Run(log);
+                TrayRepairTests.RunNative(log);
                 string token=Guid.NewGuid().ToString("N");
                 string readyName="Local\\TaskbarTiles.NotificationReady."+token;
                 string invokedName="Local\\TaskbarTiles.NotificationInvoke."+token;
