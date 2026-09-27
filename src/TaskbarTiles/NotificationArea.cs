@@ -18,6 +18,7 @@ namespace TaskbarTiles
     sealed class NotificationItem
     {
         internal string Key="", Name="", AutomationId="", ClassName="", RuntimeId="";
+        internal string ImageSource = "Image unavailable";
         internal IntPtr Root;
         internal Rectangle Bounds;
         internal bool Offscreen, Enabled, SystemItem;
@@ -227,6 +228,7 @@ namespace TaskbarTiles
         readonly BlockingCollection<Action> jobs=new BlockingCollection<Action>();
         readonly Dictionary<string,Bitmap> cache=new Dictionary<string,Bitmap>(StringComparer.OrdinalIgnoreCase);
         readonly Dictionary<string,Bitmap> artworkCache=new Dictionary<string,Bitmap>(StringComparer.Ordinal);
+        readonly WindowsTrayArt windowsArt = new WindowsTrayArt();
         List<FavouriteEntry> catalog;
         volatile bool disposed;
         internal NotificationIconWorker()
@@ -247,7 +249,7 @@ namespace TaskbarTiles
             {
                 jobs.Add(delegate
                 {
-                    if(catalog==null) try { catalog=InstalledApps.Read(); } catch { catalog=new List<FavouriteEntry>(); }
+                    windowsArt.Refresh();
                     foreach(var item in items)
                     {
                         if(disposed) break;
@@ -256,17 +258,20 @@ namespace TaskbarTiles
                             Bitmap previous;
                             if(item.Image!=null)
                             {
-                                if(artworkCache.TryGetValue(item.Key,out previous)){previous.Dispose();artworkCache.Remove(item.Key);}
+                                if(artworkCache.TryGetValue(ArtworkKey(item),out previous)){previous.Dispose();artworkCache.Remove(ArtworkKey(item));}
                                 if(artworkCache.Count>=256){string first=artworkCache.Keys.First();artworkCache[first].Dispose();artworkCache.Remove(first);}
-                                artworkCache[item.Key]=(Bitmap)item.Image.Clone();continue;
+                                artworkCache[ArtworkKey(item)]=(Bitmap)item.Image.Clone();continue;
                             }
-                            if(artworkCache.TryGetValue(item.Key,out previous)){item.Image=(Bitmap)previous.Clone();continue;}
+                            if(artworkCache.TryGetValue(ArtworkKey(item),out previous)){item.Image=(Bitmap)previous.Clone();item.ImageSource="Cached live tray artwork";continue;}
+                            item.Image=windowsArt.Get(item.Name,item.AutomationId);
+                            if(item.Image!=null){item.ImageSource="Windows saved tray artwork (status may lag)";continue;}
+                            if(catalog==null) try { catalog=InstalledApps.Read(); } catch { catalog=new List<FavouriteEntry>(); }
                             string target=TargetFor(item.Name);
                             if(target.Length==0) continue;
                             Bitmap cached;
                             if(!cache.TryGetValue(target,out cached))
-                            { cached=ShellIcons.Extract(Environment.ExpandEnvironmentVariables(target),64); cache[target]=cached; }
-                            if(cached!=null) item.Image=(Bitmap)cached.Clone();
+                            { cached=ShellIcons.Extract(Environment.ExpandEnvironmentVariables(target),64); if(cached!=null)cache[target]=cached; }
+                            if(cached!=null){item.Image=(Bitmap)cached.Clone();item.ImageSource="Application icon fallback";}
                         }
                         catch { }
                     }
@@ -275,6 +280,9 @@ namespace TaskbarTiles
             }
             catch(InvalidOperationException){done();}
         }
+        // A changing tooltip/state or recycled runtime ID cannot inherit another item's pixels.
+        static string ArtworkKey(NotificationItem item)
+        { return item.Key + "|" + item.ClassName + "|" + item.Name; }
         string TargetFor(string name)
         {
             var candidates=catalog.Where(e=>NotificationAreaPolicy.StrongNameMatch(name,e.Name))
@@ -348,7 +356,7 @@ namespace TaskbarTiles
                         Bitmap artwork=!c.IsOffscreen && NotificationRoots.Uncovered(rootHandle,TrayArtwork.InnerBounds(bounds)) ? TrayArtwork.Capture(bounds,false) : null;
                         result.Add(new NotificationItem{Key=key,Name=c.Name,AutomationId=c.AutomationId??"",ClassName=c.ClassName??"",
                             RuntimeId=runtime,Root=rootHandle,Bounds=bounds,
-                            Offscreen=c.IsOffscreen,Enabled=c.IsEnabled,Image=artwork,SystemItem=NotificationRoots.IsSystem(c.AutomationId,c.ClassName,c.Name,overflow)});
+                            Offscreen=c.IsOffscreen,Enabled=c.IsEnabled,Image=artwork,ImageSource=artwork==null?"Image unavailable":"Live Windows tray artwork",SystemItem=NotificationRoots.IsSystem(c.AutomationId,c.ClassName,c.Name,overflow)});
                     }
                 }
                 catch(Exception ex){Program.Log("Notification area root: "+ex.GetType().Name);}
@@ -380,9 +388,13 @@ namespace TaskbarTiles
             if(disposed||jobs.IsAddingCompleted)return;
             jobs.Add(delegate
             {
-                var list=Scan(includeHidden); string status=list.Count==0?
-                    "Windows has not exposed notification-area items yet. Refresh after the taskbar/Explorer is ready.":"";
-                icons.Resolve(list,delegate{completed(list,status);});
+                try
+                {
+                    var list=Scan(includeHidden); string status=list.Count==0?
+                        "Windows has not exposed notification-area items yet. Refresh after the taskbar/Explorer is ready.":"";
+                    icons.Resolve(list,delegate{completed(list,status);});
+                }
+                catch(Exception ex){Program.Log("Tray scan failed: "+ex.GetType().Name);completed(new List<NotificationItem>(),"Tray scan unavailable; try Refresh tray items.");}
             });
         }
         internal void Act(NotificationItem item,Action<string> completed)

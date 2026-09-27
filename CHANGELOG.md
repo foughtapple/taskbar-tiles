@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.1
+
+- Fix tray right-click/click-away termination: reuse the context menu and defer command/disposal work until ToolStrip completes its close path.
+- Read matching Windows saved tray PNG artwork without needing the overflow panel visible; never add historical registry records to the live tray list. Registry access is read-only.
+- Retain live tray captures first, reject ambiguous snapshot matches and label cached/app-icon sources. Unavailable artwork uses a neutral application symbol rather than initials.
+- Add Copy tray diagnostics and a load/refresh-images action. Keep app icons centred and taskbar system controls at the far right.
+- Add native production-menu cancellation/outside-click/reopen tests and bounded PNG/cache-match tests.
+
 ## 0.14.0
 
 - Fix the Settings editor being covered by its sidebar: navigation, editor and live preview now have separate measured rectangles.

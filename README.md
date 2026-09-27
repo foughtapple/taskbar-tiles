@@ -121,3 +121,9 @@ The main **Order** button cycles **Recent**, **A-Z** and **Priority** and saves 
 Application tray icons occupy the middle strip; language/network/audio/clock and other system controls sit at the far right. The Windows 11 hidden-icons window is now included. If Explorer has not created that surface yet, use **Load tray apps...**, then reopen Taskbar Tiles. This opens the native tray only on your explicit click and never changes Windows pin/visibility settings. Actual exposed tray artwork is preferred; offscreen icons without cached artwork use their local application icon or a neutral fallback.
 
 The bottom bar includes **Display settings**, **Bluetooth** and **Task Manager**; individual switches are under **Settings > Quick access**.
+
+### Tray repair in 0.14.1
+
+The tray mirror now reads Windows saved `IconSnapshot` PNGs using read-only access to `HKCU\Control Panel\NotifyIconSettings`. Only an unambiguous match to an item already in the live tray inventory supplies an image; old registry records never create extra app buttons. Windows may update saved artwork later than the live icon. Visible unobstructed captures still take precedence. Unknown images use a neutral application symbol; right-click **Copy tray diagnostics** reports each image source locally. This cache format is an optional Windows compatibility path, not a guaranteed public API.
+
+Right-click menus are reused rather than disposed during their `Closed` event. Commands and final disposal run after the close stack completes. **Load / refresh Windows tray images** remains an explicit user action; no hidden taskbar coordinates are clicked and Windows pin/visibility settings are not modified.
