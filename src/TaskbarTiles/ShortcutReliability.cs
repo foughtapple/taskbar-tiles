@@ -52,16 +52,19 @@ namespace TaskbarTiles
         }
         bool swallowTabUp, session;
         volatile bool stopped;
-        int queued, repairRequested, generation, fault;
+        int queued, repairRequested, generation, fault, overflowRelease;
         long lastInstalled, lastEvent;
         internal int Generation { get { return Volatile.Read(ref generation); } }
         public bool Installed { get { return !stopped && Volatile.Read(ref generation) > 0 && hook != IntPtr.Zero; } }
         internal string Status { get { return (Enabled ? "Enabled" : "Disabled / temporary recovery pause") + "; hook registration " + Generation + ". Registration is not proof Windows has retained a hook."; } }
-        public KeyboardHook()
+        public KeyboardHook() : this(true) { }
+        internal KeyboardHook(bool startPump)
         {
             callback = OnKey;
-            delivery.Tick += delegate { Drain(); }; delivery.Start();
+            delivery.Tick += delegate { Drain(); };
             supervisor.Tick += delegate { if (!stopped && Enabled && !WorkerRunning) StartWorker(); };
+            if (!startPump) return; // Deterministic queue regression: no global hooks or timers.
+            delivery.Start();
             supervisor.Start(); StartWorker();
             if (ready.WaitOne(2000)) ready.Dispose();
         }
@@ -137,7 +140,15 @@ namespace TaskbarTiles
                 }
                 catch (Exception ex) { ShortcutDiagnostics.Write("shortcut delivery failed: " + ex.GetType().Name); Repair(); }
             }
+            // A release must survive a stalled UI filling the bounded press queue.
+            // Coalesce overflow releases after queued presses so nonsticky sessions finish.
+            if (!stopped && Interlocked.Exchange(ref overflowRelease, 0) != 0)
+            {
+                try { if (Released != null) Released(); }
+                catch (Exception ex) { ShortcutDiagnostics.Write("shortcut release failed: " + ex.GetType().Name); Repair(); }
+            }
         }
+        void EnqueueRelease() { if (!Enqueue(4)) Interlocked.Exchange(ref overflowRelease, 1); }
         IntPtr OnKey(int code, IntPtr wp, IntPtr lp)
         {
             try
@@ -162,13 +173,15 @@ namespace TaskbarTiles
                         }
                     }
                     if (up && session && (vk == 0x12 || vk == 0xA4 || vk == 0xA5))
-                    { session = false; Enqueue(4); }
+                    { session = false; EnqueueRelease(); }
                 }
             }
             catch { Interlocked.Exchange(ref repairRequested, 1); }
             return Native.CallNextHookEx(IntPtr.Zero, code, wp, lp);
         }
-        internal void TestDeliver() { Enqueue(0); Drain(); }
+        internal void TestDeliver() { Enqueue(0); }
+        internal bool TestQueuePress() { return Enqueue(0); }
+        internal void TestQueueRelease() { EnqueueRelease(); }
         internal void TestRevoke() { if (hook != IntPtr.Zero) Native.UnhookWindowsHookEx(hook); Repair(); }
         public void Dispose()
         {

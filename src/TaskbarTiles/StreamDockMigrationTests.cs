@@ -5,11 +5,11 @@ namespace TaskbarTiles
 {
     static class StreamDockMigrationTests
     {
-        internal static int Run(string temp)
+        internal static int Run(string temp, string moduleBundle = null)
         {
             int checks = 0;
             Action<bool, string> check = (ok, label) => { if (!ok) throw new Exception("Unified migration: " + label); checks++; };
-            string bundle = Path.Combine(Program.Home, "streamdock");
+            string bundle = moduleBundle ?? Path.Combine(Program.Home, "streamdock");
             string root = Path.Combine(temp, "unified-legacy-tests"), plugins = Path.Combine(root, "plugins"), store = Path.Combine(root, "state"), seed = Path.Combine(root, "seed");
             var m = new DockManager(bundle, plugins, store, () => ""); var p = m.Catalog.Packages.Single();
             m.Unpack(p, seed);
@@ -21,7 +21,7 @@ namespace TaskbarTiles
                 File.Copy(Path.Combine(seed, "workers", p.LegacyPackageIds[i], "manifest.json"), Path.Combine(old[i], "manifest.json"));
                 File.WriteAllText(Path.Combine(old[i], "private.json"), "keep-" + p.LegacyPackageIds[i]);
             }
-            DockManager.AtomicText(Path.Combine(store, "state.json"), DockManager.Encode(new DockState { ManagedPackages = p.LegacyPackageIds, EnabledActions = new[] { clip } }));
+            DockManager.AtomicText(Path.Combine(store, "state.json"), DockManager.Encode(new DockState { AutoUpdate = true, ManagedPackages = p.LegacyPackageIds, EnabledActions = new[] { clip } }));
             string priorManifest = File.ReadAllText(Path.Combine(old[0], "manifest.json"));
             var newer = DockManager.Manifest(old[0]); newer["Version"] = "99.0.0";
             DockManager.AtomicText(Path.Combine(old[0], "manifest.json"), DockManager.Encode(newer));
@@ -57,11 +57,11 @@ namespace TaskbarTiles
             var m2 = new DockManager(bundle, plugins2, store2, () => "");
             string old2 = Path.Combine(plugins2, p.LegacyFolders[0]); Directory.CreateDirectory(old2);
             File.WriteAllText(Path.Combine(old2, "manifest.json"), priorManifest); File.WriteAllText(Path.Combine(old2, "private.json"), "off-state-kept");
-            DockManager.AtomicText(Path.Combine(store2, "state.json"), DockManager.Encode(new DockState { ManagedPackages = new[] { "controls" } }));
+            DockManager.AtomicText(Path.Combine(store2, "state.json"), DockManager.Encode(new DockState { AutoUpdate = true, ManagedPackages = new[] { "controls" } }));
             m2.Apply(m2.State(false), true, false);
             check(!Directory.Exists(old2) && !Directory.Exists(Path.Combine(plugins2, p.Folder)), "all-off migration exposes no category");
             check(File.ReadAllText(Path.Combine(store2, "Disabled", p.Folder, "workers", "controls", "private.json")) == "off-state-kept", "all-off migration keeps disabled worker data");
-            m2.Apply(new DockState { EnabledActions = new[] { clip } }, false, false);
+            m2.Apply(new DockState { AutoUpdate = true, EnabledActions = new[] { clip } }, false, false);
             check(File.ReadAllText(Path.Combine(plugins2, p.Folder, "workers", "controls", "private.json")) == "off-state-kept", "re-enable restores data after all-off migration");
             return checks;
         }

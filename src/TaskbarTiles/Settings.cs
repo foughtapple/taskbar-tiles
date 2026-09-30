@@ -14,6 +14,7 @@ namespace TaskbarTiles
     {
         public int ConfigVersion = 8;
         public bool TouchSupportEnabled = false;
+        public bool AutoUpdateApp = false;
         public int TouchReturnDelayMs = 1000, PenReturnDelayMs = 2000, TouchReturnAction = 0;
         public bool TouchWaitForHover = true, TouchTypingCancels = true, TouchPauseForMenus = true;
         public string TouchMonitorRules = "", TouchExcludedApps = "", TouchPauseShortcut = "", TouchStayShortcut = "", TouchReturnShortcut = "";
@@ -323,7 +324,7 @@ namespace TaskbarTiles
             Check(navigation, "InterceptAltTab", "Replace Alt+Tab while Taskbar Tiles is running");
             Check(navigation, "MinimizeFullscreenOnOpen", "Minimise the foreground fullscreen app when opening the switcher");
             Section(navigation, "Launching and window placement", "Each click sends one normal launch request. The application decides whether to create a window or reuse one; its own settings and your shortcut arguments are respected.");
-            Check(navigation, "RightClickZones", "Enable right-click monitor and zone picker");
+            Check(navigation, "RightClickZones", "Enable current-zone right-click and corner destination buttons");
             Check(navigation, "KeepOpenAfterMove", "Reopen Taskbar Tiles after moving an existing window");
             Check(navigation, "EnableUndoMove", "Remember the last window move for Undo");
             Check(navigation, "DirectAppLaunch", "Launch verified shortcuts directly instead of clicking the taskbar");
@@ -381,7 +382,7 @@ namespace TaskbarTiles
             AddFavouritesPage();
             AddSearchSettingsPage();
             AddRecentAppsPage();
-            AddTouchSupportPage(); AddShortcutRecoveryPage(); AddWindowOrganisationPage();
+            AddProfileLayoutsPage(); AddShortcutRecoveryPage(); AddWindowOrganisationPage();
             BuildSettingsNavigation();
             LoadControls(); HookLiveChanges(); InstallSettingHints();
             if (!string.IsNullOrEmpty(initialTab))

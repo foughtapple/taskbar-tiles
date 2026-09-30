@@ -207,7 +207,13 @@ namespace TaskbarTiles
                     if (!settings.DirectAppLaunch)
                     { Fallback(app, reader, operation, completed); return; }
                     string target = app.VerifiedShortcut ? app.ShortcutPath : "";
+                    string arguments = "";
                     if (!string.IsNullOrEmpty(target) && LaunchIdentity.FullPath(target) && !File.Exists(target)) target = "";
+                    if (string.IsNullOrEmpty(target))
+                    {
+                        var declared = TaskbarLauncherMetadata.Resolve(app, null);
+                        if (declared != null) { target = declared.ExpandedTarget; arguments = declared.Arguments ?? ""; }
+                    }
                     // Resolve launch identity independently of whether an icon could be extracted.
                     if (string.IsNullOrEmpty(target) && LaunchIdentity.FullPath(app.AppId) && File.Exists(app.AppId)) target = app.AppId;
                     if (string.IsNullOrEmpty(target) && !string.IsNullOrWhiteSpace(app.AppId))
@@ -219,11 +225,11 @@ namespace TaskbarTiles
                     var receipt = new LaunchReceipt { ExpectedAppId = app.AppId, ExpectedExe = app.LaunchExe };
                     if (!string.IsNullOrWhiteSpace(target))
                     {
-                        start = new ProcessStartInfo { FileName = target, UseShellExecute = true, WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) };
+                        start = TaskbarStartInfo(target, arguments);
                         SetShortcutIdentity(app, target, receipt);
                     }
-                    if (settings.TerminalNewWindow && TryTerminal(app, target, "", receipt, ref start)) receipt.Method = "Terminal new window";
-                    else if (!SteamReopen.TryPrepare(app, target, "", receipt, ref start)) receipt.Method = "shell target";
+                    if (settings.TerminalNewWindow && TryTerminal(app, target, arguments, receipt, ref start)) receipt.Method = "Terminal new window";
+                    else if (!SteamReopen.TryPrepare(app, target, arguments, receipt, ref start)) receipt.Method = "shell target";
                     if (start == null) { Fallback(app, reader, operation, completed); return; }
                     // Pass the actual .lnk to the shell. Never discard its profile arguments.
                     Dispatch(start, receipt, operation, completed);
@@ -231,6 +237,13 @@ namespace TaskbarTiles
                 catch (Exception ex) { LaunchLog.Write(operation.Id, "launch failed: " + ex.GetType().Name + "; HRESULT=0x" + ex.HResult.ToString("X8")); completed(null, "Could not open " + app.DisplayName + ": " + ex.Message); }
             }) { IsBackground = true, Name = "Taskbar Tiles app launch" };
             t.SetApartmentState(ApartmentState.STA); t.Start();
+        }
+        internal static ProcessStartInfo TaskbarStartInfo(string target, string arguments)
+        {
+            // Arguments come from the exact app-authored descriptor. Passing them
+            // separately avoids re-tokenising a profile or dropping its quoting.
+            return new ProcessStartInfo { FileName = target, Arguments = arguments ?? "", UseShellExecute = true,
+                WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) };
         }
         static void SetShortcutIdentity(AppButton app, string target, LaunchReceipt receipt)
         {

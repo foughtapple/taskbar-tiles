@@ -35,8 +35,6 @@ RestartApplications=no
 DisableWelcomePage=no
 ChangesAssociations=no
 [Tasks]
-Name: "streamdock"; Description: "Install and manage Taskbar Tiles Stream Dock modules"; GroupDescription: "Optional integrations:"; Flags: checkedonce
-Name: "touchreturn"; Description: "Enable Touch Return (mouse/focus back to the previous screen after touchscreen use)"; GroupDescription: "Optional integrations:"; Flags: unchecked
 Name: "startup"; Description: "Start Taskbar Tiles when I sign in"; GroupDescription: "Startup:"; Flags: checkedonce
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 [Files]
@@ -48,7 +46,12 @@ Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\docs\XMOUSE-SETUP.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\build\app\streamdock\*"; DestDir: "{app}\streamdock"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\app\streamdock\catalog.json"; DestDir: "{app}\streamdock"; Flags: ignoreversion
+Source: "..\build\app\streamdock\module-index.json"; DestDir: "{app}\streamdock"; Flags: ignoreversion
+[InstallDelete]
+; Obsolete installer-owned bundled code. Downloaded modules and private data
+; are under StreamDockData; active plugins are outside the application folder.
+Type: filesandordirs; Name: "{app}\streamdock\packages"
 [Icons]
 Name: "{group}\Taskbar Tiles"; Filename: "{app}\TaskbarTiles.exe"; Parameters: "--show"; WorkingDir: "{app}"
 Name: "{group}\Uninstall Taskbar Tiles"; Filename: "{uninstallexe}"
@@ -56,10 +59,15 @@ Name: "{userdesktop}\Taskbar Tiles"; Filename: "{app}\TaskbarTiles.exe"; Paramet
 Name: "{userstartup}\Taskbar Tiles"; Filename: "{app}\TaskbarTiles.exe"; WorkingDir: "{app}"; Tasks: startup
 [Run]
 Filename: "{app}\TaskbarTiles.exe"; Description: "Start Taskbar Tiles"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\TaskbarTiles.exe"; Flags: nowait; Check: IsAutomaticUpdate
 [Code]
 var
   BackupDone: Boolean;
   ExistingInstall: Boolean;
+function IsAutomaticUpdate(): Boolean;
+begin
+  Result := ExpandConstant('{param:TTLAUTOUPDATE|0}') = '1';
+end;
 function StopResident(const Folder: String): Boolean;
 var
   Code, I: Integer;
@@ -85,13 +93,13 @@ var
 begin
   ExistingInstall := FileExists(ExpandConstant('{localappdata}\TaskbarTiles\TaskbarTiles.exe'));
   if ExistingInstall then begin
-    { Stream Dock is presented ON by default in Setup, including upgrades. The
-      first-install seeding command still refuses to replace an existing state file. }
-    SelectedTasks := 'streamdock';
+    SelectedTasks := '';
     if FileExists(ExpandConstant('{userstartup}\Taskbar Tiles.lnk')) then
-      SelectedTasks := SelectedTasks + ',startup';
-    if FileExists(ExpandConstant('{userdesktop}\Taskbar Tiles.lnk')) then
-      SelectedTasks := SelectedTasks + ',desktopicon';
+      SelectedTasks := 'startup';
+    if FileExists(ExpandConstant('{userdesktop}\Taskbar Tiles.lnk')) then begin
+      if SelectedTasks <> '' then SelectedTasks := SelectedTasks + ',';
+      SelectedTasks := SelectedTasks + 'desktopicon';
+    end;
     WizardSelectTasks(SelectedTasks);
   end;
 end;
@@ -106,13 +114,6 @@ begin
   if not StopResident(Folder) then begin
     Result := 'Taskbar Tiles is still running. Exit it from its tray icon, then choose Next. No other apps have been closed.';
     exit;
-  end;
-  if FileExists(Folder + '\StreamDockData\state.json') and FileExists(Folder + '\TaskbarTiles.exe') then begin
-    Code := 0;
-    if not Exec(Folder + '\TaskbarTiles.exe', '--streamdock-ready', Folder, SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then begin
-      Result := 'Stream Dock plugin updates are enabled. Fully exit Stream Dock from its tray icon, then choose Next. Plugins and settings have not been replaced.';
-      exit;
-    end;
   end;
   if BackupDone or not FileExists(Folder + '\TaskbarTiles.exe') then exit;
   Backup := Folder + '\Backups\' + GetDateTimeString('yyyymmdd-hhnnss', '-', ':');
@@ -136,28 +137,8 @@ begin
     if not WizardIsTaskSelected('startup') then DeleteFile(ExpandConstant('{userstartup}\Taskbar Tiles.lnk'));
     if not WizardIsTaskSelected('desktopicon') then DeleteFile(ExpandConstant('{userdesktop}\Taskbar Tiles.lnk'));
 
-    { First-install choices only. Upgrades preserve the user's existing Stream Dock
-      and Touch Return configuration regardless of these new Setup task defaults. }
-    if not ExistingInstall then begin
-      if WizardIsTaskSelected('streamdock') then begin
-        Code := 0;
-        if not Exec(ExpandConstant('{app}\TaskbarTiles.exe'), '--seed-streamdock-defaults', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
-          Log('Could not seed first-install Stream Dock defaults; Settings can apply them later.');
-      end;
-      if WizardIsTaskSelected('touchreturn') then begin
-        Code := 0;
-        if not Exec(ExpandConstant('{app}\TaskbarTiles.exe'), '--enable-touch-return-default', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
-          Log('Could not enable the first-install Touch Return master switch.');
-      end;
-    end;
-
-    { Apply saved/seeded Stream Dock choices. If Stream Dock is running, keep the
-      pending state and let Settings or the next app start retry safely. }
-    Code := 0;
-    if not Exec(ExpandConstant('{app}\TaskbarTiles.exe'), '--sync-streamdock', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then begin
-      Log('Taskbar Tiles installed; Stream Dock changes remain pending. See StreamDockData\last-result.txt.');
-      if not WizardSilent then MsgBox('Taskbar Tiles was updated. Some Stream Dock updates remain pending. Close Stream Dock, open Taskbar Tiles Settings > Stream Dock and choose Apply. Existing settings were retained.', mbInformation, MB_OK);
-    end;
+    { Optional modules install/update separately from Settings > Modules.
+      Setup never seeds, downloads or activates a module. }
     { Supersede only our own optional local-build registration, never other apps. }
     RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\TaskbarTiles-LocalBuild');
   end;

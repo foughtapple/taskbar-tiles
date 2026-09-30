@@ -87,10 +87,44 @@ namespace TaskbarTiles
                     owner.Dispose();
                     Require(reopened.IsDisposed, "owner teardown releases the final reusable menu");
                 }
+                Exception settingsError = null;
+                var settingsThread = new System.Threading.Thread(delegate()
+                {
+                    try { RunSettingsMenuFixture(); } catch (Exception ex) { settingsError = ex; }
+                    finally { Application.ExitThread(); }
+                });
+                settingsThread.IsBackground = true; settingsThread.SetApartmentState(System.Threading.ApartmentState.STA);
+                settingsThread.Start(); Require(settingsThread.Join(15000), "Settings menu fixture apartment completed");
+                if (settingsError != null) throw new InvalidOperationException("Settings menu fixture failed.", settingsError);
+                // These fixtures pump with DoEvents rather than Application.Run.
+                // Release its native thread-context windows before later RPC tests.
+                Application.ExitThread();
                 Require(errors.Count == 0, "no UI-thread exception during close, selection or teardown: " + string.Join("; ", errors.Select(e=>e.Message).ToArray()));
             }
             finally { Cursor.Position = cursor; Application.ThreadException -= onError; }
             log.AppendLine("PASS: production tray context menu; 30 cancellation/reopen cycles, actual outside click, queued item action and final disposal; switcher survives.");
+        }
+        static void RunSettingsMenuFixture()
+        {
+            using (var settings = new SettingsWindow(new Options { HideOnFocusLoss = false }, delegate { }, null,
+                new[] { new AppButton { DisplayName = "Fixture shortcut", Favourite = new FavouriteEntry { Name = "Fixture shortcut", Target = @"C:\Fixture\app.exe" } } }))
+            {
+                settings.Show(); Application.DoEvents();
+                ContextMenuStrip first = null;
+                for (int i = 0; i < 10; i++)
+                {
+                    var menu = settings.BuildTaskbarFavouriteMenu();
+                    Require(menu != null && menu.Items.Count == 1, "production From taskbar menu contains fixture shortcut");
+                    if (first == null) first = menu;
+                    Require(ReferenceEquals(first, menu), "From taskbar reuses its menu across cancellations");
+                    menu.Show(settings, new Point(40, 40)); Application.DoEvents();
+                    menu.Close(i % 2 == 0 ? ToolStripDropDownCloseReason.AppClicked : ToolStripDropDownCloseReason.Keyboard);
+                    Application.DoEvents();
+                    Require(!menu.IsDisposed && !settings.IsDisposed, "From taskbar cancellation leaves ToolStrip alive after Closed");
+                }
+                settings.Close();
+                Require(first.IsDisposed, "Settings teardown releases From taskbar menu");
+            }
         }
     }
 }

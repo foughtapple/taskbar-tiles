@@ -36,7 +36,7 @@ namespace TaskbarTiles
                 Check(!m.HasState && !m.Rows().Any(x => x.Selected), "new catalogue is opt-in");
                 Check(m.Apply(new DockState(), true, false).Contains("off"), "unconfigured startup is read-only");
                 Check(!Directory.Exists(plugins), "no plugin root created by read-only startup");
-                m.Apply(new DockState { EnabledActions = new[] { a } }, false, false);
+                m.Apply(new DockState { AutoUpdate = true, EnabledActions = new[] { a } }, false, false);
                 Check(Directory.Exists(live), "enable installs package");
                 Check(DockManager.ManifestActions(live).SetEquals(new[] { a }), "only selected action appears in manifest");
                 Check(m.State(false).ManagedPackages.Contains("demo"), "manager ownership persisted");
@@ -46,16 +46,16 @@ namespace TaskbarTiles
                 int backups = Directory.GetDirectories(Path.Combine(state, "Backups")).Length;
                 Check(m.Apply(m.State(false), true, false).Contains("current"), "idempotent upgrade is a no-op");
                 Check(Directory.GetDirectories(Path.Combine(state, "Backups")).Length == backups, "no redundant backups");
-                m.Apply(new DockState { EnabledActions = new[] { a, b } }, false, false);
+                m.Apply(new DockState { AutoUpdate = true, EnabledActions = new[] { a, b } }, false, false);
                 Check(DockManager.ManifestActions(live).Count == 2, "second action independently enabled");
                 Check(File.ReadAllText(Path.Combine(live, "local-settings.json")) == "synthetic user settings", "settings preserved on action change");
-                m.Apply(new DockState { EnabledActions = new[] { b } }, false, false);
+                m.Apply(new DockState { AutoUpdate = true, EnabledActions = new[] { b } }, false, false);
                 Check(DockManager.ManifestActions(live).SetEquals(new[] { b }), "partial disable removes action from discovery");
                 Check(File.ReadAllText(Path.Combine(unrelated, "settings")) == "keep", "unrelated plugin untouched");
                 m.Apply(new DockState(), false, false);
                 Check(!Directory.Exists(live), "all-off unloads entire package folder");
                 Check(File.Exists(Path.Combine(state, "Disabled", p.Folder, "local-settings.json")), "off keeps private settings in disabled folder");
-                m.Apply(new DockState { EnabledActions = new[] { a } }, false, false);
+                m.Apply(new DockState { AutoUpdate = true, EnabledActions = new[] { a } }, false, false);
                 Check(File.ReadAllText(Path.Combine(live, "local-settings.json")) == "synthetic user settings", "reenable restores preserved settings");
                 Fixture(bundle, "1.1.0", false); m = new DockManager(bundle, plugins, state, () => "");
                 m.Apply(m.State(false), true, false);
@@ -65,10 +65,10 @@ namespace TaskbarTiles
                 var optout = m.State(false); optout.AutoUpdate = false; m.Apply(optout, false, false); Fixture(bundle, "1.2.0", false); m = new DockManager(bundle, plugins, state, () => ""); m.Apply(m.State(false), true, false);
                 Check(Convert.ToString(DockManager.Manifest(live)["Version"]) == "1.1.0", "automatic-update opt-out respected");
                 var busy = new DockManager(bundle, plugins, state, () => "StreamDock");
-                Refuses(() => busy.Apply(new DockState { EnabledActions = new[] { a } }, false, false), "running host blocks replacement");
+                Refuses(() => busy.Apply(new DockState { AutoUpdate = true, EnabledActions = new[] { a } }, false, false), "running host blocks replacement");
                 Check(Convert.ToString(DockManager.Manifest(live)["Version"]) == "1.1.0", "busy host leaves old package usable");
                 m.AfterOldMoved = () => { throw new IOException("simulated failure"); };
-                Refuses(() => m.Apply(new DockState { EnabledActions = new[] { a } }, false, false), "simulated swap failure reported");
+                Refuses(() => m.Apply(new DockState { AutoUpdate = true, EnabledActions = new[] { a } }, false, false), "simulated swap failure reported");
                 Check(Convert.ToString(DockManager.Manifest(live)["Version"]) == "1.1.0", "failed swap restores old package");
                 Check(File.ReadAllText(Path.Combine(live, "local-settings.json")) == "synthetic user settings", "rollback preserves settings");
                 m.AfterOldMoved = null; m.Apply(m.State(false), true, false);
@@ -91,7 +91,7 @@ namespace TaskbarTiles
                 Directory.CreateDirectory(Path.GetDirectoryName(recovery)); Directory.Move(live, recovery);
                 string abandonedStage = Path.Combine(plugins, ".taskbar-stage-interrupted"); Directory.CreateDirectory(abandonedStage);
                 DockManager.AtomicText(Path.Combine(state, "pending-package.json"), DockManager.Encode(new DockJournal { Folder=p.Folder, Backup="Backups/interrupted/"+p.Folder, Stage=".taskbar-stage-interrupted" }));
-                m.Apply(new DockState { EnabledActions=new[] {a} }, false, false);
+                m.Apply(new DockState { AutoUpdate = true, EnabledActions=new[] {a} }, false, false);
                 Check(!Directory.Exists(abandonedStage), "interrupted stage removed");
                 Check(File.ReadAllText(Path.Combine(live, "local-settings.json")) == "synthetic user settings", "interrupted recovery retains private settings");
                 Check(Convert.ToString(DockManager.Manifest(live)["Version"]) == "1.3.0", "recovered package upgraded on retry");
@@ -103,7 +103,7 @@ namespace TaskbarTiles
                 DockManager.AtomicText(Path.Combine(migrateBundle, "catalog.json"), DockManager.Encode(mc));
                 string legacy = Path.Combine(migratePlugins, "com.foughtapple.oldtest.sdPlugin"); Directory.CreateDirectory(legacy);
                 DockManager.AtomicText(Path.Combine(legacy, "manifest.json"), DockManager.Encode(new { Version = "1.0.0", Actions = new[] { new { UUID = a, Name = "A" } } }));
-                Directory.CreateDirectory(migrateState); DockManager.AtomicText(Path.Combine(migrateState, "state.json"), DockManager.Encode(new DockState { EnabledActions = new[] { a }, ManagedPackages = new[] { "oldtest" } }));
+                Directory.CreateDirectory(migrateState); DockManager.AtomicText(Path.Combine(migrateState, "state.json"), DockManager.Encode(new DockState { AutoUpdate = true, EnabledActions = new[] { a }, ManagedPackages = new[] { "oldtest" } }));
                 var mm = new DockManager(migrateBundle, migratePlugins, migrateState, () => "");
                 Check(mm.State(false).ManagedPackages.SequenceEqual(new[] { "demo" }), "legacy package ownership maps to unified package");
                 Check(mm.Rows().Single(x => x.Action.Id == a).Status.Contains("consolidate"), "legacy action is shown as ready to consolidate");
@@ -113,24 +113,27 @@ namespace TaskbarTiles
                 Check(DockManager.ManifestActions(Path.Combine(migratePlugins, mc.Packages[0].Folder)).SetEquals(new[] { a }), "legacy enabled action remains enabled after consolidation");
                 Check(Directory.GetDirectories(Path.Combine(migrateState, "Backups"), "legacy-*", SearchOption.AllDirectories).Length >= 1, "legacy package archived in backup");
                 // Validate every actual packaged resource without touching installed plugins.
-                var realBundle = Path.Combine(Program.Home,"streamdock");
+                var realBundle = Environment.GetEnvironmentVariable("TASKBARTILES_MODULE_TEST_BUNDLE") ?? Path.Combine(Program.Home,"streamdock");
                 if (File.Exists(Path.Combine(realBundle,"catalog.json"))) {
                     var real = new DockManager(realBundle,Path.Combine(tmp,"real-plugins"),Path.Combine(tmp,"real-state"),()=>"");
-                    passed += StreamDockMigrationTests.Run(tmp);
+                    bool hasPayload = real.Catalog.Packages.All(pack => File.Exists(DockManager.Child(real.Bundle, pack.Payload)));
+                    if (hasPayload) passed += StreamDockMigrationTests.Run(tmp, realBundle);
+                    else messages.Add("SKIP: native worker payload/resource migration checks; optional module was not built. Metadata and isolated download/manager tests still run.");
                     Check(real.Catalog.Packages.Length == 1, "one unified Taskbar Tiles plugin package included");
                     Check(real.Catalog.Packages.Sum(x=>x.Actions.Length) == 10, "ten independent actions included");
-                    foreach (var pack in real.Catalog.Packages) {
+                    foreach (var pack in real.Catalog.Packages.Where(pack => File.Exists(DockManager.Child(real.Bundle, pack.Payload)))) {
                         string stage = Path.Combine(tmp,"validate-"+pack.Id); Directory.CreateDirectory(stage); real.Unpack(pack,stage);
                         Check(DockManager.ManifestActions(stage).Count == pack.Actions.Length, "real package manifest " + pack.Id);
                     }
                 }
                 if (File.Exists(Path.Combine(Program.Home,"streamdock","catalog.json"))) {
                     Application.EnableVisualStyles();
-                    using (var form = new SettingsWindow(new Options(), delegate(Options o) {}, delegate(Options o) { return new Bitmap(300,160); }, new AppButton[0], "Stream Dock")) {
+                    using (var form = new SettingsWindow(new Options { HideOnFocusLoss = false }, delegate(Options o) {}, delegate(Options o) { return new Bitmap(300,160); }, new AppButton[0], "Modules")) {
                         form.ValidateStreamDockView(Path.Combine(Program.Home,"streamdock-settings.png"));
                     }
                     Check(true,"actual Settings Stream Dock page paints with ten actions");
                 }
+                passed += StreamDockModuleServiceTests.Run(tmp);
                 messages.Add("PASS " + passed + " isolated package-manager checks.");
                 messages.Add("No real Stream Dock install, private credentials or user folders were used.");
                 File.WriteAllLines(Path.Combine(Program.Home, "streamdock-test.log"), messages); return 0;

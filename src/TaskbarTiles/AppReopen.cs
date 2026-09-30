@@ -89,7 +89,7 @@ namespace TaskbarTiles
             // state. Other switches, game URIs and all explicit favourite args survive.
             return arguments.Length == 0 || (taskbarSource && arguments.Equals("-silent", StringComparison.OrdinalIgnoreCase));
         }
-        static IEnumerable<string> InstalledClients()
+        internal static IEnumerable<string> InstalledClients()
         {
             var paths = new List<string>();
             foreach (var view in new[] { RegistryView.Registry32, RegistryView.Registry64 })
@@ -126,6 +126,18 @@ namespace TaskbarTiles
             string leaf = LaunchIdentity.Leaf(executable);
             if (leaf != "steam.exe" && leaf != "steamwebhelper.exe") return "";
             return InstalledClients().FirstOrDefault(c => BelongsToClient(executable, c)) ?? "";
+        }
+        internal static FavouriteEntry FromTaskbarId(string appId, IEnumerable<string> installed)
+        {
+            // This is Steam's declared Windows taskbar identity, not its display
+            // name. If registrations disagree, do not choose an arbitrary client.
+            if (!LaunchIdentity.CleanId(appId).Equals("Valve.Steam.Client", StringComparison.OrdinalIgnoreCase)) return null;
+            var clients = installed.Select(Canonical).Where(p => p.Length > 0 && LaunchIdentity.Leaf(p) == "steam.exe")
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (clients.Count != 1) return null;
+            string client = clients[0];
+            return new FavouriteEntry { Id = LauncherDescriptor.StableId(client, appId), Name = "Steam", Target = client,
+                IconPath = client, AppId = LaunchIdentity.CleanId(appId), Group = "Recent app" };
         }
         internal static FavouriteEntry FromWindow(WindowRecord window)
         {
@@ -172,6 +184,45 @@ namespace TaskbarTiles
             return receipt != null && !string.IsNullOrWhiteSpace(receipt.ReopenClient) && window != null &&
                 !window.IdentityAmbiguous && !LaunchResolution.ProfileScoped(window.AppId) &&
                 BelongsToClient(window.Exe, receipt.ReopenClient);
+        }
+    }
+
+    static class TaskbarLauncherMetadata
+    {
+        internal static bool ExactIdentity(string requested, string actual)
+        {
+            requested = LaunchIdentity.CleanId(requested); actual = LaunchIdentity.CleanId(actual);
+            return LaunchResolution.ExplicitId(requested) && requested.Equals(actual, StringComparison.OrdinalIgnoreCase);
+        }
+        internal static FavouriteEntry Cached(AppButton app)
+        {
+            var key = app.LauncherIdentity;
+            if (key == null || !ExactIdentity(app.AppId, key.AppId) || !LaunchIdentity.FullPath(key.Target) ||
+                !key.Target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
+                !LaunchIdentity.SamePath(key.Target, key.Exe) || LaunchIdentity.GenericHost(key.Exe) || !File.Exists(key.Target)) return null;
+            return new FavouriteEntry { Id = LauncherDescriptor.StableId(key.Target + "\n" + key.Arguments, key.AppId),
+                Name = app.DisplayName ?? app.Name ?? "App", Target = key.Target, Arguments = key.Arguments,
+                AppId = key.AppId, IconPath = key.Exe, Group = "Recent app" };
+        }
+        internal static FavouriteEntry Resolve(AppButton app, IEnumerable<WindowRecord> windows)
+        {
+            if (app == null || app.Favourite != null || !LaunchResolution.ExplicitId(app.AppId)) return null;
+            var cached = Cached(app); if (cached != null) return cached;
+            foreach (var window in windows ?? WindowInventory.Read())
+            {
+                if (window.IdentityAmbiguous || !ExactIdentity(app.AppId, window.AppId)) continue;
+                var declared = WindowRelaunch.Read(window);
+                if (declared != null && ExactIdentity(app.AppId, declared.AppId)) return declared;
+            }
+            return ExactIdentity(app.AppId, "Valve.Steam.Client") ?
+                SteamReopen.FromTaskbarId(app.AppId, SteamReopen.InstalledClients()) : null;
+        }
+        internal static void Bind(AppButton app, IEnumerable<WindowRecord> windows)
+        {
+            if (app == null || app.Favourite != null || app.VerifiedShortcut) return;
+            var descriptor = Resolve(app, windows); if (descriptor == null) return;
+            app.LauncherIdentity = LauncherKey.FromEntry(descriptor, false);
+            app.LaunchExe = app.LauncherIdentity.Exe;
         }
     }
 }

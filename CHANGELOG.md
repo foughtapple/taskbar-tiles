@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.0
+
+- Repair taskbar default-action validation, Chrome profile arguments and registered Steam reopening.
+- Right-click places windows/apps in the current FancyZone, with full-monitor fallback; corner buttons open the destination picker.
+- Add named profile layouts with missing-app launches, existing-only mode, cancellation and identity/monitor checks.
+- Add tray names and fix refresh after clicks, context-menu lifetime, foreground retries and lost Alt-release recovery.
+- Make Stream Dock an independently installed/updated module with function checkboxes; list Touch Return as Developing and keep it inactive.
+- Add opt-in idle app updates and separate module auto-updates, preserving settings and module versions across upgrades.
+- Bound Steam avatar transport and serialize account/game transitions across worker engines.
+
+
 ## 0.14.1
 
 - Fix tray right-click/click-away termination: reuse the context menu and defer command/disposal work until ToolStrip completes its close path.

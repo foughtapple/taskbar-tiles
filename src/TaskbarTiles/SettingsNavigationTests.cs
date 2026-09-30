@@ -19,14 +19,14 @@ namespace TaskbarTiles
             checks = 0;
             var pages = new[] {
                 "Appearance","Navigation","Window organisation","Screens & zones","Monitor layouts","Startup & tools","Updates",
-                "Stream Dock","Quick access","Favourites","Search","Recent apps","Touch screen monitor support","Shortcut health"
+                "Modules","Quick access","Favourites","Search","Recent apps","Profile layouts","Shortcut health"
             };
             var ordered = SettingsNavigationModel.OrderedPages(pages).ToArray();
             Require(ordered.Length == pages.Length, "every settings page appears exactly once in navigation");
             Require(ordered.Distinct(StringComparer.OrdinalIgnoreCase).Count() == pages.Length, "settings navigation has no duplicate pages");
             Require(ordered.Take(3).SequenceEqual(new[] { "Appearance","Navigation","Window organisation" }), "general pages are grouped first");
             Require(Array.IndexOf(ordered,"Favourites") < Array.IndexOf(ordered,"Screens & zones"), "launchers are grouped before display/input");
-            Require(Array.IndexOf(ordered,"Stream Dock") > Array.IndexOf(ordered,"Touch screen monitor support"), "integrations are grouped after display/input");
+            Require(Array.IndexOf(ordered,"Modules") > Array.IndexOf(ordered,"Monitor layouts"), "integrations are grouped after display/input");
 
             using (var tabs = new HeaderlessSettingsTabs())
             {
@@ -58,6 +58,16 @@ namespace TaskbarTiles
                     }
                     form.Close();
                 }
+                using (var form = new SettingsWindow(new Options(), delegate(Options o) { }, null, new AppButton[0], "Profile layouts"))
+                {
+                    form.Show(); Application.DoEvents(); form.PerformLayout(); Application.DoEvents();
+                    Require(form.SettingsNavigationReady, "new Profile layouts settings page participates in the dark navigation rail");
+                    form.AssertSettingsWorkspace();
+                    using (var image = new Bitmap(form.Width, form.Height))
+                    { form.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size)); image.Save(Path.Combine(Program.Home, "profile-layout-settings-test.png"), System.Drawing.Imaging.ImageFormat.Png); }
+                    form.Close();
+                }
+                ProfileLayoutTests.RunNativeUI(log);
                 log.AppendLine("PASS: real Settings window painted with the dark navigation rail.");
                 File.WriteAllText(Path.Combine(Program.Home, "settings-navigation-test.log"), log.ToString());
                 return 0;

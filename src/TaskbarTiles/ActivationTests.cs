@@ -67,6 +67,16 @@ namespace TaskbarTiles
             Require(a.State == ActivationState.Failed && api.Calls == 1, "no blind retry without last-input tracking");
             api = new Fake(); a = Attempt(api); a.Start(); api.Input++;
             Require(a.Step(30) == ActivationState.Succeeded, "user input already directed to chosen window is success");
+            api = new Fake(); var focus = new PlacementFocusGuard(api);
+            Require(focus.TryActivate(selected) && api.Requested == selected, "completed placement activates when foreground and input are unchanged");
+            api = new Fake(); focus = new PlacementFocusGuard(api); api.Input++;
+            Require(!focus.TryActivate(selected) && api.Calls == 0, "input during asynchronous placement prevents a late focus request");
+            api = new Fake(); focus = new PlacementFocusGuard(api); api.Current = other;
+            Require(!focus.TryActivate(selected) && api.Calls == 0, "unrelated foreground transition prevents placement stealing focus without an input change");
+            api = new Fake { TrackInput = false }; focus = new PlacementFocusGuard(api);
+            Require(!focus.TryActivate(selected) && api.Calls == 0, "placement does not activate blindly when input tracking is unavailable");
+            api = new Fake(); focus = new PlacementFocusGuard(api); api.TrackInput = false;
+            Require(!focus.TryActivate(selected) && api.Calls == 0, "placement does not activate when input tracking fails at completion");
             log.AppendLine("PASS: " + checks + " activation state-machine assertions using an injected OS interface (no real focus changes).");
         }
     }

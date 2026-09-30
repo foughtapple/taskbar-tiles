@@ -6,7 +6,8 @@ This installs for your Windows user only. Administrator access is not required.
 Your existing Taskbar Tiles settings, favourites and X-Mouse command are preserved.
 Setup backs up the previous executable and configuration before replacing them.
 
-Updates are checked only when you choose "Check for updates" in the tray menu.
+Automatic app updates can be configured in Settings > Updates. Manual checks
+remain available in the tray menu.
 This build is not Authenticode-signed. Checksums detect corruption, not publisher
 identity. Only install builds from a source you trust; do not disable Windows security.
 
@@ -14,6 +15,9 @@ Uninstall through Windows Settings > Apps. Personal settings and favourites rema
 on disk unless you remove their folder yourself after uninstalling.
 
 
-Optional integrations in Setup:
-- Stream Dock integration is selected by default on a fresh install. Existing Stream Dock choices are not replaced on upgrade.
-- Touch Return is off by default. Selecting it enables the master switch only; touchscreen/pen association still requires the in-app passive detection test.
+Optional modules are managed separately in Settings > Modules:
+- Stream Dock code is downloaded only when you select functions and install it.
+  App Setup includes module metadata only; module releases/update choices are
+  independent of app releases. Existing private settings and scenes are retained.
+- Touch Return is Developing / unavailable. This version does not install or
+  activate it, even if an older configuration enabled it.

@@ -21,7 +21,7 @@ After successful installation, old downloaded/extracted ZIP folders outside `%LO
 
 ## Updating
 
-Tray → Check for updates → Check GitHub → Download & install. A manual download of the next Setup.exe from Releases works too. Updates keep the same installation directory and settings. There is no startup polling or silent installation.
+Tray → Check for updates → Check GitHub → Download & install. A manual download of the next Setup.exe from Releases works too. Updates keep the same installation directory and settings. Automatic app updates are an optional Settings → Updates preference; they wait for five idle minutes and no active app operations. Stream Dock is separately installed and updated through Settings → Modules. Touch Return is Developing and unavailable.
 
 The checksum comes from the same GitHub release as the installer. It detects truncated/corrupt downloads but is not an independent trust anchor. Releases are not currently Authenticode-signed. Never disable security software to install; consult the source/run provenance when deciding whether to trust a build.
 

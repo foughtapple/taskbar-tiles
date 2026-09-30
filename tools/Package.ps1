@@ -5,6 +5,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = Split-Path $PSScriptRoot -Parent
 & (Join-Path $PSScriptRoot 'Build.ps1')
+& (Join-Path $PSScriptRoot 'Build-StreamDock.ps1')
+& (Join-Path $PSScriptRoot 'Test-StreamDock.ps1')
 $version = (Get-Content (Join-Path $root 'version.txt') -Raw).Trim()
 $candidates = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe")
 $compiler = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1

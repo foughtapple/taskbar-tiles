@@ -187,8 +187,7 @@ namespace TaskbarTiles
         internal void RequestShortcutRepair(){RepairShortcuts();}
         void SetupTouchSupport()
         {
-            try { touchService=new TouchReturnService(this,options); }
-            catch(Exception ex){Program.Log("Touch support unavailable: "+ex);Notify("Touch screen monitor support could not initialise. The switcher is still available; see TaskbarTiles.log.");}
+            // Touch Return is a developing optional module; no service/listener is installed in this release.
         }
         void ShowTouchSupport(){CancelPassiveLaunchObservation();if(touchService!=null)touchService.Cancel("Settings opened");if(transient!=null){transient.Activate();return;}Dismiss();SettingsCore("Touch screen monitor support");}
     }

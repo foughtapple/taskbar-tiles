@@ -71,6 +71,14 @@ namespace TaskbarTiles
         internal void Reset() { seen.Clear(); }
     }
 
+    static class LaunchObservationPolicy
+    {
+        internal static bool UserMoved(uint? initial, uint? current, IntPtr before, IntPtr foreground, uint observerProcess, uint foregroundProcess, bool matchingForeground)
+        {
+            return initial.HasValue && current.HasValue && current.Value != initial.Value && foreground != IntPtr.Zero &&
+                foreground != before && foregroundProcess != observerProcess && !matchingForeground;
+        }
+    }
     sealed class LaunchPlacement : IDisposable
     {
         readonly AppButton app;
@@ -85,6 +93,7 @@ namespace TaskbarTiles
         readonly Stopwatch clock = new Stopwatch();
         readonly LaunchOutcomeSelector selector = new LaunchOutcomeSelector();
         readonly WindowsActivationApi input = new WindowsActivationApi();
+        readonly Func<uint?> readInput;
         bool inputKnown;
         uint initialInput;
         bool completed;
@@ -95,13 +104,18 @@ namespace TaskbarTiles
         internal bool ForPlacement { get; private set; }
         internal WindowRecord SelectedWindow { get; private set; }
         public LaunchPlacement(AppButton requested, Options settings, string id, Action<IntPtr, string> callback, bool forPlacement = true)
+            : this(requested, settings, id, callback, forPlacement, null) { }
+        // The native fixture may isolate its input stamp while retaining real
+        // process/window enumeration. Production callers always use Windows input.
+        internal LaunchPlacement(AppButton requested, Options settings, string id, Action<IntPtr, string> callback, bool forPlacement, Func<uint?> inputStamp)
         {
+            readInput = inputStamp ?? delegate { uint stamp; return input.TryInputStamp(out stamp) ? (uint?)stamp : null; };
             app = requested; options = settings; finished = callback; requestId = id; ForPlacement = forPlacement;
             var initial = WindowInventory.Read(cache);
             before = initial.ToDictionary(w => w.Handle, w => w.ProcessId);
             beforeMinimized = initial.ToDictionary(w => w.Handle, w => Native.IsIconic(w.Handle));
             foregroundBefore = Native.GetForegroundWindow();
-            inputKnown = input.TryInputStamp(out initialInput);
+            inputKnown = TryInputStamp(out initialInput);
             timer.Tick += Tick;
         }
         public void Begin(LaunchReceipt accepted)
@@ -116,14 +130,17 @@ namespace TaskbarTiles
         public void Fail(string error) { Complete(null, error, "dispatch failed"); }
         bool New(WindowRecord w) { return LaunchIdentity.IsNew(w, before); }
         bool Match(WindowRecord w) { return LaunchIdentity.Matches(app, w, receipt); }
+        bool TryInputStamp(out uint stamp)
+        { uint? value = readInput(); stamp = value.GetValueOrDefault(); return value.HasValue; }
         bool UserMovedElsewhere(IntPtr foreground, IList<WindowRecord> matching)
         {
             uint stamp;
             // Mouse motion alone while waiting in the same foreground does not cancel.
             // But never pull the user back after they interact with another app.
-            return inputKnown && input.TryInputStamp(out stamp) && stamp != initialInput && foreground != IntPtr.Zero &&
-                foreground != foregroundBefore && WindowNative.ProcessId(foreground) != (uint)Process.GetCurrentProcess().Id &&
-                !matching.Any(w => w.Handle == foreground || SwitcherLayerPolicy.OwnedBy(foreground, w.Handle));
+            uint? current = TryInputStamp(out stamp) ? (uint?)stamp : null;
+            return LaunchObservationPolicy.UserMoved(inputKnown ? (uint?)initialInput : null, current, foregroundBefore, foreground,
+                (uint)Process.GetCurrentProcess().Id, WindowNative.ProcessId(foreground),
+                matching.Any(w => w.Handle == foreground || SwitcherLayerPolicy.OwnedBy(foreground, w.Handle)));
         }
         void Tick(object sender, EventArgs e)
         {
@@ -190,7 +207,7 @@ namespace TaskbarTiles
             if (completed) return;
             if (wait)
             {
-                selector.Reset(); clock.Restart(); inputKnown = input.TryInputStamp(out initialInput);
+                selector.Reset(); clock.Restart(); inputKnown = TryInputStamp(out initialInput);
                 LaunchLog.Write(requestId, "wait extended without re-launch"); timer.Start(); return;
             }
             if (result == DialogResult.OK && selected != null) Complete(selected, null, "manual selection");

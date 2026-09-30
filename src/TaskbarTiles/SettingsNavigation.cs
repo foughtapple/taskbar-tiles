@@ -50,10 +50,10 @@ namespace TaskbarTiles
         }
 
         internal static readonly Group[] Groups = new[] {
-            new Group("GENERAL", "Appearance", "Navigation", "Window organisation", "Quick access"),
+            new Group("GENERAL", "Appearance", "Navigation", "Window organisation", "Profile layouts", "Quick access"),
             new Group("LAUNCHERS", "Favourites", "Search", "Recent apps"),
-            new Group("DISPLAY & INPUT", "Screens & zones", "Monitor layouts", "Touch screen monitor support"),
-            new Group("INTEGRATIONS", "Stream Dock", "Updates", "Startup & tools", "Shortcut health")
+            new Group("DISPLAY & INPUT", "Screens & zones", "Monitor layouts"),
+            new Group("INTEGRATIONS", "Modules", "Updates", "Startup & tools", "Shortcut health")
         };
 
         internal static IEnumerable<string> OrderedPages(IEnumerable<string> actual)

@@ -50,5 +50,4 @@ try {
 Get-Content (Join-Path $output 'self-test.log')
 Write-Host "Build and helper tests passed: $output" -ForegroundColor Green
 
-& (Join-Path $PSScriptRoot 'Build-StreamDock.ps1')
-& (Join-Path $PSScriptRoot 'Test-StreamDock.ps1')
+& (Join-Path $PSScriptRoot 'Build-StreamDockMetadata.ps1')

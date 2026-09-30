@@ -42,7 +42,12 @@ namespace TaskbarTiles
                 result = FromEntry(new FavouriteEntry { AppId = app.AppId, Target = app.ShortcutPath }, resolve);
                 if (result.Exe.Length == 0) result.Exe = app.LaunchExe ?? "";
             }
-            else if (LaunchIdentity.FullPath(result.AppId)) { result.Exe = result.AppId; result.Target = result.AppId; }
+            else
+            {
+                var declared = TaskbarLauncherMetadata.Cached(app);
+                if (declared != null) result = FromEntry(declared, false);
+                else if (LaunchIdentity.FullPath(result.AppId)) { result.Exe = result.AppId; result.Target = result.AppId; }
+            }
             return result;
         }
         internal static bool Same(LauncherKey a, LauncherKey b)
@@ -78,6 +83,12 @@ namespace TaskbarTiles
             string target = app.VerifiedShortcut ? app.ShortcutPath : "";
             if (string.IsNullOrWhiteSpace(target))
             {
+                var declared = TaskbarLauncherMetadata.Resolve(app, null);
+                if (declared != null)
+                {
+                    declared.Name = app.DisplayName ?? app.Name ?? declared.Name;
+                    return declared;
+                }
                 if (LaunchIdentity.FullPath(app.AppId) && File.Exists(app.AppId)) target = app.AppId;
                 else if (LaunchResolution.ExplicitId(app.AppId) && ShellIcons.CanResolve(@"shell:AppsFolder\" + app.AppId)) target = @"shell:AppsFolder\" + app.AppId;
             }

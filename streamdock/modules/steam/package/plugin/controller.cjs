@@ -66,7 +66,8 @@ class Controller{
  }
  async press(ctx){const item=this.contexts.get(ctx);if(!item||this.busy||this.now()-this.lastPress<1500)return;this.lastPress=this.now();this.busy=true;this.abort=new AbortController();this.phase='checking';this.message='Checking the active Steam account.';this.repaint();this.report();
   const wasSteam=!item.shownId;
-  this.activeTask=(async()=>{try{
+  this.activeTask=(async()=>{let release;try{
+   release=await this.steam.acquireTransition(this.abort.signal,()=>this.abort?.abort());
    const s=await this.observe();const plan=decide(s,this.accounts,item.settings);
    if(wasSteam||plan.kind==='open'){
     this.phase='opening';this.message='Opening Steam. No account selection is changed.';this.repaint();this.report();await this.steam.open();await this.steam.wait(3000,this.abort.signal);return;
@@ -78,7 +79,7 @@ class Controller{
    if(item.action===PLAY){if(this.abort.signal.aborted)throw new Error('Cancelled before launching Rocket League.');await this.steam.launchRocket(plan.target.id);}
    if(this.contexts.size)await this.observe();
   }catch(e){this.message=e.message;this.phase='attention';this.log('action',e.message);if(!this.closed&&this.contexts.has(ctx))this.send({event:'showAlert',context:ctx});}
-  finally{this.busy=false;this.abort=null;this.repaint();this.report();this.schedule();}})();
+  finally{try{if(release)await release();}finally{this.busy=false;this.abort=null;this.repaint();this.report();this.schedule();}}})();
   try{await this.activeTask;}finally{this.activeTask=null;}
  }
  async close(){this.closed=true;this.generation++;if(this.timer!==null)this.timers.clearTimeout(this.timer);this.timer=null;this.contexts.clear();this.inspectors.clear();this.abort?.abort();if(this.activeTask)await this.activeTask.catch(()=>{});}

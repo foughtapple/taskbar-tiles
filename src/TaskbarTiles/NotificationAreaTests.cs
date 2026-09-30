@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Automation;
@@ -16,6 +17,8 @@ namespace TaskbarTiles
     static class NotificationAreaTests
     {
         static int checks;
+        [DllImport("UIAutomationCore.dll", ExactSpelling = true)]
+        static extern int UiaDisconnectAllProviders();
         static void Require(bool value,string name)
         { checks++; if(!value)throw new InvalidOperationException("FAILED: "+name); }
 
@@ -60,6 +63,14 @@ namespace TaskbarTiles
             var on=new Options{ShowNotificationArea=true,NotificationIconSize=26};
             Require(NotificationAreaMetrics.LogicalHeight(off)==0,"disabled row takes no height");
             Require(NotificationAreaMetrics.LogicalHeight(on)>=50,"enabled row reserves compact band");
+            foreach (int width in new[] { 520, 760, 1200, 2200 })
+                foreach (float dpi in new[] { .5f, 1f, 1.5f, 2f })
+                {
+                    var named = NotificationStripGeometry.Build((int)(width*dpi), 100, (int)(26*dpi), (int)(8*dpi), 40, 4, 0, dpi, true);
+                    Require(named.Apps.All(r => r.Height >= (int)(54*dpi) && r.Width >= (int)(76*dpi)), "tray names reserve separate width and height");
+                    Require(named.Apps.Concat(named.System).All(r => r.Left >= 0 && r.Right <= width*dpi), "named tray cells stay inside menu");
+                    Require(!named.Apps.Any(a => named.System.Any(a.IntersectsWith)), "named app and system cells do not overlap");
+                }
             log.AppendLine("PASS: "+layouts+" notification-row layouts and "+checks+" policy/geometry assertions. No tray actions were sent.");
         }
 
@@ -79,7 +90,7 @@ namespace TaskbarTiles
                     form.Shown+=delegate{button.Focus();ready.Set();};
                     Application.Run(form);
                 }
-                return 0;
+                return UiaDisconnectAllProviders() == 0 ? 0 : 4;
             }
             catch{return 3;}
             finally{if(ready!=null)ready.Dispose();if(invoked!=null)invoked.Dispose();}
@@ -102,6 +113,8 @@ namespace TaskbarTiles
                     Arguments="--test-notification-target "+readyName+" "+invokedName,
                     UseShellExecute=false,WorkingDirectory=Program.Home}))
                 {
+                    try
+                    {
                     Require(process!=null&&ready.WaitOne(10000),"fixture became ready");
                     IntPtr window=IntPtr.Zero;
                     var wait=Stopwatch.StartNew();
@@ -111,15 +124,34 @@ namespace TaskbarTiles
                         if(window!=IntPtr.Zero)break; Thread.Sleep(40);
                     }
                     Require(window!=IntPtr.Zero,"fixture window handle found");
-                    var root=AutomationElement.FromHandle(window);
-                    var button=root.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.NameProperty,"Fixture tray item"));
-                    Require(button!=null,"fixture action element found through UI Automation");
-                    string error=NotificationAreaAction.InvokeDefault(button);
-                    Require(error==null&&invoked.WaitOne(5000),"default notification action invoked cross-process");
-                    try{if(!process.HasExited)process.Kill();}catch{}
-                    process.WaitForExit(5000);
+                    // Match the production reader's MTA and keep its native RPC
+                    // proxies off the WinForms UI thread. End the client before
+                    // requesting normal provider shutdown.
+                    Exception clientError = null;
+                    var client = new Thread(delegate()
+                    {
+                        try { InvokeFixture(window, invoked); }
+                        catch (Exception ex) { clientError = ex; }
+                    });
+                    client.IsBackground = true; client.Name = "Notification fixture accessibility client";
+                    client.SetApartmentState(ApartmentState.MTA); client.Start();
+                    Require(client.Join(15000), "fixture accessibility client completed before provider teardown");
+                    if (clientError != null) throw new InvalidOperationException("Fixture accessibility client failed.", clientError);
+                    GC.Collect(); GC.WaitForPendingFinalizers();
+                    Require(process.CloseMainWindow(), "fixture provider receives a normal window close");
+                    Require(process.WaitForExit(10000) && process.ExitCode == 0, "fixture provider shuts down cleanly after native Invoke");
+                    }
+                    finally
+                    {
+                        if (process != null && !process.HasExited)
+                        {
+                            process.CloseMainWindow();
+                            if (!process.WaitForExit(5000)) { process.Kill(); process.WaitForExit(5000); }
+                        }
+                    }
                 }
                 log.AppendLine("PASS: disposable cross-process Invoke routing. The real Windows tray was not touched.");
+                Require(UiaDisconnectAllProviders() == 0, "disposed fixture window accessibility providers disconnected before process exit");
                 File.WriteAllText(Path.Combine(Program.Home,"notification-area-test.log"),log.ToString());
                 return 0;
             }
@@ -129,6 +161,15 @@ namespace TaskbarTiles
                 try{File.WriteAllText(Path.Combine(Program.Home,"notification-area-test.log"),log.ToString());}catch{}
                 return 1;
             }
+        }
+        // The UIA objects stay local to the MTA and never enter the UI thread.
+        static void InvokeFixture(IntPtr window, EventWaitHandle invoked)
+        {
+            var root = AutomationElement.FromHandle(window);
+            var button = root.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.NameProperty, "Fixture tray item"));
+            Require(button != null, "fixture action element found through UI Automation");
+            string error = NotificationAreaAction.InvokeDefault(button);
+            Require(error == null && invoked.WaitOne(5000), "default notification action invoked cross-process");
         }
     }
 }
