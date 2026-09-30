@@ -79,10 +79,12 @@ namespace TaskbarTiles
         internal readonly List<Rectangle> Apps = new List<Rectangle>(), System = new List<Rectangle>();
         internal Rectangle Previous, Next, Load;
         internal int PerPage, Page;
-        internal static NotificationStripGeometry Build(int width, int top, int icon, int spacing, int apps, int system, int page, float dpi)
+        internal static NotificationStripGeometry Build(int width, int top, int icon, int spacing, int apps, int system, int page, float dpi, bool names = false)
         {
             var g = new NotificationStripGeometry();
             int pad = Math.Max(1,(int)Math.Round(22*dpi)), gap = Math.Max(1,spacing), cell = Math.Max(16,icon+(int)Math.Round(10*dpi));
+            int height = names ? cell + Math.Max(1,(int)Math.Round(28*dpi)) : cell;
+            if (names) cell = Math.Max(cell, (int)Math.Round(76*dpi));
             int right=width-pad, systemCount=system;
             int systemGap=gap, systemCell=cell;
             if(systemCount>0 && systemCount*cell+(systemCount-1)*gap>width/3)
@@ -91,7 +93,7 @@ namespace TaskbarTiles
                 systemCell=Math.Max(1,(width/3-(systemCount-1)*systemGap)/systemCount);
             }
             int systemWidth=systemCount==0?0:systemCount*systemCell+(systemCount-1)*systemGap;
-            for(int i=0;i<systemCount;i++)g.System.Add(new Rectangle(right-systemWidth+i*(systemCell+systemGap),top,systemCell,cell));
+            for(int i=0;i<systemCount;i++)g.System.Add(new Rectangle(right-systemWidth+i*(systemCell+systemGap),top,systemCell,height));
             int reserved = Math.Max(pad,systemWidth+pad+gap*2);
             int centreWidth = Math.Max(cell, width-2*reserved), centreLeft=(width-centreWidth)/2;
             bool paged = apps*(cell+gap)-gap > centreWidth;
@@ -103,13 +105,13 @@ namespace TaskbarTiles
             int shown = Math.Min(g.PerPage,Math.Max(0,apps-g.Page*g.PerPage));
             int rowWidth = shown == 0 ? 0 : shown*cell+(shown-1)*gap;
             int x=(width-rowWidth)/2;
-            for(int i=0;i<shown;i++) g.Apps.Add(new Rectangle(x+i*(cell+gap),top,cell,cell));
+            for(int i=0;i<shown;i++) g.Apps.Add(new Rectangle(x+i*(cell+gap),top,cell,height));
             if(paged)
             {
-                g.Previous=new Rectangle(Math.Max(centreLeft,x-arrow-arrowGap),top,arrow,cell);
-                g.Next=new Rectangle(x+rowWidth+arrowGap,top,arrow,cell);
+                g.Previous=new Rectangle(Math.Max(centreLeft,x-arrow-arrowGap),top,arrow,height);
+                g.Next=new Rectangle(x+rowWidth+arrowGap,top,arrow,height);
             }
-            if(apps==0) g.Load=new Rectangle(centreLeft,top,centreWidth,cell);
+            if(apps==0) g.Load=new Rectangle(centreLeft,top,centreWidth,height);
             return g;
         }
     }
@@ -166,7 +168,7 @@ namespace TaskbarTiles
             notificationRects.Clear(); shownNotifications.Clear();
             notificationPrev=notificationNext=notificationBand=loadNotificationRect=Rectangle.Empty;
             if(!options.ShowNotificationArea)return;
-            int icon=S(options.NotificationIconSize),cell=icon+S(10),top=footer-cell-S(6);
+            int icon=S(options.NotificationIconSize),cell=icon+S(38),top=footer-cell-S(6);
             var apps=notificationItems.Where(n=>!n.SystemItem).ToList();
             var system=notificationItems.Where(n=>n.SystemItem).ToList();
             if(renderingPreview)
@@ -175,7 +177,7 @@ namespace TaskbarTiles
                 system=new[]{new NotificationItem{Name="Language"},new NotificationItem{Name="Network"},new NotificationItem{Name="Volume"},new NotificationItem{Name="Clock"}}.ToList();
             }
             notificationAppCount=apps.Count;
-            var g=NotificationStripGeometry.Build(width,top,icon,S(options.NotificationIconSpacing),apps.Count,system.Count,notificationPage,scale);
+            var g=NotificationStripGeometry.Build(width,top,icon,S(options.NotificationIconSpacing),apps.Count,system.Count,notificationPage,scale,true);
             notificationPerPage=g.PerPage; notificationPage=g.Page;
             for(int i=0;i<g.Apps.Count;i++){notificationRects.Add(g.Apps[i]);shownNotifications.Add(apps[g.Page*g.PerPage+i]);}
             for(int i=0;i<g.System.Count;i++){notificationRects.Add(g.System[i]);shownNotifications.Add(system[i]);}
@@ -191,12 +193,18 @@ namespace TaskbarTiles
                 Rectangle r=notificationRects[i]; var item=shownNotifications[i];
                 if(lastMouseHit==3000+i)DrawingUtil.Round(g,r,S(6),Theme.Card,Theme.Border,1);
                 int size=Math.Max(1,Math.Min(S(options.NotificationIconSize),Math.Min(r.Width,r.Height)-S(4)));
-                var box=new Rectangle(r.Left+(r.Width-size)/2,r.Top+(r.Height-size)/2,size,size);
+                var box=new Rectangle(r.Left+(r.Width-size)/2,r.Top+S(4),size,size);
                 // Actual tray artwork wins over a reconstructed app/count tile.
                 if(!DrawMenuImage(g,item.Image,box,"tray artwork"))
                 {
                     TrayImageFallback.Paint(g,box);
                 }
+                using (var font = new Font("Segoe UI", Math.Max(6, 10 * scale), FontStyle.Regular, GraphicsUnit.Pixel))
+                using (var brush = new SolidBrush(text))
+                using (var format = new StringFormat { Alignment=StringAlignment.Center, LineAlignment=StringAlignment.Near,
+                    Trimming=StringTrimming.EllipsisCharacter })
+                    g.DrawString(item.Name ?? "Tray app", font, brush,
+                        new RectangleF(r.Left+S(2),box.Bottom+S(3),Math.Max(1,r.Width-S(4)),S(27)),format);
             }
             if(!loadNotificationRect.IsEmpty)
             {

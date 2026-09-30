@@ -35,6 +35,7 @@ func main() {
   case "--validate":fmt.Println(`{"probe":"SteamSession","version":"1.1.0"}`);return
   case "--once":err=json.NewEncoder(os.Stdout).Encode(nativeSnapshot())
   case "--open":err=openSteam()
+  case "--hold-transition":err=holdTransition()
   case "--rocket-status":var running bool;running,err=rocketRunning(false);if err==nil{err=json.NewEncoder(os.Stdout).Encode(map[string]bool{"running":running})}
   case "--close-rocket":_,err=rocketRunning(true)
   case "--launch-rocket":err=openSteamURI("steam://run/252950")

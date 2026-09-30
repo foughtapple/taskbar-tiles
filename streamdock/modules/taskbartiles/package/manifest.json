@@ -221,7 +221,7 @@
   "Category": "Taskbar Tiles",
   "CategoryIcon": "images/taskbar.svg",
   "Icon": "images/taskbar.svg",
-  "Version": "1.0.0",
+  "Version": "1.1.0",
   "CodePath": "plugin/index.js",
   "OS": [
     {

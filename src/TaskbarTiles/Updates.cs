@@ -1,4 +1,4 @@
-// GitHub updates are opt-in per operation. No startup polling, telemetry or credentials.
+// Manual GitHub updates and optional daily stable updates. No telemetry or credentials.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -218,6 +218,13 @@ namespace TaskbarTiles
 
         internal static AvailableUpdate Check(CancellationToken token)
         { return CheckFromPublicRelease(token); }
+        internal static void VerifyInstaller(string file, AvailableUpdate update, string expectedHash)
+        {
+            if (update == null || update.AssetName != ReleaseInfo.SetupName(update.Tag) ||
+                !string.Equals(Path.GetFileName(file), update.AssetName, StringComparison.Ordinal) ||
+                ReleaseInfo.Hash(file) != expectedHash || !InternetDownload.HasMark(file, ReleaseInfo.AssetUrl(update.Tag, update.AssetName)))
+                throw new InvalidDataException("Installer or Internet marker changed after verification. Nothing will be run.");
+        }
         internal static string Download(AvailableUpdate update, CancellationToken token, Action<long, long> progress, out string verifiedHash)
         { return DownloadTo(update, token, progress, out verifiedHash, Path.Combine(Program.Home, "Updates")); }
         // The online integration test uses a unique temporary root; normal updates keep their existing location.
@@ -329,7 +336,7 @@ namespace TaskbarTiles
                         if (stop.IsCancellationRequested || IsDisposed) return;
                         try
                         {
-                            if (ReleaseInfo.Hash(file) != expected) throw new InvalidDataException("Installer changed after verification. Not running it.");
+                            UpdateTransport.VerifyInstaller(file, update, expected);
                             Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
                             status.Text = "Setup opened. Follow its wizard; it will close this copy safely when ready.";
                         }
@@ -353,7 +360,7 @@ namespace TaskbarTiles
         }
         void ShowAbout()
         {
-            MessageBox.Show("Taskbar Tiles " + Program.Version + "\n\nSwitch to the right window. Launch into the right place.\n\n" + ReleaseInfo.ProjectUrl + "\nMIT licence. No telemetry. Updates are checked only when requested.\n\nRight-click the tray icon for updates, settings and diagnostics.",
+            MessageBox.Show("Taskbar Tiles " + Program.Version + "\n\nSwitch to the right window. Launch into the right place.\n\n" + ReleaseInfo.ProjectUrl + "\nMIT licence. No telemetry. Optional automatic updates are controlled in Settings > Updates.\n\nRight-click the tray icon for updates, settings and diagnostics.",
                 "About Taskbar Tiles", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }

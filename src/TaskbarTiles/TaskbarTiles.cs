@@ -1,6 +1,6 @@
 // Taskbar Tiles 0.9.1 - Windows utility. C# 5 / .NET Framework.
 // No telemetry, keyboard logging, taskbar registry edits or process injection.
-// Network access is limited to explicit, user-initiated GitHub update checks/downloads.
+// GitHub downloads are manual by default; automatic app/module updates require opt-in.
 using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -26,7 +26,7 @@ namespace TaskbarTiles
         internal static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
         internal const string EventName = "Local\\TaskbarTiles.Exit.v01";
         internal const string ToggleEventName = "Local\\TaskbarTiles.Toggle.v02";
-        internal const string Version = "0.14.1";
+        internal const string Version = "0.15.0";
         static bool SignalToggle()
         {
             try
@@ -72,8 +72,8 @@ namespace TaskbarTiles
             if (args.Contains("--test-launcher-experience")) { Environment.Exit(LauncherExperienceTests.RunNative()); return; }
             if (args.Contains("--test-reopen-target")) { Environment.Exit(AppReopenTests.Fixture(args)); return; }
             if (args.Contains("--test-app-reopen")) { Environment.Exit(AppReopenTests.RunNative()); return; }
-            if (args.Contains("--test-notification-target")) { Environment.Exit(NotificationAreaTests.Fixture(args)); return; }
-            if (args.Contains("--test-notification-area")) { Environment.Exit(NotificationAreaTests.RunNative()); return; }
+            if (args.Contains("--test-notification-target")) { Environment.ExitCode = NotificationAreaTests.Fixture(args); return; }
+            if (args.Contains("--test-notification-area")) { Environment.ExitCode = NotificationAreaTests.RunNative(); return; }
             if (args.Contains("--test-navigation-update")) { Environment.Exit(OrganisationTests.RunNative()); return; }
             if (args.Contains("--test-settings-navigation")) { Environment.Exit(SettingsNavigationTests.RunNative()); return; }
             if (args.Contains("--seed-streamdock-defaults")) { Environment.Exit(DockManager.SeedFirstInstallDefaults()); return; }
@@ -84,6 +84,23 @@ namespace TaskbarTiles
                 return;
             }
             if (args.Contains("--sync-streamdock")) { Environment.Exit(DockManager.SyncInstalled(false)); return; }
+            if (args.Contains("--install-streamdock"))
+            {
+                try
+                {
+                    var desired = DockManager.Open().State(true);
+                    if (desired.EnabledActions.Length == 0) throw new InvalidOperationException("Choose Stream Dock functions in Settings > Modules first.");
+                    using (var stop = new CancellationTokenSource(TimeSpan.FromMinutes(6)))
+                    {
+                        string result = StreamDockModuleService.InstallLatest(desired, stop.Token);
+                        DockManager.AtomicText(Path.Combine(Home, "StreamDockData", "last-result.txt"), result);
+                        Log(result);
+                    }
+                    Environment.Exit(0);
+                }
+                catch (Exception ex) { Log("Stream Dock installation: " + ex.Message); Environment.Exit(20); }
+                return;
+            }
             if (args.Contains("--streamdock-ready")) { Environment.Exit(DockManager.SyncInstalled(true)); return; }
             if (args.Contains("--test-streamdock")) { Environment.Exit(StreamDockTests.Run()); return; }
             if (args.Contains("--self-test")) { Environment.Exit(SelfTests.Run()); return; }
@@ -119,7 +136,7 @@ namespace TaskbarTiles
                     AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs e)
                     { Log(Convert.ToString(e.ExceptionObject)); ShortcutDiagnostics.Write("unhandled exception; terminating=" + e.IsTerminating); };
                     Options.Migrate();
-                    ThreadPool.QueueUserWorkItem(delegate { DockManager.SyncInstalled(false); });
+                    using (var moduleUpdates = StreamDockModuleService.StartAutomaticChecks())
                     using (var popup = new Switcher())
                     using (var quit = new EventWaitHandle(false, EventResetMode.AutoReset, EventName))
                     using (var toggle = new EventWaitHandle(false, EventResetMode.AutoReset, ToggleEventName))
@@ -394,10 +411,11 @@ namespace TaskbarTiles
                     {
                         RefreshCatalog();
                         var running = ReadRunning();
+                        var launchWindows = WindowInventory.Read();
                         foreach (var app in apps)
                         {
                             if (stopping) break;
-                            try { ResolveOne(app, running); app.LauncherIdentity = LauncherKey.FromApp(app, true); }
+                            try { ResolveOne(app, running); TaskbarLauncherMetadata.Bind(app, launchWindows); app.LauncherIdentity = LauncherKey.FromApp(app, true); }
                             catch (Exception ex) { Program.Log("Icon: " + app.DisplayName + ": " + ex.Message); }
                         }
                     }
@@ -416,6 +434,7 @@ namespace TaskbarTiles
             string pinned = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 @"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar");
             ReadShortcuts(pinned, true);
+            ReadShortcuts(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Microsoft\Internet Explorer\Quick Launch\ImplicitAppShortcuts"), false);
             ReadShortcuts(Environment.GetFolderPath(Environment.SpecialFolder.Programs), false);
             ReadShortcuts(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), false);
             ReadAppsFolder();
@@ -469,7 +488,7 @@ namespace TaskbarTiles
                     foreach (string path in Directory.GetFiles(dir, "*.lnk"))
                     {
                         var item = new ShortcutInfo { Path = path, Name = Path.GetFileNameWithoutExtension(path), Pinned = pinned, AppId = "" };
-                        if (pinned) item.AppId = ShellIcons.FileProperty(path, "System.AppUserModel.ID");
+                        item.AppId = ShellIcons.FileProperty(path, "System.AppUserModel.ID");
                         shortcuts.Add(item);
                     }
                     if (!pinned)
@@ -503,7 +522,7 @@ namespace TaskbarTiles
                     (!string.IsNullOrEmpty(id) && string.Equals(s.AppId, id, StringComparison.OrdinalIgnoreCase) ? 20 : 0)).ToList();
             var exact = candidates.Where(s => !string.IsNullOrEmpty(id) && string.Equals(s.AppId, id, StringComparison.OrdinalIgnoreCase)).ToList();
             var pinnedNames = candidates.Where(s => s.Pinned && TextTools.Key(s.Name) == name).ToList();
-            ShortcutInfo launch = exact.FirstOrDefault() ?? (pinnedNames.Count == 1 ? pinnedNames[0] : null);
+            ShortcutInfo launch = exact.FirstOrDefault() ?? (!LaunchResolution.ProfileScoped(id) && pinnedNames.Count == 1 ? pinnedNames[0] : null);
             if (launch != null)
             {
                 app.ShortcutPath = launch.Path; app.VerifiedShortcut = true;
@@ -801,16 +820,7 @@ namespace TaskbarTiles
             menu.Items.Add("Refresh taskbar apps", null, delegate { RefreshApps(); });
             menu.Items.Add("Repair shortcuts", null, delegate { RepairShortcuts(); });
             menu.Items.Add("Open shortcut diagnostics", null, delegate { OpenFile(ShortcutDiagnostics.PathName); });
-            var touchMenu = new ToolStripMenuItem("Touch screen monitor support");
-            var pauseTouch = new ToolStripMenuItem("Pause automatic return") { CheckOnClick = true };
-            pauseTouch.Click += delegate { if (touchService != null) touchService.SetPaused(pauseTouch.Checked); };
-            var stayTouch = new ToolStripMenuItem("Stay here") { CheckOnClick = true };
-            stayTouch.Click += delegate { if (touchService != null) touchService.SetStay(stayTouch.Checked); };
-            touchMenu.DropDownOpening += delegate { if (touchService != null) { pauseTouch.Checked = touchService.Paused; stayTouch.Checked = touchService.Stay; } };
-            touchMenu.DropDownItems.Add(pauseTouch); touchMenu.DropDownItems.Add(stayTouch);
-            touchMenu.DropDownItems.Add("Return now (when safe)", null, delegate { if (touchService != null) touchService.ReturnNow(); });
-            touchMenu.DropDownItems.Add("Monitors, test and settings...", null, delegate { ShowTouchSupport(); });
-            menu.Items.Add(touchMenu);
+            menu.Items.Add("Modules", null, delegate { Dismiss(); SettingsCore("Modules"); });
             menu.Items.Add(new ToolStripSeparator());
             interceptItem = new ToolStripMenuItem("Replace Alt+Tab (uncheck to restore Windows)") { Checked = hook.Enabled, CheckOnClick = true };
             interceptItem.Click += delegate
@@ -860,7 +870,7 @@ namespace TaskbarTiles
             launchTimer = new System.Windows.Forms.Timer { Interval = 40 };
             launchTimer.Tick += LaunchTick;
             monitorPoint = Cursor.Position;
-            SetupFeatures(); SetupQuickAccess(); SetupFullscreen(); SetupActivation();
+            SetupFeatures(); SetupQuickAccess(); SetupFullscreen(); SetupActivation(); SetupAutomaticUpdates(delegate { return ProfileLayoutBusy || (profileLayoutProgress != null && profileLayoutProgress.Visible); });
             switcherLayer = new SwitcherLayer(this, delegate
             { return !closing && transient == null && activation == null && !fullscreenOpening; });
             SetupOutsideDismissal(); SetupShortcutRecovery(); SetupTouchSupport(); SetupRecentApps(); SetupNotificationArea();
@@ -975,6 +985,7 @@ namespace TaskbarTiles
             monitorPoint = Cursor.Position;
             IntPtr foreground = Native.GetForegroundWindow();
             desktopAtOpen = DisplayNative.CurrentDesktop(foreground);
+            CaptureCurrentZone(foreground);
             if (minimiseFullscreen && StartFullscreenOpen(foreground, reverse)) return;
             ShowMenuCore(reverse, foreground);
         }
@@ -1044,6 +1055,7 @@ namespace TaskbarTiles
         int S(int n) { return Math.Max(1, (int)Math.Round(n * scale)); }
         MenuGeometry menuGeometry;
         Rectangle pageInfoRect;
+        bool ShowQuickSizeControls { get { return options.QuickSizeButtons && Width >= S(670); } }
         void RefreshLabelFonts()
         {
             EnsureMenuFonts();
@@ -1090,6 +1102,7 @@ namespace TaskbarTiles
                 tileRects.Add(new Rectangle(x + i % tileColumns * (tile + gap), appTop + S(42) + row * (tile + gap), tile, tile));
             }
             footerTop = height - S(40) - QuickAccessExtra;
+            profileLayoutButton = new Rectangle(pad, footerTop, S(158), S(28));
             LayoutNotificationArea(width, footerTop, pad);
             sizeDown = new Rectangle(width - pad - S(64), footerTop, S(28), S(28));
             sizeUp = new Rectangle(width - pad - S(28), footerTop, S(28), S(28));
@@ -1103,7 +1116,7 @@ namespace TaskbarTiles
         Rectangle PreviewBox(Rectangle r)
         {
             int titleBand = S(MenuTextMetrics.TitleBand(options));
-            return new Rectangle(r.Left + S(10), r.Top + titleBand, Math.Max(1, r.Width - S(20)), Math.Max(1, r.Height - titleBand - S(options.ShowMonitorBadges ? 32 : 10)));
+            return new Rectangle(r.Left + S(10), r.Top + titleBand, Math.Max(1, r.Width - S(20)), Math.Max(1, r.Height - titleBand - S(options.ShowMonitorBadges || options.RightClickZones ? 38 : 10)));
         }
         void UpdateThumbnails()
         {
@@ -1199,12 +1212,13 @@ namespace TaskbarTiles
                     if (lastMouseHit == 2000 + i) DrawingUtil.Round(g, cardCloseRects[i], S(5), Color.FromArgb(155, 51, 65), Color.Transparent, 0);
                     PaintAction(g, cardCloseRects[i], 2000 + i, "close");
                 }
-                if (options.ShowMonitorBadges) Label(g, MonitorLabel(windows[index].Handle), new Rectangle(r.Left + S(10), r.Bottom - S(24), r.Width - S(20), S(20)), false, muted, false);
+                if (options.ShowMonitorBadges) Label(g, MonitorLabel(windows[index].Handle), new Rectangle(r.Left + S(10), r.Bottom - S(24), r.Width - S(options.RightClickZones ? 54 : 20), S(20)), false, muted, false);
                 Rectangle box = PreviewBox(r);
                 DrawingUtil.Round(g, box, S(5), Color.FromArgb(17, 22, 31), Color.Transparent, 0);
                 // Do not paint placeholder words behind valid, narrow live previews.
                 if (renderingPreview && options.ShowLivePreviews) PaintExampleWindow(g, box, i);
                 else if (!previewReady.Contains(i)) Label(g, options.ShowLivePreviews ? "Preview unavailable" : windows[index].Title, box, false, muted, true);
+                PaintDestinationButton(g, r, -1000 - i);
             }
             if (windows.Count == 0) Label(g, "No switchable windows", new Rectangle(S(22), headerHeight + S(10), Width - S(44), S(80)), false, muted, true);
             using (var divider = new Pen(Color.FromArgb(45, 56, 73)))
@@ -1230,17 +1244,21 @@ namespace TaskbarTiles
                     DrawingUtil.Round(g, box, S(9), Color.FromArgb(45, 65, 89), Color.Transparent, 0);
                     Label(g, TextTools.Initials(app.DisplayName), box, true, accent, true);
                 }
-                var label = new Rectangle(r.Left + S(5), r.Bottom - labelHeight - S(5), r.Width - S(10), labelHeight);
+                var label = new Rectangle(r.Left + S(5), r.Bottom - labelHeight - S(5), r.Width - S(options.RightClickZones ? 40 : 10), labelHeight);
                 var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
                 flags |= TextFormatFlags.WordBreak;
                 if (options.ShowAppLabels) TextRenderer.DrawText(g, app.DisplayName, tileFont, label, light, flags);
+                PaintDestinationButton(g, r, -2000 - i);
             }
             if (apps.Count == 0) Label(g, string.IsNullOrEmpty(Query) ? taskbarStatus : "No matching apps", new Rectangle(S(22), appTop + S(42), Width - S(44), S(72)), false, muted, true);
             PaintNotificationArea(g, light, muted, accent);
             paintPhase = "footer";
             PaintQuickAccess(g);
-            Label(g, options.RightClickZones ? "Left-click: choose   /   Right-click: place   /   Esc: back" : "Click to choose   /   Esc to close", new Rectangle(S(22), footerTop, Width - S(options.QuickSizeButtons ? 490 : 44), S(28)), false, muted, false);
-            if (options.QuickSizeButtons)
+            DrawingUtil.Round(g, profileLayoutButton, S(6), lastMouseHit == -40 ? Color.FromArgb(45, 65, 90) : Theme.Card, Theme.Border, 1);
+            Label(g, "Profile layout", profileLayoutButton, false, light, true);
+            int helpWidth = Width - S(ShowQuickSizeControls ? 680 : 220);
+            if (helpWidth > S(120)) Label(g, options.RightClickZones ? "Right-click: current zone" : "Esc: close", new Rectangle(S(190), footerTop, helpWidth, S(28)), false, muted, false);
+            if (ShowQuickSizeControls)
             {
                 Label(g, "Previews  " + options.PreviewScale + "%", new Rectangle(previewDown.Left - S(145), footerTop, S(140), S(28)), false, muted, true);
                 Label(g, "Apps  " + options.TileSize + " px", new Rectangle(sizeDown.Left - S(135), footerTop, S(130), S(28)), false, muted, true);
@@ -1251,6 +1269,8 @@ namespace TaskbarTiles
         static int PageCount(int count, int size) { return Math.Max(1, (count + size - 1) / size); }
         int Hit(Point p)
         {
+            if (profileLayoutButton.Contains(p)) return -40;
+            int destination = HitDestinationButton(p); if (destination != -100) return destination;
             if (organisationRect.Contains(p)) return -21;
             int priority = HitPriority(p); if (priority != -100) return priority;
             if (pageInfoRect.Contains(p)) return -17;
@@ -1259,7 +1279,7 @@ namespace TaskbarTiles
             if (closeRect.Contains(p)) return -1;
             if (gearRect.Contains(p)) return -8;
             if (options.EnableUndoMove && mover.HasUndo && undoRect.Contains(p)) return -11;
-            if (options.QuickSizeButtons)
+            if (ShowQuickSizeControls)
             {
                 if (sizeDown.Contains(p)) return -6;
                 if (sizeUp.Contains(p)) return -7;
@@ -1288,8 +1308,8 @@ namespace TaskbarTiles
             else if (hit == -22) text = NotificationTip(hit);
             else if (hit >= 3000) text = NotificationTip(hit);
             else if (hit >= 2000) text = "Close " + windows[windowPage * perWindowPage + hit - 2000].Title;
-            else if (hit >= 1000) text = apps[appPage * perAppPage + hit - 1000].DisplayName + "\nLeft-click: open another. Right-click: choose a screen or zone.";
-            else if (hit >= 0) text = windows[windowPage * perWindowPage + hit].Title + "\nRight-click to choose a screen or zone.";
+            else if (hit >= 1000) text = apps[appPage * perAppPage + hit - 1000].DisplayName + "\nLeft-click: open another. Right-click: open in current zone. Corner button: choose a screen or zone.";
+            else if (hit >= 0) text = windows[windowPage * perWindowPage + hit].Title + "\nRight-click: move to current zone. Corner button: choose a screen or zone.";
             else if (hit == -6) text = "Smaller tiles";
             else if (hit == -7) text = "Larger app tiles";
             else if (hit == -8) text = "Settings";
@@ -1298,6 +1318,8 @@ namespace TaskbarTiles
             else if (hit == -11) text = "Undo last window move";
             else if (hit == -19 || hit == -20) text = NotificationTip(hit);
             if (QuickAccessLayout.IsHit(hit)) text = QuickAccessTip(hit);
+            if (hit == -40) text = "Profile layout: open and arrange saved apps. Right-click: move only apps already open.";
+            if (hit <= -1000) text = "Choose a screen or zone for this window or app";
             tip.SetToolTip(this, text); Invalidate();
         }
         protected override void OnMouseDown(MouseEventArgs e)
@@ -1310,7 +1332,12 @@ namespace TaskbarTiles
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
-            int hit = Hit(e.Location); if (hit != pressedMouseHit) return;
+            int pressed = pressedMouseHit; pressedMouseHit = -100;
+            int hit = Hit(e.Location); if (hit != pressed) return;
+            if (hit == -40 && (e.Button == MouseButtons.Left || e.Button == MouseButtons.Right)) { ShowProfileLayouts(e.Button == MouseButtons.Right); return; }
+            if (e.Button != MouseButtons.Left && hit <= -1000) return;
+            if (hit <= -2000) { int index = appPage * perAppPage - hit - 2000; if (index < apps.Count) ChooseZone(null, apps[index]); return; }
+            if (hit <= -1000) { int index = windowPage * perWindowPage - hit - 1000; if (index < windows.Count) ChooseZone(windows[index], null); return; }
             if (e.Button == MouseButtons.Middle && options.MiddleClickClose && hit >= 0 && hit < 1000)
             { CloseWindowCard(hit); return; }
             if (e.Button == MouseButtons.Right)
@@ -1319,9 +1346,9 @@ namespace TaskbarTiles
                 if (hit == -21) { Dismiss(); SettingsCore("Window organisation"); return; }
                 if (hit >= 3000) { ShowNotificationActions(NotificationAtHit(hit), e.Location); return; }
                 if (!options.RightClickZones) return;
-                if (hit >= 2000) ChooseZone(windows[windowPage * perWindowPage + hit - 2000], null);
-                else if (hit >= 1000) ChooseZone(null, apps[appPage * perAppPage + hit - 1000]);
-                else if (hit >= 0) ChooseZone(windows[windowPage * perWindowPage + hit], null);
+                if (hit >= 2000) PlaceInCurrentZone(windows[windowPage * perWindowPage + hit - 2000], null);
+                else if (hit >= 1000) PlaceInCurrentZone(null, apps[appPage * perAppPage + hit - 1000]);
+                else if (hit >= 0) PlaceInCurrentZone(windows[windowPage * perWindowPage + hit], null);
                 return;
             }
             if (e.Button != MouseButtons.Left) return;
@@ -1502,7 +1529,7 @@ namespace TaskbarTiles
             if (touchService != null) touchService.Dispose();
             DisposeOutsideDismissal();
             if (switcherLayer != null) switcherLayer.Dispose();
-            CancelPendingLaunch(); DisposeActivation(); ShutdownFullscreen(); ShutdownNotificationArea(); ShutdownQuickAccess(); ShutdownFeatures();
+            CancelPendingLaunch(); DisposeAutomaticUpdates(); DisposeProfileLayouts(); DisposeActivation(); ShutdownFullscreen(); ShutdownNotificationArea(); ShutdownQuickAccess(); ShutdownFeatures();
             hook.Dispose(); Native.UnregisterHotKey(Handle, 10);
             settingsTimer.Stop(); launchTimer.Stop(); reader.Dispose(); ClearThumbnails();
             tray.Visible = false; tray.Dispose(); trayIcon.Dispose(); DisposeImages(allApps); allApps.Clear(); apps.Clear();
@@ -1642,6 +1669,9 @@ namespace TaskbarTiles
                 OutsideClickTests.Run(log);
                 TouchSupportTests.Run(log);
                 UpdateTests.Run(log);
+                AutomaticUpdateTests.Run(log);
+                CurrentZonePolicy.Test(log);
+                ProfileLayoutTests.Run(log);
                 log.AppendLine("These are unit/interop-layout tests, not live Windows, FancyZones or X-Mouse integration tests.");
                 File.WriteAllText(Path.Combine(Program.Home, "self-test.log"), log.ToString());
                 return 0;

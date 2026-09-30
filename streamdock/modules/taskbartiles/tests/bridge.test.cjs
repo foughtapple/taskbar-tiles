@@ -62,7 +62,7 @@ else {
   const real=new FakeReal(r=>{for(const [a,c] of [[PC,'pc'],['com.foughtapple.deskstatus.p1s','p1s'],['com.foughtapple.nicknacksorders.processing','orders'],['com.foughtapple.steamsmarttoggle.toggle','steam'],[CLIP,'clip']])r.emit('message',Buffer.from(JSON.stringify(appear(a,c))));});
   const app=bridge.start(['-port','1234','-pluginUUID','native-test','-registerEvent','registerPlugin'],{realSocket:real,noSignals:true});
   t.after(async()=>{app.shutdown();await wait(()=>[...app.states.values()].every(s=>!s.child));if(previous===undefined)delete process.env.LOCALAPPDATA;else process.env.LOCALAPPDATA=previous;fs.rmSync(temp,{recursive:true,force:true});});
-  real.emit('open');await wait(()=>[...app.states.values()].length===4&&[...app.states.values()].every(s=>s.socket));
+  real.emit('open');await wait(()=>[...app.states.values()].length===4&&[...app.states.values()].every(s=>s.socket)).catch(e=>{const status=[...app.states].map(([id,s])=>({id,connected:!!s.socket,failed:s.failed,child:!!s.child}));const log=path.join(temp,'FoughtApple','TaskbarTilesStreamDock','bridge.log');throw Error(e.message+' '+JSON.stringify(status)+' '+(fs.existsSync(log)?fs.readFileSync(log,'utf8'):''));});
   await wait(()=>['pc','p1s','orders','steam'].every(c=>real.sent.some(m=>m.event==='setImage'&&m.context===c)));
   for(const st of app.states.values())assert.ok(st.child&&!st.failed,'native worker remains alive');
   // No keyDown was emitted: no Steam account switch, game launch, screenshot or input.

@@ -22,6 +22,20 @@ namespace TaskbarTiles
         {
             TouchSetupTests.Run(log);
             checks=0;var e=Engine();var p=Anchor();
+            using (var queue = new KeyboardHook(false))
+            {
+                int presses = 0, releases = 0, pressesAtRelease = -1;
+                queue.Pressed = delegate { presses++; };
+                queue.Released = delegate { releases++; pressesAtRelease = presses; };
+                for (int i = 0; i < 64; i++) Require(queue.TestQueuePress(), "bounded shortcut press accepted " + i);
+                Require(!queue.TestQueuePress(), "shortcut queue remains bounded during UI stall");
+                queue.TestQueueRelease(); queue.TestQueueRelease(); queue.Drain();
+                Require(presses == 64 && releases == 1 && pressesAtRelease == 64, "overflow Alt release survives after all queued presses and coalesces");
+                queue.Drain(); Require(releases == 1, "overflow release consumed once");
+                Require(queue.TestQueuePress(), "shortcut queue reusable after overflow");
+                queue.TestQueueRelease(); queue.Drain();
+                Require(presses == 65 && releases == 2 && pressesAtRelease == 65, "normal press-release delivery continues after overflow");
+            }
             var bounds=new Rectangle(1000,0,1000,1000); var coordinate=F("position",false,true);
             Require(TouchAnchorPolicy.Matches(coordinate,new Point(1500,500),bounds),"matching normalized contact and promoted screen point");
             Require(!TouchAnchorPolicy.Matches(coordinate,new Point(1800,500),bounds),"nearby time alone cannot associate a device");
@@ -74,7 +88,10 @@ namespace TaskbarTiles
                 {
                     Require(hook.Installed,"keyboard hook registered");
                     hook.Pressed=delegate{Require(Thread.CurrentThread.ManagedThreadId==thread,"shortcut delivered outside low-level pump on UI thread");delivered++;};
-                    hook.TestDeliver();Require(delivered==1,"queued delivery reached UI callback");
+                    hook.TestDeliver();
+                    var deliveryWait=Stopwatch.StartNew();
+                    while(delivered==0&&deliveryWait.ElapsedMilliseconds<1000){Application.DoEvents();Thread.Sleep(10);}
+                    Require(delivered==1,"actual delivery timer reached UI callback");
                     int first=hook.Generation;hook.TestRevoke();
                     var wait=Stopwatch.StartNew();while(hook.Generation==first&&wait.ElapsedMilliseconds<3500){Application.DoEvents();Thread.Sleep(10);}
                     Require(hook.Generation>first,"removed hook repaired without application restart or probe input");

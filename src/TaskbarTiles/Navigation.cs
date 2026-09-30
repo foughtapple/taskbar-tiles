@@ -100,7 +100,7 @@ namespace TaskbarTiles
         {
             CancelPassiveLaunchObservation();
             if (!options.RightClickZones || transient != null) return;
-            if (pending != null || launchPlacement != null || mover.Busy) { Notify("Finish the current launch or window move first."); return; }
+            if (pending != null || launchPlacement != null || mover.Busy || ProfileLayoutBusy) { Notify("Finish the current launch or layout first."); return; }
             Point point = monitorPoint; Dismiss();
             ZoneDestination destination = null;
             while (!closing)
@@ -123,6 +123,7 @@ namespace TaskbarTiles
         }
         void MoveTo(IntPtr window, ZoneDestination destination, bool existing)
         {
+            if (ProfileLayoutBusy) { Notify("A profile layout is already in progress."); return; }
             mover.Place(window, destination, options, delegate(string error)
             {
                 if (closing) return;
@@ -138,7 +139,7 @@ namespace TaskbarTiles
         void QueueLaunch(AppButton app, ZoneDestination destination)
         {
             CancelPassiveLaunchObservation();
-            if (pending != null || launchPlacement != null) { Notify("An app launch is already in progress."); return; }
+            if (pending != null || launchPlacement != null || ProfileLayoutBusy) { Notify("A launch or profile layout is already in progress."); return; }
             pending = new AppButton { Id=app.Id, Name=app.Name, DisplayName=app.DisplayName, ClassName=app.ClassName,
                 LaunchExe=app.LaunchExe, ShortcutPath=app.ShortcutPath, VerifiedShortcut=app.VerifiedShortcut,
                 Favourite=app.Favourite == null ? null : app.Favourite.Clone(), Taskbar=app.Taskbar, Bounds=app.Bounds };

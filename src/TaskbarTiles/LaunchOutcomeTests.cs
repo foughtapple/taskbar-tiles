@@ -67,6 +67,13 @@ namespace TaskbarTiles
             Require(!LaunchIdentity.Matches(app, new WindowRecord { AppId = "Browser.Profile.B", Exe = app.LaunchExe }, null), "runtime result observation keeps explicit profile conflicts");
             Require(!LaunchIdentity.Matches(new AppButton { LaunchExe = @"C:\One\app.exe" }, new WindowRecord { AppId = "", Exe = @"D:\Other\app.exe" }, null), "same filename is not application identity");
             var operation = new LaunchOperation(); Require(operation.TryDispatch() && !operation.TryDispatch(), "one dispatch only regardless of launch outcome");
+            Require(LaunchObservationPolicy.UserMoved(10, 11, new IntPtr(1), new IntPtr(2), 5, 6, false), "physical input in another app cancels observation");
+            Require(!LaunchObservationPolicy.UserMoved(10, 10, new IntPtr(1), new IntPtr(2), 5, 6, false), "foreground change alone does not count as deliberate input");
+            Require(!LaunchObservationPolicy.UserMoved(10, 11, new IntPtr(1), new IntPtr(1), 5, 6, false), "mouse motion in original foreground preserves wait");
+            Require(!LaunchObservationPolicy.UserMoved(10, 11, new IntPtr(1), new IntPtr(2), 5, 6, true), "interaction with matching launched app preserves observation");
+            Require(!LaunchObservationPolicy.UserMoved(10, 11, new IntPtr(1), new IntPtr(2), 5, 5, false), "observer's owned chooser preserves wait");
+            Require(!LaunchObservationPolicy.UserMoved(null, 11, new IntPtr(1), new IntPtr(2), 5, 6, false), "unavailable initial input is not invented");
+            Require(!LaunchObservationPolicy.UserMoved(10, null, new IntPtr(1), new IntPtr(2), 5, 6, false), "unavailable current input is not invented");
             log.AppendLine("PASS: " + checks + " app-managed new/reused-window, delay, ambiguity, identity and migration assertions.");
         }
         static void PumpUntil(Func<bool> ready, int milliseconds, string name)
@@ -134,7 +141,7 @@ namespace TaskbarTiles
                 var handle = dispatcher.Handle;
                 LaunchPlacement tracking = null;
                 using (tracking = new LaunchPlacement(app, options, "fixture", delegate(IntPtr h, string error)
-                { selected = tracking.SelectedWindow; failure = error; finished = true; }, forPlacement))
+                { selected = tracking.SelectedWindow; failure = error; finished = true; }, forPlacement, delegate { return (uint?)0; }))
                 {
                     var request = new LaunchOperation();
                     ReliableLauncher.Start(app, options, null, request, delegate(LaunchReceipt receipt, string error)
@@ -179,7 +186,7 @@ namespace TaskbarTiles
                 var delayed = Observe(token, true, log);
                 Require(delayed.Handle != first.Handle, "zone launch waits for a slow new window instead of taking the old one");
                 Require(File.ReadAllLines(Path.Combine(root, "starts.txt")).Length == 5, "exactly five launch requests; no automatic retries or duplicate dispatch");
-                log.AppendLine("PASS: " + checks + " native launch/outcome checks with disposable out-of-process fixture windows.");
+                log.AppendLine("PASS: " + checks + " native launch/outcome checks with disposable out-of-process fixture windows. Only the fixture input stamp is held stable; production cancellation policy is tested independently.");
                 log.AppendLine("Actual Steam/Bambu and the user's desktop were not tested by this fixture.");
                 File.WriteAllText(Path.Combine(Program.Home, "launch-outcome-test.log"), log.ToString());
                 return 0;

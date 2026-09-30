@@ -62,7 +62,7 @@ namespace TaskbarTiles
             try
             {
                 float dpi = Math.Max(.5f, DeviceDpi / 96f);
-                bool showPreview = tabs.SelectedTab == null || tabs.SelectedTab.Text != "Stream Dock";
+                bool showPreview = tabs.SelectedTab == null || tabs.SelectedTab.Text != "Modules";
                 var g = SettingsWorkspaceGeometry.Build(settingsContentHost.ClientSize, dpi, showPreview);
                 tabs.Dock = settingsNavigationPanel.Dock = previewPanel.Dock = DockStyle.None;
                 settingsNavigationPanel.Bounds = g.Navigation;

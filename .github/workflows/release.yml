@@ -88,7 +88,7 @@ jobs:
         shell: powershell
         run: |
           $version = (Get-Content version.txt -Raw).Trim()
-          $catalog = Get-Content build/app/streamdock/catalog.json -Raw | ConvertFrom-Json
+          $catalog = Get-Content build/modules/streamdock/catalog.json -Raw | ConvertFrom-Json
           @{
             version = $version
             commit = $env:GITHUB_SHA
@@ -99,7 +99,7 @@ jobs:
             helper_tests = 'passed'
             streamdock_packages = @($catalog.Packages | Select-Object Id,Version,SHA256)
             streamdock_manager_tests = 'passed: checksums, archive paths, action choices, opt-out, busy host refusal, rollback, private settings and real settings-page painting'
-            streamdock_installer_tests = 'passed: actual Setup upgrade synchronises enabled modules, preserves private settings, keeps disabled actions off and leaves unrelated plugins untouched'
+            streamdock_installer_tests = 'passed: core-only Setup preserves separately installed modules and private choices, removes obsolete bundled code and never activates Touch Return'
             app_reopen_tests = 'passed: native default actions and out-of-process hidden-window fixture; actual Steam client not exercised'
             notification_area_tests = 'passed: compact row geometry/policy and cross-process Invoke fixture; personalised Windows notification area not tested'
             settings_navigation_tests = 'passed: hidden native tab strip, grouped dark sidebar and real Settings window paint'
@@ -115,6 +115,11 @@ jobs:
             interactive_desktop_tests = 'physical Stream Dock 293S, real Steam accounts, printer and MCP store endpoint not tested'
             authenticode_signed = $false
           } | ConvertTo-Json -Depth 8 | Set-Content dist/build-info.json -Encoding UTF8
+      - name: Publish independent module only after all tests pass
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./tools/Publish-StreamDock.ps1
       - name: Publish only after all tests pass
         shell: powershell
         env:

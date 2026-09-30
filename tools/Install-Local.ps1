@@ -33,6 +33,12 @@ if ($existing) {
 $payload = Join-Path $root 'build\app'
 foreach ($name in @('TaskbarTiles.exe','TaskbarTiles.exe.config','README.md','LICENSE','THIRD-PARTY-NOTICES.txt','CHANGELOG.md','XMOUSE-SETUP.txt')) { Copy-Item -LiteralPath (Join-Path $payload $name) -Destination (Join-Path $dest $name) -Force }
 if (-not (Test-Path (Join-Path $dest 'settings.ini'))) { Copy-Item (Join-Path $payload 'settings.ini') (Join-Path $dest 'settings.ini') }
+$metadata = Join-Path $dest 'streamdock'
+New-Item -ItemType Directory -Path $metadata -Force | Out-Null
+foreach ($name in @('catalog.json','module-index.json')) { Copy-Item -LiteralPath (Join-Path $payload ('streamdock\' + $name)) -Destination (Join-Path $metadata $name) -Force }
+# Old app-owned bundles are superseded by independently downloaded modules.
+$obsolete = Join-Path $metadata 'packages'
+if (Test-Path -LiteralPath $obsolete) { Remove-Item -LiteralPath $obsolete -Recurse -Force }
 Copy-Item (Join-Path $PSScriptRoot 'Uninstall-Local.ps1') (Join-Path $dest 'Uninstall-Local.ps1') -Force
 $shell = New-Object -ComObject WScript.Shell
 try {

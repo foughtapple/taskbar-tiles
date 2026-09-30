@@ -1,4 +1,4 @@
-# Build reviewed Stream Dock modules into the normal application payload.
+# Build the independently downloadable optional Stream Dock module.
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'
@@ -6,9 +6,16 @@ Set-StrictMode -Version Latest
 $root = Split-Path $PSScriptRoot -Parent
 $source = Join-Path $root 'streamdock\modules'
 $work = Join-Path $root 'build\dock'
-$bundle = Join-Path $root 'build\app\streamdock'
+$bundle = Join-Path $root 'build\modules\streamdock'
+function Assert-BuildPath([string]$target) {
+    $boundary=[IO.Path]::GetFullPath((Join-Path $root 'build')).TrimEnd([IO.Path]::DirectorySeparatorChar)+[IO.Path]::DirectorySeparatorChar
+    $resolved=[IO.Path]::GetFullPath($target)
+    if(-not $resolved.StartsWith($boundary,[StringComparison]::OrdinalIgnoreCase)){throw "Build path leaves the workspace: $resolved"}
+    return $resolved
+}
+$work=Assert-BuildPath $work; $bundle=Assert-BuildPath $bundle
 foreach ($tool in @('go','node')) { if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool is required for developer builds. Users should install the release Setup executable." } }
-foreach ($p in @($work,$bundle)) { if (Test-Path $p) { Remove-Item $p -Recurse -Force }; New-Item -ItemType Directory -Path $p -Force | Out-Null }
+foreach ($p in @($work,$bundle)) { if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force }; New-Item -ItemType Directory -Path $p -Force | Out-Null }
 New-Item -ItemType Directory -Path (Join-Path $bundle 'packages') -Force | Out-Null
 foreach ($name in @('System.Windows.Forms','System.Drawing','System.Web.Extensions','System.IO.Compression','System.IO.Compression.FileSystem')) { Add-Type -AssemblyName $name }
 $utf8 = New-Object Text.UTF8Encoding($false)
@@ -30,7 +37,8 @@ function Build-Go([string]$dir,[string]$out) {
 }
 function Build-Worker([string]$id,[string]$package) {
     $module = Join-Path $source $id
-    if (Test-Path $package) { Remove-Item $package -Recurse -Force }
+    $package=Assert-BuildPath $package
+    if (Test-Path -LiteralPath $package) { Remove-Item -LiteralPath $package -Recurse -Force }
     New-Item -ItemType Directory -Path $package -Force | Out-Null
     Copy-Item (Join-Path $module 'package\*') $package -Recurse -Force
     New-Item -ItemType Directory -Path (Join-Path $package 'plugin') -Force | Out-Null
@@ -105,8 +113,17 @@ foreach ($entry in $catalog.Packages) {
     [IO.Compression.ZipFile]::CreateFromDirectory($package,$zip,[IO.Compression.CompressionLevel]::Optimal,$false)
     $packages += [ordered]@{Id=$entry.Id;Name=$entry.Name;Folder=$entry.Folder;Version=$entry.Version;Payload=('packages/'+$entry.Id+'.zip');SHA256=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant();LegacyFolders=@($entry.LegacyFolders);LegacyPackageIds=@($entry.LegacyPackageIds);Actions=@($entry.Actions)}
 }
-$version=(Get-Content (Join-Path $root 'version.txt') -Raw).Trim()
+$index=Get-Content -LiteralPath (Join-Path $root 'streamdock\module-index.json') -Raw | ConvertFrom-Json
+$version=$index.Version
 $result=[ordered]@{Schema=1;BundleVersion=$version;Packages=@($packages)}
 [IO.File]::WriteAllText((Join-Path $bundle 'catalog.json'),($result|ConvertTo-Json -Depth 12),$utf8)
 Copy-Item (Join-Path $root 'docs\STREAM-DOCK.md') (Join-Path $bundle 'README.md')
+$dist=Join-Path $root 'dist';New-Item -ItemType Directory -Path $dist -Force | Out-Null
+$asset=Join-Path $dist $index.AssetName
+if(Test-Path -LiteralPath $asset){Remove-Item -LiteralPath $asset -Force}
+[IO.Compression.ZipFile]::CreateFromDirectory($bundle,$asset,[IO.Compression.CompressionLevel]::Optimal,$false)
+$hash=(Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText((Join-Path $dist 'module-SHA256SUMS.txt'),($hash+'  '+$index.AssetName+"`n"),$utf8)
+$info=[ordered]@{module='streamdock';version=$version;tag=$index.ReleaseTag;asset=$index.AssetName;sha256=$hash;goVersion=(& go version);nodeVersion=(& node --version);builtUtc=(Get-Date).ToUniversalTime().ToString('o');interactiveHardwareTested=$false}
+[IO.File]::WriteAllText((Join-Path $dist 'module-build-info.json'),($info|ConvertTo-Json -Depth 6),$utf8)
 Write-Host ('Stream Dock bundle ready: '+$packages.Count+' package; '+(@($catalog.Packages.Actions).Count)+' actions in one Taskbar Tiles category.') -ForegroundColor Green

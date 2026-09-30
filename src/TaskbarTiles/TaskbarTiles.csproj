@@ -87,6 +87,13 @@
     <Compile Include="UpdateTlsTests.cs" />
     <Compile Include="InternetDownload.cs" />
     <Compile Include="Updates.cs" />
+    <Compile Include="AutomaticUpdates.cs" />
+    <Compile Include="AutomaticUpdateTests.cs" />
+    <Compile Include="CurrentZone.cs" />
+    <Compile Include="ProfileLayouts.cs" />
+    <Compile Include="ProfileLayoutTests.cs" />
+    <Compile Include="StreamDockModuleService.cs" />
+    <Compile Include="StreamDockModuleServiceTests.cs" />
     <Compile Include="OutsideClickDismissal.cs" />
     <Compile Include="OutsideClickTests.cs" />
     <Compile Include="ShortcutReliability.cs" />

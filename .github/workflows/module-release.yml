@@ -1,0 +1,69 @@
+name: Stream Dock module release
+on:
+  push:
+    branches: [main]
+    paths: ['streamdock/module-index.json']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release
+  cancel-in-progress: false
+jobs:
+  changes:
+    runs-on: windows-2022
+    outputs:
+      independent: ${{ steps.scope.outputs.independent }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - id: scope
+        shell: powershell
+        run: |
+          $independent = 'true'
+          if ($env:GITHUB_EVENT_NAME -eq 'push') {
+            & git diff --quiet HEAD^ HEAD -- version.txt
+            if ($LASTEXITCODE -eq 1) { $independent = 'false' }
+            elseif ($LASTEXITCODE -ne 0) { throw 'Could not determine release scope.' }
+          }
+          "independent=$independent" >> $env:GITHUB_OUTPUT
+  publish:
+    needs: changes
+    if: needs.changes.outputs.independent == 'true' && github.repository == 'foughtapple/taskbar-tiles' && github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - name: Build core and isolated tests
+        shell: powershell
+        run: ./tools/Build.ps1
+      - name: Build and test independent module
+        shell: powershell
+        run: |
+          ./tools/Build-StreamDock.ps1
+          ./tools/Test-StreamDock.ps1
+      - name: Publish module without changing latest core release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./tools/Publish-StreamDock.ps1
+      - name: Preserve diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: streamdock-module-build
+          path: |
+            build/
+            dist/
+          retention-days: 14

@@ -65,6 +65,9 @@ namespace TaskbarTiles
                             var draft = menu.options.Clone();
                             draft.WindowTitleFontSize = 9 + i % 24; draft.AppLabelFontSize = 32 - i % 24;
                             using (var preview = menu.CaptureMenuPreview(draft)) RenderRequire(preview.Width > 0, "real settings preview rendered");
+                            if (i == 0)
+                                using (var representative = menu.CaptureMenuPreview(menu.options.Clone()))
+                                    representative.Save(Path.Combine(Program.Home, "menu-rendering-normal-test.png"), System.Drawing.Imaging.ImageFormat.Png);
                             RenderRequire(ReferenceEquals(menu.menuFonts, same), "preview restores live font ownership");
                             AssertFontAlive(menu.Font); AssertFontAlive(menu.searchBox.Font);
                             menu.area = new Rectangle(0, 0, 1000, 750);

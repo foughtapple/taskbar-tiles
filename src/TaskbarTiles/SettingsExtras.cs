@@ -24,6 +24,7 @@ namespace TaskbarTiles
         readonly Timer previewTimer = new Timer { Interval = 180 };
         FavouriteIcons previewIcons;
         bool previewBusy, extrasDisposed;
+        ContextMenuStrip taskbarFavouriteMenu;
 
         void InitialiseFavouriteDraft()
         {
@@ -55,19 +56,22 @@ namespace TaskbarTiles
         }
         void CommitDraft()
         {
-            string settingsPath = Options.FilePath, favouritesPath = FavouriteStore.FilePath;
+            string settingsPath = Options.FilePath, favouritesPath = FavouriteStore.FilePath, profilesPath = ProfileLayoutStore.FilePath;
             byte[] previousSettings = File.Exists(settingsPath) ? File.ReadAllBytes(settingsPath) : null;
             byte[] previousFavourites = File.Exists(favouritesPath) ? File.ReadAllBytes(favouritesPath) : null;
+            byte[] previousProfiles = File.Exists(profilesPath) ? File.ReadAllBytes(profilesPath) : null;
             bool oldStartup = File.Exists(Switcher.StartupPath), touched = favouritesTouched, failed = favouritesLoadFailed;
             try
             {
-                SaveFavouriteDraft(); edit.Save(); Switcher.SetStartup(startup.Checked);
+                SaveFavouriteDraft(); CommitProfileLayoutsDraft(); edit.Save(); Switcher.SetStartup(startup.Checked);
+                MarkProfileLayoutsCommitted();
             }
             catch
             {
                 // Restore the pre-Apply state on a file/startup failure, rather than leaving half an edit saved.
                 try { RestoreDraftFile(settingsPath, previousSettings); } catch (Exception ex) { Program.Log("Settings rollback: " + ex.Message); }
                 try { RestoreDraftFile(favouritesPath, previousFavourites); } catch (Exception ex) { Program.Log("Favourites rollback: " + ex.Message); }
+                try { RestoreDraftFile(profilesPath, previousProfiles); } catch (Exception ex) { Program.Log("Profile layouts rollback: " + ex.Message); }
                 try { Switcher.SetStartup(oldStartup); } catch (Exception ex) { Program.Log("Startup rollback: " + ex.Message); }
                 favouritesTouched = touched; favouritesLoadFailed = failed; throw;
             }
@@ -204,24 +208,38 @@ namespace TaskbarTiles
         }
         void AddFromTaskbar()
         {
-            var menu = new ContextMenuStrip();
+            var menu = BuildTaskbarFavouriteMenu();
+            if (menu == null)
+            { MessageBox.Show(this, "No launchable taskbar shortcuts have been read yet. Reopen the switcher, or use Installed apps / Add shortcut."); return; }
+            menu.Show(Cursor.Position);
+        }
+        internal ContextMenuStrip BuildTaskbarFavouriteMenu()
+        {
+            if (taskbarFavouriteMenu != null && !taskbarFavouriteMenu.IsDisposed)
+            {
+                taskbarFavouriteMenu.Close();
+                return taskbarFavouriteMenu.Items.Count == 0 ? null : taskbarFavouriteMenu;
+            }
+            taskbarFavouriteMenu = TrayMenuLifetime.Create(this);
+            var menu = taskbarFavouriteMenu;
+            // Settings owns a fixed taskbar snapshot. Keep its item providers alive
+            // with the menu rather than rebuilding/discarding them on every show.
             foreach (var app in taskbarChoices)
             {
                 var a = app;
-                string target = !string.IsNullOrWhiteSpace(a.ShortcutPath) ? a.ShortcutPath : !string.IsNullOrWhiteSpace(a.LaunchExe) ? a.LaunchExe :
-                    !string.IsNullOrWhiteSpace(a.AppId) ? @"shell:AppsFolder\" + a.AppId : "";
-                if (string.IsNullOrWhiteSpace(target)) continue;
+                var descriptor = LauncherDescriptor.FromApp(a);
+                if (descriptor == null) continue;
                 var item = new ToolStripMenuItem(a.DisplayName);
                 item.Click += delegate
                 {
                     // Wait until the native context menu finishes closing before opening an editor.
-                    BeginInvoke(new Action(delegate { if (!IsDisposed && !DismissedByFocusLoss) EditFavourite(new FavouriteEntry { Name = a.DisplayName, Target = target, AppId = a.AppId }); }));
+                    BeginInvoke(new Action(delegate { if (!IsDisposed && !DismissedByFocusLoss) EditFavourite(descriptor.Clone()); }));
                 };
                 menu.Items.Add(item);
             }
             if (menu.Items.Count == 0)
-            { menu.Dispose(); MessageBox.Show(this, "No launchable taskbar shortcuts have been read yet. Reopen the switcher, or use Installed apps / Add shortcut."); return; }
-            menu.Closed += delegate { menu.Dispose(); }; menu.Show(Cursor.Position);
+                return null;
+            return menu;
         }
         void ImportFavourites()
         {

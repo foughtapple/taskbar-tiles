@@ -14,7 +14,7 @@ namespace TaskbarTiles
             if (original == null || !TaskbarScanPolicy.KnownApp(id, cls, false, name)) return false;
             string expected = original.AppId;
             if (!string.IsNullOrWhiteSpace(expected))
-                return string.Equals(id, "Appid:" + expected, StringComparison.OrdinalIgnoreCase);
+                return string.Equals(LaunchIdentity.CleanId(id), LaunchIdentity.CleanId(expected), StringComparison.OrdinalIgnoreCase);
             // Name-only selection is allowed only for the actual root/entry we
             // observed, not for a favourite that merely happens to have that name.
             return original.Taskbar != IntPtr.Zero && original.Taskbar == root &&

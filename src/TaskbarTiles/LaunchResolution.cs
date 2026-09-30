@@ -154,9 +154,17 @@ namespace TaskbarTiles
         {
             var page = Page("Updates");
             Section(page, "Updates from GitHub", "Installed version: " + Program.Version + ". Existing settings, favourites and X-Mouse commands are retained by Setup.");
+            Check(page, "AutoUpdateApp", "Automatically install stable Taskbar Tiles updates when this PC is idle (off by default)");
+            Section(page, "Automatic update behavior", "When enabled, the installed per-user copy checks stable releases daily, verifies SHA-256 and the Internet security marker, then opens Setup automatically after five minutes of idle time. The switcher must be hidden and all launch, move and profile-layout operations must be finished. Settings, favourites and shortcut choices are retained. Development copies never install automatically.");
+            var autoStatus = Theme.Label(AutomaticUpdateStatus.Text, 64); autoStatus.MaximumSize = new System.Drawing.Size(600, 0);
+            page.Controls.Add(autoStatus);
+            var statusTimer = new Timer { Interval = 1500 };
+            statusTimer.Tick += delegate { if (!autoStatus.IsDisposed) autoStatus.Text = AutomaticUpdateStatus.Text; };
+            page.Disposed += delegate { statusTimer.Stop(); statusTimer.Dispose(); };
+            statusTimer.Start();
             var check = Theme.Button("Check for updates...", 235);
             check.Click += delegate { using (var dialog = new UpdatesWindow(true)) dialog.ShowDialog(this); };
-            Row(page, "Check and update", "Checks the latest published GitHub release. The next screen shows release notes and a Download & install button. Nothing installs silently.", check);
+            Row(page, "Check and update", "Check manually at any time. The next screen shows release notes and a Download & install button that opens Setup's wizard.", check);
             var notes = Theme.Button("Open release notes", 235);
             notes.Click += delegate { try { ReleaseInfo.Open(ReleaseInfo.LatestUrl); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "Release notes"); } };
             Row(page, "Release history", "Opens the project's public GitHub release page in your browser.", notes);

@@ -28,7 +28,7 @@ namespace TaskbarTiles
     static class NotificationAreaMetrics
     {
         internal static int LogicalHeight(Options o)
-        { return o.ShowNotificationArea ? Math.Max(38, o.NotificationIconSize + 24) : 0; }
+        { return o.ShowNotificationArea ? Math.Max(66, o.NotificationIconSize + 52) : 0; }
 
         internal static List<Rectangle> Cells(int count, int page, int width, int top, int iconSize, int spacing,
             out Rectangle previous, out Rectangle next, out int perPage)

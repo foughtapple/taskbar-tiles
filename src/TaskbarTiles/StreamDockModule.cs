@@ -24,7 +24,7 @@ namespace TaskbarTiles
     sealed class DockState
     {
         public int Schema = 1;
-        public bool AutoUpdate = true;
+        public bool AutoUpdate = false;
         public string[] EnabledActions = new string[0];
         public string[] ManagedPackages = new string[0];
     }
@@ -43,7 +43,7 @@ namespace TaskbarTiles
         internal static string Encode(object value) { lock (JsonLock) return Json.Serialize(value); }
         internal static T Decode<T>(string text) { lock (JsonLock) return Json.Deserialize<T>(text); }
         internal static string DefaultRoot { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"HotSpot\StreamDock\plugins"); } }
-        internal static DockManager Open() { return new DockManager(Path.Combine(Program.Home, "streamdock"), DefaultRoot, Path.Combine(Program.Home, "StreamDockData"), null); }
+        internal static DockManager Open() { string store = Path.Combine(Program.Home, "StreamDockData"); return new DockManager(StreamDockModuleService.ActiveBundle(store, Path.Combine(Program.Home, "streamdock")), DefaultRoot, store, null); }
         internal string StatePath { get { return Path.Combine(Store, "state.json"); } }
         internal bool HasState { get { return File.Exists(StatePath); } }
         internal DockManager(string bundle, string root, string store, Func<string> busy)
@@ -269,7 +269,7 @@ namespace TaskbarTiles
                     if (plans.Count == 0) { if (!automatic) AtomicText(StatePath, Encode(desired)); return "Everything is current. No plugin files changed."; }
                     string running = Busy(); if (running != "") throw new IOException("Close Stream Dock fully from its tray icon before applying plugin changes. Still running: " + running);
                     // Entire release payload is verified before any installed folder is moved.
-                    foreach (var plan in plans) { string payload = Child(Bundle, plan.Package.Payload); NoLinks(payload); if (Hash(payload) != plan.Package.SHA256) throw new IOException("Package checksum mismatch: " + plan.Package.Name); }
+                    foreach (var plan in plans.Where(x => x.Enabled.Length != 0)) { string payload = Child(Bundle, plan.Package.Payload); NoLinks(payload); if (Hash(payload) != plan.Package.SHA256) throw new IOException("Package checksum mismatch: " + plan.Package.Name); }
                     Directory.CreateDirectory(Root); Directory.CreateDirectory(Store);
                     string batch = Path.Combine(Store, "Backups", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N").Substring(0, 8)); Directory.CreateDirectory(batch);
                     if (HasState) File.Copy(StatePath, Path.Combine(batch, "previous-state.json"));
@@ -294,7 +294,8 @@ namespace TaskbarTiles
                                 string old = Child(Root, legacy.Folder);
                                 if (ManifestActions(old).Except(p.Actions.Select(a => a.Id)).Any()) throw new IOException("Unrecognised actions in legacy package " + legacy.Folder + "; folder left unchanged.");
                             }
-                            if (plan.Enabled.Length != 0 || legacyMoves.Length != 0) {
+                            bool canConsolidate = File.Exists(Child(Bundle, p.Payload));
+                            if (plan.Enabled.Length != 0 || (legacyMoves.Length != 0 && canConsolidate)) {
                                 Directory.CreateDirectory(stage); if (source != null) CopySafe(source, stage);
                                 Unpack(p, stage);
                                 ImportLegacyWorkers(p, stage, source);
@@ -320,6 +321,12 @@ namespace TaskbarTiles
                                 // Keep the backup and an independently restorable disabled copy.
                                 if (Directory.Exists(stage)) Directory.Move(stage, disabled); else CopySafe(backup, disabled);
                             }
+                            if (plan.Enabled.Length == 0 && !canConsolidate)
+                                foreach (var legacy in movedLegacy) {
+                                    string kept = Child(Path.Combine(Store, "Disabled"), legacy.Folder);
+                                    if (Directory.Exists(kept)) Directory.Move(kept, Child(batch, "previous-disabled-" + legacy.Folder));
+                                    CopySafe(Child(Store, legacy.Backup), kept);
+                                }
                             File.Delete(Path.Combine(Store, "pending-package.json"));
                             done++;
                         }

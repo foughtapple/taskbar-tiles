@@ -3,6 +3,9 @@ const fs=require('node:fs/promises'),fss=require('node:fs'),path=require('node:p
 const {execFile,spawn}=require('node:child_process');
 const {accountsFromText,isID}=require('./model.cjs');
 const {chooser,setAutoLoginFlag}=require('./keyvalues.cjs');
+const {acquireTransition}=require('./transition.cjs');
+// Base64 and SDK JSON must fit the unified bridge's 1 MiB message limit.
+const MAX_AVATAR_BYTES=512*1024;
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 function sleep(ms,signal){return new Promise((resolve,reject)=>{if(signal?.aborted)return reject(new Error('Cancelled.'));const t=setTimeout(done,ms);function done(){signal?.removeEventListener('abort',abort);resolve();}function abort(){clearTimeout(t);signal?.removeEventListener('abort',abort);reject(new Error('Cancelled.'));}signal?.addEventListener('abort',abort,{once:true});});}
 function run(exe,args,options={}){return new Promise((resolve,reject)=>execFile(exe,args,{encoding:'utf8',windowsHide:true,timeout:6000,maxBuffer:512*1024,...options},(e,stdout,stderr)=>e?reject(new Error(String(stderr||e.message).slice(0,500))):resolve(stdout)));}
@@ -32,6 +35,7 @@ class Steam {
  async snapshot(){const s=JSON.parse(await this.probe('--once'));if(s.steamPath)this.lastPath=s.steamPath;return s;}
  async accounts(steamPath){if(!steamPath)return [];const p=path.join(steamPath,'config','loginusers.vdf');try{const st=await fs.stat(p);const key=p+'|'+st.mtimeMs+'|'+st.size;if(this.usersCache?.key===key)return this.usersCache.items;const items=accountsFromText(await textFile(p,2*1024*1024));this.usersCache={key,items};return items;}catch(e){if(e.code==='ENOENT')return [];throw e;}}
  async open(){await this.probe('--open');}
+ async acquireTransition(signal,onLost){return acquireTransition(this.probeExe,{signal,onLost});}
  async closeRocket(signal){await this.probe('--close-rocket');const until=this.now()+90000;for(;;){if(signal?.aborted)throw new Error('Cancelled.');const s=JSON.parse(await this.probe('--rocket-status'));if(!s.running)return;if(this.now()>until)throw new Error('Rocket League has not closed. Finish its exit prompt.');await this.wait(1000,signal);}}
  async launchRocket(expected){const s=await this.snapshot();if(!s.loggedIn||s.steamId!==expected)throw new Error('Account not confirmed; Rocket League was not launched.');await this.probe('--launch-rocket');}
  async image(account,s,settings){
@@ -46,10 +50,10 @@ class Steam {
  async loadAvatar(account,s,settings){
   const cache=path.join(this.dataDir,'avatars',account.id+'.img');
   const candidates=['png','jpg','jpeg'].map(ext=>path.join(s.steamPath,'config','avatarcache',account.id+'.'+ext));candidates.push(cache);
-  for(const p of candidates){try{const st=await fs.stat(p);if(st.size>2*1024*1024||!st.isFile())continue;const b=await fs.readFile(p),mime=imageType(b);if(mime)return 'data:'+mime+';base64,'+b.toString('base64');}catch{}}
+  for(const p of candidates){try{const st=await fs.stat(p);if(st.size>MAX_AVATAR_BYTES||!st.isFile())continue;const b=await fs.readFile(p);if(b.length>MAX_AVATAR_BYTES)continue;const mime=imageType(b);if(mime)return 'data:'+mime+';base64,'+b.toString('base64');}catch{}}
   if(settings.webAvatars===false)return this.fallback(account);
   if(this.fetchFailed&&this.now()-(this.fetchFailed.get(account.id)||0)<300000)return this.fallback(account);
-  try{const xml=(await fetchBounded('https://steamcommunity.com/profiles/'+account.id+'?xml=1',512*1024)).toString('utf8');const url=avatarURL(xml);if(!url)throw new Error('Avatar is not exposed.');const b=await fetchBounded(url,2*1024*1024),mime=imageType(b);if(!mime)throw new Error('Unexpected avatar format.');await fs.mkdir(path.dirname(cache),{recursive:true});await fs.writeFile(cache,b,{mode:0o600});return 'data:'+mime+';base64,'+b.toString('base64');}
+  try{const xml=(await fetchBounded('https://steamcommunity.com/profiles/'+account.id+'?xml=1',512*1024)).toString('utf8');const url=avatarURL(xml);if(!url)throw new Error('Avatar is not exposed.');const b=await fetchBounded(url,MAX_AVATAR_BYTES),mime=imageType(b);if(!mime)throw new Error('Unexpected avatar format.');await fs.mkdir(path.dirname(cache),{recursive:true});await fs.writeFile(cache,b,{mode:0o600});return 'data:'+mime+';base64,'+b.toString('base64');}
   catch{if(!this.fetchFailed)this.fetchFailed=new Map();this.fetchFailed.set(account.id,this.now());if(this.fetchFailed.size>12)this.fetchFailed.delete(this.fetchFailed.keys().next().value);return this.fallback(account);}
  }
  async recoverChooser(force=false){
@@ -122,4 +126,4 @@ class Steam {
   }
  }
 }
-module.exports={Steam,sleep,run,launchExe,replaceFile,avatarURL,imageType,hash};
+module.exports={Steam,sleep,run,launchExe,replaceFile,avatarURL,imageType,hash,MAX_AVATAR_BYTES};

@@ -14,7 +14,7 @@
 
 Run Setup normally. It installs for your account, adds a Start menu shortcut and an entry in **Windows Settings → Apps**, and offers startup at sign-in. Administrator access, Git and developer tools are not required for an installed release. Requires Windows 10/11 with .NET Framework 4.8 or later; Windows 11 is the primary manual-testing target.
 
-Setup now also shows two optional integration choices: **Stream Dock integration** is checked by default; **Touch Return** is unchecked by default. On a fresh install, the Stream Dock choice seeds all bundled Taskbar Tiles Stream Dock actions and keeps automatic module updates enabled. Touch Return only enables its master feature switch; it still requires the normal monitor/device detection setup before automatic return can run. Upgrades do not overwrite an existing Stream Dock state file or existing Touch Return settings.
+Install optional features from **Settings → Modules** after installing Taskbar Tiles. **Stream Dock** has its own download, update preference and function checkboxes. **Touch Return** is marked **Developing** and cannot be installed or activated in this release. Core upgrades preserve existing module choices and private settings.
 
 **Upgrading from a previous source-built version? Do not uninstall first.** Setup updates the same `%LOCALAPPDATA%\TaskbarTiles` directory, preserving your settings, favourites, startup choice and X-Mouse command. [Migration and removal instructions](docs/INSTALLATION.md).
 
@@ -28,7 +28,7 @@ Setup now also shows two optional integration choices: **Stream Dock integration
 | **Taskbar apps** | Larger launcher tiles, in taskbar order. Launch through a verified shortcut/app identity where possible, then follow the new or reused window the app produces. |
 | **Search** | An integrated icon-and-name search panel for apps, open windows, favourites, common settings/folders and indexed filenames. It does not open Windows Search. |
 | **Favourites** | A curated launcher, with groups, import/export, custom icons and optional arguments. |
-| **Screens & zones** | Right-click a window or launcher entry, then choose a monitor or zone. “Full screen” maximises on that monitor; it is not F11/exclusive fullscreen. |
+| **Screens & zones** | Right-click a window or taskbar app to use the current FancyZone (full monitor without FancyZones). The corner button opens the monitor/zone chooser. “Full screen” maximises on that monitor; it is not F11/exclusive fullscreen. |
 | **Settings** | Dark left-hand navigation, compact aligned controls, independent tile/title/icon/app-name sizes, hover tips, live previews and feature toggles. |
 
 The monitor picker fits the entire arrangement without scrolling. Saved FancyZones layouts are read-only: Taskbar Tiles uses their rectangles without changing PowerToys configuration or zone history. Where a layout cannot be resolved, the UI labels its fallback **Basic zones** rather than pretending to show a saved layout.
@@ -49,7 +49,7 @@ One press opens; another closes. Bind the default profile only when game-specifi
 
 ## Updates and removal
 
-Open **Settings → Updates → Check for updates…**, or use the tray's update command. Review the version/notes, then choose **Download & install**. Version discovery uses GitHub's normal public `/releases/latest` redirect rather than the unauthenticated REST API, avoiding REST rate-limit/403 failures. The updater downloads the named installer from this repository, verifies its release SHA-256 and opens the normal Setup wizard. It never installs silently or polls at startup. Upgrading retains your configuration.
+Open **Settings → Updates → Check for updates…**, or use the tray's update command. Review the version/notes, then choose **Download & install**. Version discovery uses GitHub's normal public `/releases/latest` redirect rather than the unauthenticated REST API, avoiding REST rate-limit/403 failures. The updater downloads the named installer from this repository, verifies its release SHA-256 and opens the normal Setup wizard. Checks are manual by default. Opt in to **Automatically update Taskbar Tiles** to check daily and install a verified stable release while the switcher is closed and you have been idle for five minutes. Active layouts, launches and dialogs postpone installation. Upgrading retains your configuration.
 
 Uninstall via **Windows Settings → Apps → Taskbar Tiles**. Settings, favourites, backups and diagnostics remain in `%LOCALAPPDATA%\TaskbarTiles`; remove that folder manually only after uninstalling and only when you want to erase those files.
 
@@ -61,13 +61,15 @@ The switcher requests activation **before hiding**, verifies the selected HWND b
 
 Windows still controls foreground permission. Elevated apps, protected windows, exclusive-fullscreen transitions and deliberately always-on-top windows can require special handling. Taskbar Tiles does not bypass foreground locks, attach foreign input queues, inject code, or forcibly change another app's topmost policy. [Troubleshooting](docs/TROUBLESHOOTING.md).
 
-## Touch screen monitor support — experimental
+## Profile layouts
 
-**Touch Return is off by default.** On a specifically enabled and successfully tested touchscreen, use another application temporarily, then return to the previously active window and cursor after the last verified contact ends. Defaults are **1 second for touch** and **2 seconds for pen**. Per-monitor touch/pen switches, timing overrides, nicknames, pen-hover protection where supported, Pause, Stay here and Return now are provided.
+Use **Settings → Profile layouts** to create a named layout such as Gaming. Add exact app shortcuts and choose a monitor/zone for each, or capture current open apps and positions. **Apply** saves the draft. The footer **Profile layout** button opens your saved layouts: left-click opens missing apps and arranges them; right-click moves only matching apps already open. Ambiguous apps are skipped, and changed or missing monitor layouts require updating destinations. You can cancel a running layout; completed moves and opened apps remain.
 
-Start in **Settings → Touch screen monitor support → Monitors & input detection test…**. The passive test stays open while you use other applications; no automatic return runs during the test. Associate a device only after the test validates complete contact reports and a corroborated pre-touch state. Main Settings **Apply** saves the draft. Normal mouse/trackpad use cancels a pending return; no synthetic click or input replay is used.
+## Optional modules
 
-**Hardware compatibility is not assumed.** The initial provider accepts a strict subset of HID digitizer formats and requires a pre-touch snapshot from a different display. Virtual mouse-only paths, incomplete contacts, ambiguous device mappings, unsupported coordinate transforms or missing required hover data remain detection-only. Surface/spacedesk and Apollo/Moonlight must be tested separately on the real setup. [Touchscreen setup and limitations](docs/TOUCH-SUPPORT.md).
+The installer contains Taskbar Tiles and module metadata. In **Settings → Modules**, install or update **Stream Dock** separately, then tick the functions you want: Steam switching, PC/printer status and NickNacks Orders. Module updates have their own opt-in switch and release version; core app upgrades preserve module code and private settings. A running Stream Dock host must be closed before replacing its module.
+
+**Touch Return — Developing** is an unavailable optional module. It is not installed or activated in this release, even if older settings enabled touch support. Its experimental source/tests are retained for development.
 
 ## Auto-hide, broader search and Recent apps
 
@@ -81,7 +83,7 @@ The wider bottom-left **Search apps, settings and files** box searches inside Ta
 
 No telemetry, account login or usage analytics in the app. Icons/previews, taskbar accessibility, saved layouts and launch detection are processed locally. Search uses your existing local filename index; it does not crawl document contents. Logs are local; general launch/layout logs may include paths or titles, so review before sharing. Touch diagnostics are local and copied only on request; no reports or input recordings are uploaded automatically.
 
-GitHub is contacted **only after you explicitly request an update check/download or open a repository link**. Checking updates discloses normal HTTP request metadata to GitHub. Websites you deliberately launch may make their own network requests. [Security policy](SECURITY.md).
+GitHub is contacted when you request app/module installation or update checks, enable automatic app/module updates, or open a repository link. Checking updates discloses normal HTTP request metadata to GitHub. Websites you deliberately launch may make their own network requests. [Security policy](SECURITY.md).
 
 ## Build and contribute
 
@@ -98,7 +100,7 @@ Discord gets a dedicated unread counter tile in this row: **black with 0**, **re
 
 Taskbar Tiles can mirror Windows notification-area (system-tray) items in a compact, single row between **Taskbar apps** and the footer. It is independent of Windows taskbar auto-hide. Icon size and spacing are adjustable under **Settings > Appearance**, and extra items page horizontally instead of creating another row.
 
-Left-click asks the real Explorer notification item to perform its normal/default action. Right-click opens a small Taskbar Tiles menu with **Open/default action**, **Copy name**, **Windows taskbar settings**, and **Refresh notification area**. Taskbar Tiles does not scrape Explorer memory, read notification contents, force the hidden taskbar open, or click hidden coordinates. Icons are resolved locally from strong installed-app name matches when possible; unresolved items use a neutral initials tile.
+Left-click asks the real Explorer notification item to perform its normal/default action. Right-click opens a small Taskbar Tiles menu with **Open/default action**, **Copy name**, **Windows taskbar settings**, and **Refresh notification area**. Taskbar Tiles does not scrape Explorer memory, read notification contents, force the hidden taskbar open, or click hidden coordinates. Icons are resolved locally from strong installed-app name matches when possible; unresolved items use a neutral application symbol. Names are shown underneath tray items; long lists are paged.
 
 ## Tray-hidden application reopening
 
@@ -112,7 +114,7 @@ MIT. See [LICENSE](LICENSE) and [third-party notices](THIRD-PARTY-NOTICES.txt) f
 
 ## Optional Stream Dock modules (0.10+)
 
-**Settings > Stream Dock** manages the custom game/Steam/clipboard/screenshot/voice controls and printer/PC/order displays independently of the taskbar. Enable only the actions you use, Apply while Stream Dock is closed, then add them from the single **Taskbar Tiles** category in Stream Dock. The normal Taskbar Tiles release installer carries future module updates; disabled/new actions stay off and private settings remain local. [Full integration and update guide](docs/STREAM-DOCK.md).
+**Settings > Modules** manages the optional Stream Dock download and its game/Steam/clipboard/screenshot/voice controls and printer/PC/order displays. Enable the functions you use, install while Stream Dock is closed, then add them from the single **Taskbar Tiles** category. Module updates are independent; new functions stay off and private settings remain local. [Full integration and update guide](docs/STREAM-DOCK.md).
 
 ## Active-window organisation (0.14.0)
 

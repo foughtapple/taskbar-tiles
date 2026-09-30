@@ -23,3 +23,6 @@
 streamdock/**/plugin/*.exe
 StreamDockData/
 *.dpapi
+
+/profile-layouts.json
+/profile-layouts.json.bak

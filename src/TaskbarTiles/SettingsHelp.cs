@@ -11,6 +11,7 @@ namespace TaskbarTiles
     static class SettingsHelp
     {
         static readonly Dictionary<string, string> hints = new Dictionary<string, string> {
+            { "AutoUpdateApp", "Off by default. Check stable GitHub releases daily and install verified updates automatically from the installed per-user copy after five idle minutes. The switcher must be hidden, with no pending launch, move, activation or profile layout. Settings and shortcut choices are retained; Windows security prompts remain enabled. Development copies never auto-install." },
             { "TouchSupportEnabled", "Opt in to automatic return only for explicitly associated, tested touchscreen devices. Default off. Run the passive detection test first. Unknown or incomplete input never triggers a return; enabling this alone does not enable every display." },
             { "TouchWaitForHover", "Keep focus while the pen reports that it remains in detection range, including pauses between strokes. This requires actual in-range reports. A pen device without hover information cannot auto-return while this option is enabled; the utility never invents hover state." },
             { "TouchTypingCancels", "Typing cancels the current return point so focus does not jump away while entering text. Physical mouse/trackpad use and deliberate task navigation always cancel independently of this option. Touch Return's own assigned shortcuts are excluded." },
@@ -39,7 +40,7 @@ namespace TaskbarTiles
             { "WindowTitleIconSize", "Size of the icon before an open-window title, in logical pixels before Windows display scaling. Default 28, range 12-64. Independent of title text and launcher icon sizes. The header expands to avoid the preview or close X. The live preview shows the result." },
             { "StickyAltTab", "Leave Taskbar Tiles open after Alt is released. Useful for pressing your mouse button once and then clicking a result. Turn off to accept the highlighted window on Alt release." },
             { "InterceptAltTab", "Use Taskbar Tiles instead of the normal Alt+Tab switcher while this app is running. Turning this off restores native Alt+Tab; your X-Mouse Run Application command and Ctrl+Alt+Space still work." },
-            { "RightClickZones", "Right-click a window, taskbar tile, favourite or Search result to choose a monitor/zone. Left-click keeps its normal switch/open behaviour. This is not a Windows context menu." },
+            { "RightClickZones", "Right-click a window or taskbar tile to place it in the zone of the window used before opening the switcher; without FancyZones, use the full monitor. The corner button chooses a monitor/zone. Favourites and Search keep their destination chooser." },
             { "KeepOpenAfterMove", "After placing an existing window, reopen the main menu so you can organise another window. Does not continuously reopen while a new app is starting." },
             { "EnableUndoMove", "Remember the previous position of the last moved window. Use the curved-arrow button or Ctrl+Z outside text fields to undo that move. This is a one-step undo, not an application undo history." },
             { "DirectAppLaunch", "Use the verified pinned shortcut or shell app identity, without moving the pointer or requiring a visible taskbar. Shortcut arguments and profiles are kept. Turn off to use the legacy taskbar action. If no verified target exists, the revalidated taskbar action is used; a request is never automatically repeated." },
@@ -126,6 +127,9 @@ namespace TaskbarTiles
                     page.Text == "Navigation" ? "Window switching, closing, filtering and placement behaviour." :
                     page.Text == "Screens & zones" ? "Monitor picker size, full-screen buttons and zone geometry." :
                     page.Text == "Monitor layouts" ? "Choose the layout for each monitor without changing PowerToys files." :
+                    page.Text == "Modules" ? "Install and update Stream Dock independently, choose functions and review developing modules." :
+                    page.Text == "Profile layouts" ? "Save named app destinations; apply them from the main footer." :
+                    page.Text == "Updates" ? "Check stable releases manually or opt in to idle automatic app updates." :
                     page.Text == "Quick access" ? "Bottom-bar buttons, local keyboard shortcuts and live preview." : page.Text == "Touch screen monitor support" ? "Detection-first Touch Return, monitor associations and safe idle timings." : page.Text == "Shortcut health" ? "Repair Alt+Tab interception and inspect local shortcut diagnostics." : "Startup, diagnostics and X-Mouse setup.";
             HintTree(startup, "Start the tray app when you sign in. Apply saves this choice; no administrator service is installed.");
             if (favouritesList != null) HintTree(favouritesList, "Tick entries to show them. Unticking hides without removing. Select a row to Edit / Remove / Move it; double-click to edit. Apply saves your list.");

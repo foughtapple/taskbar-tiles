@@ -98,6 +98,27 @@ namespace TaskbarTiles
         { return LaunchIdentity.Matches(app, w, null); }
     }
 
+    sealed class PlacementFocusGuard
+    {
+        readonly IActivationApi api;
+        readonly IntPtr initialForeground;
+        readonly uint inputStamp;
+        readonly bool trackingInput;
+        internal PlacementFocusGuard(IActivationApi api)
+        {
+            this.api = api;
+            initialForeground = api.Foreground;
+            trackingInput = api.TryInputStamp(out inputStamp);
+        }
+        internal bool TryActivate(IntPtr target)
+        {
+            uint currentStamp;
+            if (!trackingInput || !api.TryInputStamp(out currentStamp) || currentStamp != inputStamp) return false;
+            IntPtr foreground = api.Foreground;
+            if (foreground != initialForeground && foreground != target && foreground != IntPtr.Zero) return false;
+            return api.Activate(target);
+        }
+    }
     sealed class WindowMover : IDisposable
     {
         readonly Timer timer = new Timer { Interval = 70 };
@@ -109,6 +130,7 @@ namespace TaskbarTiles
         DateTime started, phaseTime;
         int phase;
         Action<string> completed;
+        PlacementFocusGuard focusGuard;
         public bool HasUndo { get { return undoTarget != IntPtr.Zero && Native.IsWindow(undoTarget) && WindowNative.ProcessId(undoTarget) == undoProcess; } }
         public bool Busy { get { return timer.Enabled; } }
         public WindowMover() { timer.Tick += Tick; }
@@ -128,6 +150,7 @@ namespace TaskbarTiles
                 if (WindowNative.GetWindowPlacement(window, ref original)) { undoTarget = window; undoProcess = WindowNative.ProcessId(window); undo = original; }
             }
             target = window; targetProcess = WindowNative.ProcessId(window); destination = where; completed = done;
+            focusGuard = new PlacementFocusGuard(new WindowsActivationApi());
             started = phaseTime = DateTime.UtcNow; phase = 0;
             if (Native.IsIconic(target) || WindowNative.IsZoomed(target)) Native.ShowWindowAsync(target, 9);
             timer.Start();
@@ -167,12 +190,12 @@ namespace TaskbarTiles
                     {
                         Rectangle actual = WindowNative.VisibleBounds(target);
                         bool close = Math.Abs(actual.Left - desired.Left) <= 8 && Math.Abs(actual.Top - desired.Top) <= 8 && Math.Abs(actual.Width - desired.Width) <= 8 && Math.Abs(actual.Height - desired.Height) <= 8;
-                        Native.SetForegroundWindow(target);
+                        focusGuard.TryActivate(target);
                         Finish(close ? null : "Placement requested, but the app adjusted the final size. Some windows enforce a minimum size.");
                     }
                 }
                 else if (phase == 3 && elapsed >= 180 && WindowNative.IsZoomed(target))
-                { Native.SetForegroundWindow(target); Finish(null); }
+                { focusGuard.TryActivate(target); Finish(null); }
             }
             catch (Exception ex) { Finish("Window placement failed: " + ex.Message); }
         }
