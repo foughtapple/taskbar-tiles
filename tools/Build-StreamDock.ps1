@@ -20,7 +20,7 @@ New-Item -ItemType Directory -Path (Join-Path $bundle 'packages') -Force | Out-N
 foreach ($name in @('System.Windows.Forms','System.Drawing','System.Web.Extensions','System.IO.Compression','System.IO.Compression.FileSystem')) { Add-Type -AssemblyName $name }
 $utf8 = New-Object Text.UTF8Encoding($false)
 function Run-Checked([string]$file,[string]$arguments,[string]$cwd,[int]$seconds=60) {
-    $p = Start-Process -FilePath $file -ArgumentList $arguments -WorkingDirectory $cwd -PassThru
+    $p = Start-Process -FilePath $file -ArgumentList $arguments -WorkingDirectory $cwd -WindowStyle Hidden -PassThru
     try { if (-not $p.WaitForExit($seconds*1000)) { $p.Kill(); throw "Build test timed out: $([IO.Path]::GetFileName($file))" }; if ($p.ExitCode -ne 0) { throw "Build test failed ($($p.ExitCode)): $([IO.Path]::GetFileName($file)) $arguments" } } finally { $p.Dispose() }
 }
 function Build-CSharp([string[]]$files,[string]$out,[string]$options) {
@@ -30,6 +30,20 @@ function Build-CSharp([string[]]$files,[string]$out,[string]$options) {
     $p.CompilerOptions='/target:winexe /platform:anycpu /optimize+ /codepage:65001 /langversion:5 '+$options
     foreach ($ref in @('System.dll','System.Core.dll',[Windows.Forms.Form].Assembly.Location,[Drawing.Bitmap].Assembly.Location,[Web.Script.Serialization.JavaScriptSerializer].Assembly.Location)) { [void]$p.ReferencedAssemblies.Add($ref) }
     try { $r=$provider.CompileAssemblyFromFile($p,$files); if ($r.Errors.HasErrors) { throw (($r.Errors | ForEach-Object {$_.ToString()}) -join "`n") } } finally {$provider.Dispose()}
+}
+# .NET Framework ZipFile on Windows emits backslashes. The module transport
+# deliberately accepts canonical ZIP names, so create portable slash-only entries.
+function Write-Zip([string]$directory,[string]$archive) {
+    $prefix=[IO.Path]::GetFullPath($directory).TrimEnd([IO.Path]::DirectorySeparatorChar)+[IO.Path]::DirectorySeparatorChar
+    $zip=[IO.Compression.ZipFile]::Open($archive,[IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach($file in Get-ChildItem -LiteralPath $directory -Recurse -File | Sort-Object FullName) {
+            $name=$file.FullName.Substring($prefix.Length).Replace('\','/')
+            $entry=$zip.CreateEntry($name,[IO.Compression.CompressionLevel]::Optimal)
+            $input=[IO.File]::OpenRead($file.FullName); $output=$entry.Open()
+            try {$input.CopyTo($output)} finally {$output.Dispose();$input.Dispose()}
+        }
+    } finally {$zip.Dispose()}
 }
 function Build-Go([string]$dir,[string]$out) {
     Push-Location $dir
@@ -63,6 +77,14 @@ function Build-Worker([string]$id,[string]$package) {
           if ($errors.Count) {throw "PowerShell parse failed: $($script.Name): $errors"}
         }
       }
+      'audio' {
+        $exe=Join-Path $package 'plugin\AudioControl.exe'
+        $cs=[string[]]@(Get-ChildItem (Join-Path $module 'src') -Filter '*.cs' | ForEach-Object {$_.FullName})
+        Build-CSharp $cs $exe ''
+        Run-Checked $exe '--validate' (Split-Path $exe)
+        Run-Checked $exe '--self-test' (Split-Path $exe)
+        Get-Content (Join-Path $package 'plugin\audio-selftest.txt')
+      }
       'steam' {
         $exe=Join-Path $package 'plugin\SteamSession.exe'
         Build-Go (Join-Path $module 'native') $exe
@@ -94,7 +116,7 @@ foreach ($entry in $catalog.Packages) {
     Copy-Item (Join-Path $module 'package\*') $package -Recurse -Force
     if ($entry.Id -ne 'taskbartiles') { throw "Only the unified Taskbar Tiles package may be published." }
     $workers = Join-Path $package 'workers'; New-Item -ItemType Directory -Path $workers -Force | Out-Null
-    foreach ($id in @('controls','steam','desk','orders')) { Build-Worker $id (Join-Path $workers $id) }
+    foreach ($id in @('controls','steam','desk','orders','audio')) { Build-Worker $id (Join-Path $workers $id) }
     & node (Join-Path $package 'plugin\index.js') --validate
     if ($LASTEXITCODE -ne 0) { throw 'Unified Taskbar Tiles bridge validation failed.' }
     Push-Location (Join-Path $module 'tests')
@@ -110,7 +132,7 @@ foreach ($entry in $catalog.Packages) {
     foreach($a in $m.Actions){$refs+=@($a.Icon,$a.PropertyInspectorPath);foreach($s in $a.States){$refs+=@($s.Image)}}
     foreach($r in $refs){if([string]::IsNullOrWhiteSpace($r)){continue};if($r -match '(^[\\/]|\.\.|:)'){throw 'Unsafe manifest resource'};if(-not(Test-Path -LiteralPath (Join-Path $package $r) -PathType Leaf)){throw "Missing resource: $($entry.Id)/$r"}}
     $zip=Join-Path $bundle ('packages\'+$entry.Id+'.zip')
-    [IO.Compression.ZipFile]::CreateFromDirectory($package,$zip,[IO.Compression.CompressionLevel]::Optimal,$false)
+    Write-Zip $package $zip
     $packages += [ordered]@{Id=$entry.Id;Name=$entry.Name;Folder=$entry.Folder;Version=$entry.Version;Payload=('packages/'+$entry.Id+'.zip');SHA256=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant();LegacyFolders=@($entry.LegacyFolders);LegacyPackageIds=@($entry.LegacyPackageIds);Actions=@($entry.Actions)}
 }
 $index=Get-Content -LiteralPath (Join-Path $root 'streamdock\module-index.json') -Raw | ConvertFrom-Json
@@ -121,7 +143,7 @@ Copy-Item (Join-Path $root 'docs\STREAM-DOCK.md') (Join-Path $bundle 'README.md'
 $dist=Join-Path $root 'dist';New-Item -ItemType Directory -Path $dist -Force | Out-Null
 $asset=Join-Path $dist $index.AssetName
 if(Test-Path -LiteralPath $asset){Remove-Item -LiteralPath $asset -Force}
-[IO.Compression.ZipFile]::CreateFromDirectory($bundle,$asset,[IO.Compression.CompressionLevel]::Optimal,$false)
+Write-Zip $bundle $asset
 $hash=(Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText((Join-Path $dist 'module-SHA256SUMS.txt'),($hash+'  '+$index.AssetName+"`n"),$utf8)
 $info=[ordered]@{module='streamdock';version=$version;tag=$index.ReleaseTag;asset=$index.AssetName;sha256=$hash;goVersion=(& go version);nodeVersion=(& node --version);builtUtc=(Get-Date).ToUniversalTime().ToString('o');interactiveHardwareTested=$false}

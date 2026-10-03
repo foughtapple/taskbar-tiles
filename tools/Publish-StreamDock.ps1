@@ -29,8 +29,10 @@ if (-not $known) {
     & gh api "repos/$env:GITHUB_REPOSITORY/git/refs" --method POST -f "ref=refs/tags/$tag" -f "sha=$env:GITHUB_SHA"
     if ($LASTEXITCODE -ne 0) { throw 'Module tag creation failed.' }
 }
+$notes=Join-Path $root ('docs/releases/'+$tag+'.md')
+if(-not(Test-Path -LiteralPath $notes)){$notes=Join-Path $root 'docs/STREAM-DOCK.md'}
 if (-not $exists) {
-    & gh release create $tag --repo $env:GITHUB_REPOSITORY --verify-tag --draft --title "Stream Dock module $($index.Version)" --notes-file (Join-Path $root 'docs/STREAM-DOCK.md')
+    & gh release create $tag --repo $env:GITHUB_REPOSITORY --verify-tag --draft --title "Stream Dock module $($index.Version)" --notes-file $notes
     if ($LASTEXITCODE -ne 0) { throw 'Module draft creation failed.' }
 }
 $staged = Join-Path $root 'dist/module-release'

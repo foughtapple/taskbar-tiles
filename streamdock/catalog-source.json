@@ -4,7 +4,7 @@
     {
       "Id": "taskbartiles",
       "Folder": "com.foughtapple.taskbartiles.sdPlugin",
-      "Version": "1.1.0",
+      "Version": "1.2.0",
       "Name": "Taskbar Tiles",
       "Source": "taskbartiles",
       "LegacyFolders": [
@@ -69,6 +69,11 @@
           "Id": "com.foughtapple.nicknacksorders.processing",
           "Name": "NickNacks Orders",
           "Type": "View"
+        },
+        {
+          "Id": "com.foughtapple.audiocontrol.microphone",
+          "Name": "Audio Control - Microphone",
+          "Type": "Button"
         }
       ]
     }

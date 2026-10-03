@@ -29,7 +29,7 @@ else {
   t.after(()=>app.shutdown());real.emit('open');
   await wait(()=>clients.get('desk')?.received.some(x=>x.context==='pc'));
   assert.equal(real.sent.filter(x=>x.event==='registerPlugin').length,1);
-  assert.deepEqual([...clients.keys()].sort(),['controls','desk','orders','steam']);
+  assert.deepEqual([...clients.keys()].sort(),['audio','controls','desk','orders','steam']);
   assert.equal(clients.get('steam').received.length,0);
   clients.get('desk').ws.send(JSON.stringify({event:'setTitle',context:'pc',payload:{title:'CPU'}}));
   await wait(()=>real.sent.some(x=>x.event==='setTitle'&&x.context==='pc'));
@@ -59,13 +59,39 @@ else {
  test('real Windows workers connect, display and exit without game commands',{skip:process.platform!=='win32'},async t=>{
   const previous=process.env.LOCALAPPDATA,temp=fs.mkdtempSync(path.join(os.tmpdir(),'unified-native-'));
   process.env.LOCALAPPDATA=temp;
-  const real=new FakeReal(r=>{for(const [a,c] of [[PC,'pc'],['com.foughtapple.deskstatus.p1s','p1s'],['com.foughtapple.nicknacksorders.processing','orders'],['com.foughtapple.steamsmarttoggle.toggle','steam'],[CLIP,'clip']])r.emit('message',Buffer.from(JSON.stringify(appear(a,c))));});
+  const real=new FakeReal(r=>{for(const [a,c] of [[PC,'pc'],['com.foughtapple.deskstatus.p1s','p1s'],['com.foughtapple.nicknacksorders.processing','orders'],['com.foughtapple.steamsmarttoggle.toggle','steam'],[CLIP,'clip'],['com.foughtapple.audiocontrol.microphone','mic']])r.emit('message',Buffer.from(JSON.stringify(appear(a,c))));});
   const app=bridge.start(['-port','1234','-pluginUUID','native-test','-registerEvent','registerPlugin'],{realSocket:real,noSignals:true});
   t.after(async()=>{app.shutdown();await wait(()=>[...app.states.values()].every(s=>!s.child));if(previous===undefined)delete process.env.LOCALAPPDATA;else process.env.LOCALAPPDATA=previous;fs.rmSync(temp,{recursive:true,force:true});});
-  real.emit('open');await wait(()=>[...app.states.values()].length===4&&[...app.states.values()].every(s=>s.socket)).catch(e=>{const status=[...app.states].map(([id,s])=>({id,connected:!!s.socket,failed:s.failed,child:!!s.child}));const log=path.join(temp,'FoughtApple','TaskbarTilesStreamDock','bridge.log');throw Error(e.message+' '+JSON.stringify(status)+' '+(fs.existsSync(log)?fs.readFileSync(log,'utf8'):''));});
-  await wait(()=>['pc','p1s','orders','steam'].every(c=>real.sent.some(m=>m.event==='setImage'&&m.context===c)));
+  real.emit('open');await wait(()=>[...app.states.values()].length===5&&[...app.states.values()].every(s=>s.socket)).catch(e=>{const status=[...app.states].map(([id,s])=>({id,connected:!!s.socket,failed:s.failed,child:!!s.child}));const log=path.join(temp,'FoughtApple','TaskbarTilesStreamDock','bridge.log');throw Error(e.message+' '+JSON.stringify(status)+' '+(fs.existsSync(log)?fs.readFileSync(log,'utf8'):''));});
+  await wait(()=>['pc','p1s','orders','steam','mic'].every(c=>real.sent.some(m=>m.event==='setImage'&&m.context===c)));
   for(const st of app.states.values())assert.ok(st.child&&!st.failed,'native worker remains alive');
   // No keyDown was emitted: no Steam account switch, game launch, screenshot or input.
   real.emit('message',Buffer.from(JSON.stringify({event:'deviceDidDisconnect',device:'test-dock'})));
  });
 }
+
+if(pkg)test('Audio Control routes simulated key presses and images only to its owning worker',async t=>{
+ const bridge=require(path.join(pkg,'plugin','bridge.cjs'));
+ const {WebSocket}=require(path.join(pkg,'workers','steam','plugin','dependencies','ws'));
+ const audio='com.foughtapple.audiocontrol.microphone',clients=new Map(),real=new FakeReal();
+ const app=bridge.start(['-port','1234','-pluginUUID','audio-routing','-registerEvent','registerPlugin'],{realSocket:real,noSignals:true,stopMs:200,manifest:{Actions:[{UUID:audio},{UUID:CLIP}]},spawn:mockSpawn(WebSocket,clients)});
+ t.after(()=>app.shutdown());real.emit('open');
+ await wait(()=>clients.size===2&&[...app.states.values()].every(s=>s.socket));
+ assert.deepEqual([...clients.keys()].sort(),['audio','controls']);
+ assert.ok(app.states.get('audio').spec.file.endsWith(path.join('audio','plugin','AudioControl.exe')));
+ real.emit('message',Buffer.from(JSON.stringify(appear(audio,'mic'))));
+ real.emit('message',Buffer.from(JSON.stringify({event:'keyDown',context:'mic'})));
+ real.emit('message',Buffer.from(JSON.stringify({event:'keyUp',context:'mic'})));
+ await wait(()=>clients.get('audio').received.length===3);
+ assert.equal(clients.get('controls').received.length,0);
+ assert.ok(clients.get('audio').received.every(m=>m.action===audio));
+ const before=real.sent.length;
+ clients.get('controls').ws.send(JSON.stringify({event:'setImage',context:'mic',payload:{image:'WRONG'}}));
+ await delay(40);assert.equal(real.sent.length,before);
+ clients.get('audio').ws.send(JSON.stringify({event:'setImage',context:'mic',payload:{image:'FAKE MIC STATE'}}));
+ await wait(()=>real.sent.some(m=>m.event==='setImage'&&m.context==='mic'));
+ real.emit('message',Buffer.from(JSON.stringify({event:'willDisappear',context:'mic'})));
+ await wait(()=>clients.get('audio').received.some(m=>m.event==='willDisappear'));
+ clients.get('audio').ws.send(JSON.stringify({event:'setImage',context:'mic',payload:{image:'HIDDEN'}}));
+ await delay(40);assert.ok(!real.sent.some(m=>m.payload?.image==='HIDDEN'));
+});

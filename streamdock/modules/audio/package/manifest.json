@@ -1,0 +1,25 @@
+{
+  "Name": "Taskbar Tiles Audio Control worker",
+  "Description": "Internal default-input endpoint mute worker for the Taskbar Tiles plugin.",
+  "Author": "Taskbar Tiles / FoughtApple",
+  "Category": "Taskbar Tiles",
+  "CategoryIcon": "images/mic-live.png",
+  "Icon": "images/mic-live.png",
+  "Version": "1.2.0",
+  "SDKVersion": 1,
+  "CodePath": "plugin/AudioControl.exe",
+  "OS": [{ "Platform": "windows", "MinimumVersion": "10" }],
+  "Software": { "MinimumVersion": "3.10.188.226" },
+  "Actions": [{
+    "UUID": "com.foughtapple.audiocontrol.microphone",
+    "Name": "Audio Control - Microphone",
+    "Tooltip": "Toggle the current Windows default input microphone mute. Follows device changes and actual endpoint state.",
+    "Icon": "images/mic-live.png",
+    "Controllers": ["Keypad"],
+    "DisableAutomaticStates": true,
+    "UserTitleEnabled": false,
+    "SupportedInMultiActions": false,
+    "States": [{"Image": "images/mic-unavailable.png", "Title": "", "ShowTitle": true, "TitleAlignment": "top", "FontSize": "10"}],
+    "PropertyInspectorPath": "inspector/index.html"
+  }]
+}

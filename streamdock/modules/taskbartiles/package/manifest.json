@@ -212,6 +212,28 @@
       ],
       "PropertyInspectorPath": "workers/orders/inspector/index.html",
       "Tooltip": "Read-only Processing count. Checks every five minutes while visible."
+    },
+    {
+      "UUID": "com.foughtapple.audiocontrol.microphone",
+      "Name": "Audio Control - Microphone",
+      "Tooltip": "Toggle the current Windows default input microphone mute. Follows device changes and actual endpoint state.",
+      "Icon": "workers/audio/images/mic-live.png",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "workers/audio/images/mic-unavailable.png",
+          "Title": "",
+          "ShowTitle": true,
+          "TitleAlignment": "top",
+          "FontSize": "10"
+        }
+      ],
+      "PropertyInspectorPath": "workers/audio/inspector/index.html"
     }
   ],
   "SDKVersion": 1,
@@ -221,7 +243,7 @@
   "Category": "Taskbar Tiles",
   "CategoryIcon": "images/taskbar.svg",
   "Icon": "images/taskbar.svg",
-  "Version": "1.1.0",
+  "Version": "1.2.0",
   "CodePath": "plugin/index.js",
   "OS": [
     {
