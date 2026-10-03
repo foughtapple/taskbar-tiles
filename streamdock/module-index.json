@@ -1,8 +1,8 @@
 {
   "Schema": 1,
   "Id": "streamdock",
-  "Version": "1.2.0",
+  "Version": "1.2.1",
   "MinimumAppVersion": "0.15.0",
-  "ReleaseTag": "streamdock-v1.2.0",
-  "AssetName": "TaskbarTiles-StreamDock-1.2.0.zip"
+  "ReleaseTag": "streamdock-v1.2.1",
+  "AssetName": "TaskbarTiles-StreamDock-1.2.1.zip"
 }

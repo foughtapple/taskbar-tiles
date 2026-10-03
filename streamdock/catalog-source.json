@@ -4,7 +4,7 @@
     {
       "Id": "taskbartiles",
       "Folder": "com.foughtapple.taskbartiles.sdPlugin",
-      "Version": "1.2.0",
+      "Version": "1.2.1",
       "Name": "Taskbar Tiles",
       "Source": "taskbartiles",
       "LegacyFolders": [

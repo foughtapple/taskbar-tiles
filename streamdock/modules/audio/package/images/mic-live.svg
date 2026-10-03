@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144" role="img" aria-label="MIC LIVE">
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144" role="img" aria-label="MICS LIVE">
 <defs>
  <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#1e2b41"/><stop offset="1" stop-color="#0a101c"/></linearGradient>
  <radialGradient id="glow"><stop stop-color="#36e5b4" stop-opacity=".20"/><stop offset="1" stop-color="#36e5b4" stop-opacity="0"/></radialGradient>
@@ -15,5 +15,5 @@
 
 
 <rect x="17" y="108" width="110" height="25" rx="8" fill="#36e5b4" fill-opacity=".13"/>
-<text x="72" y="125" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="1" fill="#36e5b4">MIC LIVE</text>
+<text x="72" y="125" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="12" font-weight="700" letter-spacing="1" fill="#36e5b4">MICS LIVE</text>
 </svg>
