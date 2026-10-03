@@ -15,5 +15,5 @@
 
 <circle cx="102" cy="80" r="13" fill="#273448" stroke="#a4b1c5" stroke-width="2"/><path d="M97 80h10" stroke="#e4ecf6" stroke-width="3" stroke-linecap="round"/>
 <rect x="17" y="108" width="110" height="25" rx="8" fill="#a4b1c5" fill-opacity=".13"/>
-<text x="72" y="125" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="1" fill="#a4b1c5">NO MIC</text>
+<text x="72" y="125" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="12" font-weight="700" letter-spacing="1" fill="#a4b1c5">NO MIC</text>
 </svg>

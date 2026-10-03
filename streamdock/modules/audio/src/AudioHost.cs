@@ -27,8 +27,12 @@ namespace TaskbarTilesAudio
                 if (args.Contains("--validate")) return 0;
                 if (args.Contains("--inspect")) {
                     using (var backend = new CoreAudioBackend(delegate { })) {
-                        var endpoint = backend.OpenDefault();
-                        File.WriteAllText(Path.Combine(Root, "plugin", "audio-inspection.json"), Encode(new { role = "eCapture/eMultimedia", available = endpoint != null, endpointId = endpoint == null ? null : endpoint.Id, muted = endpoint == null ? (bool?)null : endpoint.ReadMute(), readOnly = true }), new UTF8Encoding(false));
+                        var endpoints = backend.OpenCapture();
+                        var states = endpoints.Select(endpoint => {
+                            try { return (object)new { endpointId=endpoint.Id, muted=(bool?)endpoint.ReadMute(), error=(string)null }; }
+                            catch (Exception ex) { return (object)new { endpointId=endpoint.Id, muted=(bool?)null, error="0x"+ex.HResult.ToString("X8") }; }
+                        }).ToArray();
+                        File.WriteAllText(Path.Combine(Root,"plugin","audio-inspection.json"),Encode(new { scope="all active Windows capture endpoints", endpoints=states, readOnly=true }),new UTF8Encoding(false));
                     }
                     return 0;
                 }
@@ -43,7 +47,7 @@ namespace TaskbarTilesAudio
             var manifest = Decode(File.ReadAllText(Path.Combine(Root, "manifest.json")));
             var actions = ((System.Collections.IEnumerable)manifest["Actions"]).Cast<Dictionary<string, object>>().ToArray();
             if (actions.Length != 1 || Convert.ToString(actions[0]["UUID"]) != AudioSession.ActionId) throw new IOException("Invalid Audio Control action manifest.");
-            foreach (string state in new[] { "live", "muted", "unavailable" }) {
+            foreach (string state in new[] { "live", "muted", "unavailable", "mixed" }) {
                 byte[] image = File.ReadAllBytes(Path.Combine(Root, "images", "mic-" + state + ".png"));
                 if (image.Length < 8 || image.Length > 65536 || image[0] != 137 || image[1] != 80) throw new IOException("Invalid Audio Control image.");
                 Images[state] = "data:image/png;base64," + Convert.ToBase64String(image);
@@ -122,7 +126,7 @@ namespace TaskbarTilesAudio
         void Loop()
         {
             try {
-                using (var session = new AudioSession(new CoreAudioBackend(() => wake.Set()), output)) {
+                using (var session = new AudioSession(new CoreAudioBackend(() => wake.Set()), output, AudioDiagnostics.Write)) {
                     while (!stopped) {
                         Message message;
                         do {
@@ -134,11 +138,11 @@ namespace TaskbarTilesAudio
                         } while (message != null && !stopped);
                         if (stopped) break;
                         session.Refresh(); current = session.Current;
-                        // Notifications refresh promptly; the read-only one-second fallback repairs missed events.
-                        wake.WaitOne(session.Visible ? 1000 : Timeout.Infinite);
+                        // Notifications refresh promptly; reconciliation also handles new capture endpoints while mute is on.
+                        wake.WaitOne(session.Watching ? 1000 : Timeout.Infinite);
                     }
                 }
-            } catch { if (!stopped) failed(); }
+            } catch (Exception ex) { AudioDiagnostics.Write("actor exception=" + ex.GetType().Name + " hresult=0x" + ex.HResult.ToString("X8")); if (!stopped) failed(); }
         }
         public void Dispose()
         {

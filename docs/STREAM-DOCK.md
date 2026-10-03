@@ -21,7 +21,7 @@ Existing matching actions are discovered. Their UUIDs, scene placements, private
 | FancyZone Screenshot | Key | Zone under pointer; entire-monitor fallback; copy to clipboard |
 | Clipboard History | Key | Win+V |
 | GPT Voice | Key | Ctrl+Alt+Shift+F; receiving app must be running |
-| Audio Control - Microphone (module 1.2.0) | Key | Toggle the current Windows default input mute; live endpoint state and device changes |
+| Audio Control - Microphone (module 1.2.1) | Key | Mute or unmute every available Windows microphone; actual aggregate state |
 | Steam Smart Switch | Key | Current-account avatar; switch to the other remembered account; unknown state opens Steam |
 | Steam Switch + Rocket League | Key | Close Rocket normally, switch account, confirm account, launch Rocket |
 | P1S Print Status | Info board / Key | Local printer status with certificate pinning |
@@ -54,18 +54,22 @@ The module index is fetched from the repository's controlled raw GitHub path. It
 
 Tests cover synthetic Steam switching, cross-worker transition exclusion, avatar limits, fake MQTT/MCP, native workers without game/input commands, module download/archive/hash validation, immutable versions, serialization, temporary plugin upgrades, opt-outs, rollback, private state and core-only installer preservation. These checks do not reproduce the owner's real Steam accounts, printer, store endpoint, physical Stream Dock or Windows scene layout.
 
-## Audio Control (Stream Dock module 1.2.0)
+## Audio Control (Stream Dock module 1.2.1)
 
-Enable **Audio Control - Microphone** under Settings > Modules after installing module 1.2.0, then add it from the existing **Taskbar Tiles** category. It defaults to Off, like other new functions. Module 1.2.0 remains compatible with Taskbar Tiles 0.15.0; no separate audio app is installed.
+Enable **Audio Control - Microphone** in Modules, then add it from the existing **Taskbar Tiles** category. Existing placements and function choices are retained. The module remains compatible with Taskbar Tiles 0.15.0.
 
-The button controls the ordinary Windows default input endpoint (eCapture/eMultimedia). **MIC LIVE** means that endpoint is unmuted; **MIC MUTED** means it is muted. It follows endpoint mute changes made elsewhere and default-input changes, using Windows notifications plus a one-second read-only reconciliation while visible. Multiple placements share the same observed state. When no default input is available or its state cannot be read, the neutral **NO MIC** / **MIC ERROR** presentation replaces the last known state.
+Mute on sets mute for every active Windows capture endpoint. Mute off unmutes every available endpoint, including microphones individually muted before using this button. Speakers and render endpoints are never included. No previous individual mute states are restored.
 
-Each deliberate key press reads the current mute state and performs at most one endpoint write. A changed endpoint invalidates a queued press; the button refreshes and alerts so the next deliberate press can control the new default. Failed writes are not retried onto another microphone. Hidden actions stop endpoint observation, and disconnect/shutdown releases Core Audio resources.
+**MICS LIVE** means every available microphone is unmuted. **MICS MUTED** requires a successful readback from every microphone. **MIXED MICS** means some microphones are muted and others are live. **MIC ERROR** reports unknown state or unsuccessful writes; it never claims all microphones are muted. **NO MIC** means no available capture endpoints. Changes made elsewhere remain visible.
 
-Only the current default input is affected. Other physical microphones, speakers, and applications pinned to another input or a separate default communications device retain their own device selection. Hardware mute switches and an app's own mute button can have independent states. There is no audio capture, recording, keyboard simulation or new permission request.
+Each deliberate press sets one desired value on all available microphones and verifies every endpoint separately. A failure on one endpoint does not stop the other endpoint commands. From an initial mixed state a press mutes all; while a global mute command is on, the next press unmutes all even if the state is mixed or an earlier write failed. A queued press expires if device membership changes before it is handled.
 
-Audio tests use fake endpoints for mute writes and device-swap/error scenarios. The native worker bridge check displays real endpoint state without emitting key presses. A real-device acceptance check still requires installing the module while Stream Dock is closed and pressing the button when it is safe to interrupt microphone audio. Builds do not install, restart Stream Dock or publish the module.
+While global mute is on, newly connected or reconnected microphones are muted once on arrival, including when the button's page is hidden. Ordinary external mute changes on existing endpoints are observed rather than repeatedly overwritten. An already fully muted startup adopts on mode without an initial write. When all microphones are explicitly unmuted elsewhere, on mode clears. No-device, removal and wake cases release/recreate endpoint resources safely.
 
-Windows API references: [default endpoint selection](https://learn.microsoft.com/en-us/windows/win32/api/mmdeviceapi/nf-mmdeviceapi-immdeviceenumerator-getdefaultaudioendpoint), [endpoint mute](https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nf-endpointvolume-iaudioendpointvolume-setmute), [device notifications](https://learn.microsoft.com/en-us/windows/win32/api/mmdeviceapi/nn-mmdeviceapi-immnotificationclient).
+Local bounded diagnostics in %LOCALAPPDATA%\FoughtApple\TaskbarTilesStreamDock\audio-diagnostic.log record Audio Control events, endpoint IDs, desired mute, actual readback and HRESULT failures. No audio, unrelated actions, credentials or user messages are logged. No audio capture, recording or new device permissions are requested. App-specific and hardware controls can have separate states.
 
-Module 1.2.0 also corrects the ZIP path separators that caused **Unexpected file in module archive** when installing the published 1.1.0 bundle. Canonical forward-slash entries are accepted by the unchanged Taskbar Tiles 0.15.0 archive reader; path and checksum validation remain strict. Published older assets are retained unchanged.
+Tests cover synthetic all-endpoint commands, mixed/partial/unknown states, individually pre-muted endpoints, arrival/reconnect, hidden global mute, stale commands and readback failures. Build checks only read live endpoint state. Physical button acceptance requires the user to press mute and unmute when ready; builds never press it.
+
+Windows API references: [capture endpoint enumeration](https://learn.microsoft.com/en-us/windows/win32/api/mmdeviceapi/nf-mmdeviceapi-immdeviceenumerator-enumaudioendpoints), [endpoint mute](https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nf-endpointvolume-iaudioendpointvolume-setmute), [device notifications](https://learn.microsoft.com/en-us/windows/win32/api/mmdeviceapi/nn-mmdeviceapi-immnotificationclient).
+
+Module 1.2.0 corrected the ZIP separators that caused **Unexpected file in module archive** with published 1.1.0. Canonical forward-slash entries remain required by the unchanged Taskbar Tiles 0.15.0 archive reader. Published older assets remain unchanged.

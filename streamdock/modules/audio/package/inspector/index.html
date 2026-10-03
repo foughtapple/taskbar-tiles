@@ -1,12 +1,9 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Audio Control</title><style>
-body{font:14px/1.5 'Segoe UI',sans-serif;margin:20px;color:#e4eaf2;background:#25272c}h1{font-size:18px;margin:0 0 12px}p{margin:10px 0}.states{display:flex;gap:12px;margin:18px 0}.states img{width:96px;height:96px}small{color:#b9c4d2}
-</style></head><body>
-<h1>Audio Control</h1>
-<p>Press to mute or unmute the current Windows default input microphone. The button follows changes to your default input and updates when another app changes its Windows mute state.</p>
-<div class="states"><img src="../images/mic-live.png" alt="Microphone live"><img src="../images/mic-muted.png" alt="Microphone muted"></div>
-<p><strong>MIC LIVE</strong> means the Windows endpoint is unmuted. <strong>MIC MUTED</strong> means that endpoint is muted. <strong>NO MIC</strong> or <strong>MIC ERROR</strong> means its status is unavailable.</p>
-<p>If you change microphones during a press, the button refreshes safely; press again to control the new default.</p>
-<p><small>Uses the ordinary Windows default input device. Apps using a different microphone or a separate default communications device keep their own input choice. Hardware mute switches and an app's own mute button may have a separate state. No audio is recorded.</small></p>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Audio Control</title><style>body{font:14px/1.5 'Segoe UI',sans-serif;margin:20px;color:#e4eaf2;background:#25272c}h1{font-size:18px;margin:0 0 12px}p{margin:10px 0}.states{display:flex;gap:12px;margin:18px 0}.states img{width:96px;height:96px}small{color:#b9c4d2}</style></head><body>
+<h1>Audio Control — All microphones</h1>
+<p>Press to mute every available Windows microphone. Press again to unmute every microphone, including microphones muted individually before using this button.</p>
+<div class="states"><img src="../images/mic-live.png" alt="All microphones live"><img src="../images/mic-muted.png" alt="All microphones muted"></div>
+<p><strong>MICS LIVE</strong> means every available microphone is unmuted. <strong>MICS MUTED</strong> means every microphone has confirmed mute. <strong>MIXED MICS</strong> means some are muted and others are live. <strong>MIC ERROR</strong> means a command failed or a state could not be read. <strong>NO MIC</strong> means there are no available capture devices.</p>
+<p>While mute is on, newly connected microphones are also muted, including while this button's page is hidden. Changes made elsewhere remain visible. Pressing from mixed state mutes all; if an earlier global mute command is still on, the next press unmutes all.</p>
+<p><small>Controls microphone endpoint mute only. Speakers remain unchanged. App-specific and hardware controls can have separate states. No audio is recorded.</small></p>
 </body></html>

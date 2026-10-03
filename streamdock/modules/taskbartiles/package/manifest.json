@@ -216,7 +216,7 @@
     {
       "UUID": "com.foughtapple.audiocontrol.microphone",
       "Name": "Audio Control - Microphone",
-      "Tooltip": "Toggle the current Windows default input microphone mute. Follows device changes and actual endpoint state.",
+      "Tooltip": "Mute every available Windows microphone; press again to unmute every microphone. Shows actual aggregate state.",
       "Icon": "workers/audio/images/mic-live.png",
       "Controllers": [
         "Keypad"
@@ -243,7 +243,7 @@
   "Category": "Taskbar Tiles",
   "CategoryIcon": "images/taskbar.svg",
   "Icon": "images/taskbar.svg",
-  "Version": "1.2.0",
+  "Version": "1.2.1",
   "CodePath": "plugin/index.js",
   "OS": [
     {
