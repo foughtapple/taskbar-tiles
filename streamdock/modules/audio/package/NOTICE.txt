@@ -1,0 +1,10 @@
+Taskbar Tiles Audio Control
+Copyright (c) 2026 FoughtApple / Taskbar Tiles contributors
+MIT License; see the Taskbar Tiles repository LICENSE.
+
+This worker is an internal part of the independently distributed unified
+com.foughtapple.taskbartiles.sdPlugin package. It is not installed separately.
+It uses Windows Core Audio interfaces supplied by Windows and .NET Framework.
+No third-party runtime package, recording service or microphone permission
+request is included. SVG and PNG microphone artwork is original code-native
+Taskbar Tiles artwork, distributed under the repository MIT License.

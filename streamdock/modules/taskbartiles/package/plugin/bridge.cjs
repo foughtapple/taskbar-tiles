@@ -13,6 +13,7 @@ const ACTION_WORKER=Object.freeze({
  'com.foughtapple.controls.screenshot':'controls',
  'com.foughtapple.controls.clipboard':'controls',
  'com.foughtapple.controls.voice':'controls',
+ 'com.foughtapple.audiocontrol.microphone':'audio',
  'com.foughtapple.steamsmarttoggle.toggle':'steam',
  'com.foughtapple.steamsmarttoggle.play':'steam',
  'com.foughtapple.deskstatus.p1s':'desk',
@@ -28,7 +29,7 @@ function workersFor(actions){return new Set([...actions].map(a=>ACTION_WORKER[a]
 function workerSpec(id,port,token){
  const common=['-port',String(port),'-pluginUUID',`com.foughtapple.taskbartiles.worker.${id}.${token}`,'-registerEvent','registerPlugin'];
  if(id==='steam')return {id,uuid:common[3],file:process.execPath,args:[path.join(WORKERS,'steam','plugin','index.js'),...common],cwd:path.join(WORKERS,'steam','plugin')};
- const names={controls:'ControlsHost.exe',desk:'DeskStatus.exe',orders:'NickNacksOrders.exe'};
+ const names={controls:'ControlsHost.exe',desk:'DeskStatus.exe',orders:'NickNacksOrders.exe',audio:'AudioControl.exe'};
  if(!names[id])throw new Error('Unknown worker '+id);
  return {id,uuid:common[3],file:path.join(WORKERS,id,'plugin',names[id]),args:common,cwd:path.join(WORKERS,id,'plugin')};
 }

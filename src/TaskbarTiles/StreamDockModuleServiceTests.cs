@@ -80,6 +80,21 @@ namespace TaskbarTiles
             rejects(() => StreamDockModuleService.Install(release, desired, CancellationToken.None, store, plugins, download, () => ""), "corrupt module hash rejected");
             var manager = new DockManager(StreamDockModuleService.ActiveBundle(store, "unused"), plugins, store, () => ""); manager.Apply(new DockState(), false, false);
             check(!Directory.Exists(live) && File.Exists(Path.Combine(store, "Disabled", "com.foughtapple.taskbartiles.sdPlugin", "private-settings.json")), "module removal keeps restorable private data");
+            // Exercise the exact prepared ZIP through the downloader/extractor, not only its inner package.
+            string preparedArchive = Environment.GetEnvironmentVariable("TASKBARTILES_MODULE_TEST_ARCHIVE");
+            if (!string.IsNullOrEmpty(preparedArchive) && File.Exists(preparedArchive)) {
+                string actualBundle = Environment.GetEnvironmentVariable("TASKBARTILES_MODULE_TEST_BUNDLE");
+                var actualCatalog = DockManager.Decode<DockCatalog>(File.ReadAllText(Path.Combine(actualBundle, "catalog.json")));
+                string actualVersion = actualCatalog.BundleVersion;
+                var actualRelease = new StreamDockRelease { Schema = 1, Id = "streamdock", Version = actualVersion, MinimumAppVersion = "0.0.0", ReleaseTag = "streamdock-v" + actualVersion, AssetName = "TaskbarTiles-StreamDock-" + actualVersion + ".zip", SHA256 = DockManager.Hash(preparedArchive) };
+                string actualStore = Path.Combine(temp, "prepared-state"), actualPlugins = Path.Combine(temp, "prepared-plugins");
+                string clip = "com.foughtapple.controls.clipboard", audio = "com.foughtapple.audiocontrol.microphone";
+                StreamDockModuleService.Install(actualRelease, new DockState { EnabledActions = new[] { clip } }, CancellationToken.None, actualStore, actualPlugins,
+                    (url, output, limit, token) => { using (var input = File.OpenRead(preparedArchive)) input.CopyTo(output); }, () => "");
+                var actualManager = new DockManager(StreamDockModuleService.ActiveBundle(actualStore, "unused"), actualPlugins, actualStore, () => "");
+                check(DockManager.ManifestActions(Path.Combine(actualPlugins, "com.foughtapple.taskbartiles.sdPlugin")).SetEquals(new[] { clip }), "exact prepared outer ZIP passes real download/extraction and selected-action staging");
+                check(!actualManager.Rows().Single(row => row.Action.Id == audio).Selected, "prepared ZIP installation leaves new Audio Control off");
+            }
             return checks;
         }
     }

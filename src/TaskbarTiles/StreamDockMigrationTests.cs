@@ -39,6 +39,12 @@ namespace TaskbarTiles
             for (int i = 0; i < old.Length; i++)
                 check(File.ReadAllText(Path.Combine(live, "workers", p.LegacyPackageIds[i], "private.json")) == "keep-" + p.LegacyPackageIds[i], "worker private data imported: " + p.LegacyPackageIds[i]);
             check(DockManager.ManifestActions(live).SetEquals(new[] { clip }), "disabled actions not re-enabled during migration");
+            string audio = "com.foughtapple.audiocontrol.microphone";
+            check(!m.Rows().Single(row => row.Action.Id == audio).Selected, "new Audio Control remains off after existing choices migrate");
+            m.Apply(new DockState { AutoUpdate = true, EnabledActions = new[] { clip, audio } }, false, false);
+            check(DockManager.ManifestActions(live).SetEquals(new[] { clip, audio }) && File.Exists(Path.Combine(live, "workers", "audio", "plugin", "AudioControl.exe")), "Audio Control can be opted in alongside an existing action");
+            check(File.ReadAllText(Path.Combine(live, "workers", "controls", "private.json")) == "keep-controls", "audio opt-in retains existing worker private settings");
+            m.Apply(new DockState { AutoUpdate = true, EnabledActions = new[] { clip } }, false, false);
             // An interrupt after promotion but before deleting the transaction journal
             // must not restore legacy folders alongside the promoted replacement.
             string batch = Path.Combine(store, "Backups", "after-promotion"); Directory.CreateDirectory(batch);

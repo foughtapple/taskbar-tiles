@@ -120,7 +120,7 @@ namespace TaskbarTiles
                     if (hasPayload) passed += StreamDockMigrationTests.Run(tmp, realBundle);
                     else messages.Add("SKIP: native worker payload/resource migration checks; optional module was not built. Metadata and isolated download/manager tests still run.");
                     Check(real.Catalog.Packages.Length == 1, "one unified Taskbar Tiles plugin package included");
-                    Check(real.Catalog.Packages.Sum(x=>x.Actions.Length) == 10, "ten independent actions included");
+                    Check(real.Catalog.Packages.Sum(x=>x.Actions.Length) == 11, "eleven independent actions included");
                     foreach (var pack in real.Catalog.Packages.Where(pack => File.Exists(DockManager.Child(real.Bundle, pack.Payload)))) {
                         string stage = Path.Combine(tmp,"validate-"+pack.Id); Directory.CreateDirectory(stage); real.Unpack(pack,stage);
                         Check(DockManager.ManifestActions(stage).Count == pack.Actions.Length, "real package manifest " + pack.Id);
@@ -131,7 +131,7 @@ namespace TaskbarTiles
                     using (var form = new SettingsWindow(new Options { HideOnFocusLoss = false }, delegate(Options o) {}, delegate(Options o) { return new Bitmap(300,160); }, new AppButton[0], "Modules")) {
                         form.ValidateStreamDockView(Path.Combine(Program.Home,"streamdock-settings.png"));
                     }
-                    Check(true,"actual Settings Stream Dock page paints with ten actions");
+                    Check(true,"actual Settings Stream Dock page paints with eleven actions");
                 }
                 passed += StreamDockModuleServiceTests.Run(tmp);
                 messages.Add("PASS " + passed + " isolated package-manager checks.");
